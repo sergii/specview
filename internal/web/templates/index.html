@@ -90,7 +90,7 @@
     .project-breadcrumb {
       display: flex;
       align-items: center;
-      gap: 9px;
+      gap: 14px;
       min-width: 0;
       color: var(--quiet);
       font-size: 11px;
@@ -105,7 +105,6 @@
       letter-spacing: .2em;
       text-transform: uppercase;
     }
-    .project-breadcrumb-separator { flex: 0 0 auto; color: var(--line-strong); }
     .project-breadcrumb code {
       min-width: 0;
       overflow-x: auto;
@@ -340,7 +339,6 @@
       .view-label { display: none; }
       .top-status > span:first-child { display: none; }
       .project-breadcrumb-label { display: none; }
-      .project-breadcrumb-separator { display: none; }
       .column-head { min-height: 44px; }
       .card { padding: 11px 10px 9px; }
       html[data-view="dense"] .card {
@@ -372,7 +370,6 @@
     <section class="project-header">
       <nav class="project-breadcrumb" aria-label="Project path">
         <span class="project-breadcrumb-label">Project</span>
-        <span class="project-breadcrumb-separator">/</span>
         <code>{{.ProjectPath}}</code>
       </nav>
     </section>

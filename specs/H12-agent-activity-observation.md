@@ -101,16 +101,47 @@ Filesystem changes to activity records use the same 250 ms polling watcher mecha
 
 Agent activity is an overlay, not a fourth workflow status.
 
-Current presentation:
+The activity semantics are identical in every presentation mode. The user may switch the indicator locally without changing activity records or workflow state.
 
-- workflow state keeps the square markers for New, In progress, and Done.
-- active work uses a tiny **square-in-square** glyph: a static outline square containing a smaller filled square.
-- the inner square steps around the four inner corners while activity is live, so motion remains legible without introducing a circular spinner.
-- the agent label sits beside the glyph and beside the existing relative modification age.
-- Classic, Dense, and Flow render the same activity semantics without changing workflow state.
-- animation respects `prefers-reduced-motion` and becomes static when reduced motion is requested.
+### Nested
 
-Do not animate inactive or stale specifications.
+The default activity mark is a tiny **square-in-square** glyph:
+
+- a static outline square contains a smaller filled square.
+- the inner square steps around the four inner corners while activity is live.
+- the motion stays legible without introducing a circular spinner.
+
+### Corner
+
+The previous spinner remains available as a comparison mode:
+
+- an outline square contains a small filled corner.
+- the complete square rotates slowly while activity is live.
+- this mode preserves the earlier visual experiment rather than deleting it from the design history.
+
+### Brand
+
+A static provider-aware mark may replace the spinner when agent identity is more useful than motion.
+
+The POC uses compact built-in marks without external runtime assets:
+
+```text
+codex        CX
+claude-code  CL
+opencode     OC
+unknown      AG
+```
+
+These are presentation marks, not claims to be official provider logos. Official SVG brand assets should only be embedded deliberately from provider-approved sources if that direction is selected later.
+
+The top bar contains `Nested / Corner / Brand`. The selected activity presentation is persisted in browser `localStorage`, so SSE-driven page reloads do not reset it.
+
+In every mode:
+
+- the agent label remains visible beside the selected mark and relative modification age.
+- Classic, Dense, and Flow render the same activity semantics.
+- `prefers-reduced-motion` disables Nested and Corner animation.
+- inactive or stale specifications render no activity mark.
 
 ## Reference publisher
 
@@ -138,7 +169,7 @@ publisher starts
   -> activity JSON appears atomically
   -> activity watcher refreshes the projection
   -> SSE reloads the board
-  -> H12 shows square-in-square activity glyph + Codex
+  -> H12 shows the selected activity presentation + Codex
   -> publisher updates heartbeat every 5 seconds
 ```
 
@@ -191,5 +222,8 @@ Adapters should generate opaque session IDs, publish explicit agent identity, up
 - activity filesystem changes participate in SSE live refresh.
 - invalid runtime records do not break the specification dashboard.
 - Flow, Dense, and Classic render the same activity projection without changing its semantics.
+- Nested, Corner, and Brand can be switched independently from workflow view mode.
+- the selected activity presentation survives reloads and SSE-driven refreshes.
+- reduced-motion preference disables activity animation.
 - the standalone reference publisher exercises the full presence lifecycle without becoming part of the Specview binary.
 - provider adapters can be added without changing the observer contract.

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -21,6 +22,7 @@ type record struct {
 	SessionID   string    `json:"session_id"`
 	Agent       agent     `json:"agent"`
 	Spec        string    `json:"spec"`
+	Files       []string  `json:"files,omitempty"`
 	State       string    `json:"state"`
 	StartedAt   time.Time `json:"started_at"`
 	HeartbeatAt time.Time `json:"heartbeat_at"`
@@ -32,11 +34,12 @@ type agent struct {
 }
 
 func main() {
-	var root, spec, agentID, agentLabel string
+	var root, spec, agentID, agentLabel, filesValue string
 	flag.StringVar(&root, "root", ".", "project root")
 	flag.StringVar(&spec, "spec", "", "project-relative specification path")
 	flag.StringVar(&agentID, "agent-id", "agent", "machine-readable agent identifier")
 	flag.StringVar(&agentLabel, "agent-label", "Agent", "human-readable agent label")
+	flag.StringVar(&filesValue, "files", "", "comma-separated project-relative files currently touched by the agent")
 	flag.Parse()
 	if spec == "" {
 		fmt.Fprintln(os.Stderr, "activity-publisher: --spec is required")
@@ -57,6 +60,7 @@ func main() {
 	path := filepath.Join(dir, sessionID+".json")
 	defer os.Remove(path)
 
+	files := parseFiles(filesValue)
 	startedAt := time.Now().UTC()
 	publish := func() error {
 		now := time.Now().UTC()
@@ -65,6 +69,7 @@ func main() {
 			SessionID:   sessionID,
 			Agent:       agent{ID: agentID, Label: agentLabel},
 			Spec:        filepath.ToSlash(filepath.Clean(spec)),
+			Files:       files,
 			State:       "working",
 			StartedAt:   startedAt,
 			HeartbeatAt: now,
@@ -86,6 +91,9 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Printf("publishing %s on %s as %s (%s)\n", agentLabel, spec, sessionID, path)
+	if len(files) > 0 {
+		fmt.Printf("touching %s\n", strings.Join(files, ", "))
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -102,6 +110,27 @@ func main() {
 			}
 		}
 	}
+}
+
+func parseFiles(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0)
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		part = filepath.ToSlash(filepath.Clean(part))
+		if _, ok := seen[part]; ok {
+			continue
+		}
+		seen[part] = struct{}{}
+		out = append(out, part)
+	}
+	return out
 }
 
 func newSessionID() (string, error) {

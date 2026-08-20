@@ -199,7 +199,7 @@
     }
     html[data-view="dense"] .card {
       display: grid;
-      grid-template-columns: 62px minmax(0, 1fr) auto;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
       align-items: center;
       gap: 10px;
       min-height: 36px;
@@ -255,7 +255,7 @@
     }
     html[data-view="flow"] .card {
       display: grid;
-      grid-template-columns: 62px minmax(0, 1fr) auto;
+      grid-template-columns: 32px minmax(0, 1fr) auto;
       align-items: center;
       gap: 10px;
       min-height: 31px;
@@ -342,12 +342,14 @@
       .project-breadcrumb-separator { display: none; }
       .column-head { min-height: 44px; }
       .card { padding: 11px 10px 9px; }
-      html[data-view="dense"] .card,
-      html[data-view="flow"] .card {
-        grid-template-columns: 54px minmax(0, 1fr) auto;
+      html[data-view="dense"] .card {
+        grid-template-columns: 35px minmax(0, 1fr) auto;
         padding: 8px 9px;
       }
-      html[data-view="flow"] .card { padding-left: 2px; padding-right: 2px; }
+      html[data-view="flow"] .card {
+        grid-template-columns: 32px minmax(0, 1fr) auto;
+        padding: 8px 2px;
+      }
     }
   </style>
 </head>

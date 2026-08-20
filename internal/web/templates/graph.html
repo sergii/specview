@@ -104,6 +104,8 @@
   let yaw = -0.55;
   let pitch = 0.18;
   let drag = null;
+  let moved = false;
+  let loadSequence = 0;
 
   const statusIndex = {new: 0, in_progress: 1, done: 2};
   const byId = () => new Map(data.nodes.map((node) => [node.id, node]));
@@ -183,16 +185,12 @@
     hitboxes = [];
     const projectNames = projects();
     const grouped = new Map();
-    for (const project of projectNames) {
-      grouped.set(project, {new: [], in_progress: [], done: []});
-    }
+    for (const project of projectNames) grouped.set(project, {new: [], in_progress: [], done: []});
     for (const node of data.nodes) {
       const group = grouped.get(node.project);
       (group[node.status] || group.new).push(node);
     }
-    for (const group of grouped.values()) {
-      Object.values(group).forEach((nodes) => nodes.sort((a, b) => a.spec_id.localeCompare(b.spec_id)));
-    }
+    for (const group of grouped.values()) Object.values(group).forEach((nodes) => nodes.sort((a, b) => a.spec_id.localeCompare(b.spec_id)));
 
     let totalHeight = 20;
     const bands = [];
@@ -218,10 +216,7 @@
       ctx.lineTo(size.width, band.top + 25);
       ctx.stroke();
       ['new', 'in_progress', 'done'].forEach((status, column) => {
-        const nodes = band.group[status];
-        nodes.forEach((node, row) => {
-          positions.set(node.id, {x: x[column], y: band.top + 52 + row * 42});
-        });
+        band.group[status].forEach((node, row) => positions.set(node.id, {x: x[column], y: band.top + 52 + row * 42}));
       });
     }
 
@@ -273,12 +268,7 @@
       const r = rotate3D(point);
       const camera = 900;
       const scale = camera / Math.max(250, camera + r.z);
-      projected.set(id, {
-        x: size.width / 2 + r.x * scale,
-        y: size.height / 2 + r.y * scale,
-        z: r.z,
-        scale,
-      });
+      projected.set(id, {x: size.width / 2 + r.x * scale, y: size.height / 2 + r.y * scale, z: r.z, scale});
     }
 
     for (const edge of data.edges) {
@@ -289,10 +279,7 @@
     }
 
     const ordered = [...data.nodes].sort((a, b) => projected.get(a.id).z - projected.get(b.id).z);
-    for (const node of ordered) {
-      const p = projected.get(node.id);
-      drawNode(node, p, true);
-    }
+    for (const node of ordered) drawNode(node, projected.get(node.id), true);
   }
 
   function draw() {
@@ -312,6 +299,7 @@
 
   stage.addEventListener('mousemove', (event) => {
     if (drag && mode === '3d') {
+      if (Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) > 3) moved = true;
       yaw = drag.yaw + (event.clientX - drag.x) * .006;
       pitch = Math.max(-1.1, Math.min(1.1, drag.pitch + (event.clientY - drag.y) * .004));
       draw();
@@ -324,20 +312,21 @@
     }
     const node = hit.node;
     tooltip.innerHTML = `<strong>${node.spec_id} · ${escapeHTML(node.title)}</strong>${escapeHTML(node.project)}<br>${escapeHTML(node.status)}${node.agents?.length ? `<br>${escapeHTML(node.agents.join(', '))}` : ''}${node.orphaned ? '<br>idle / orphaned' : ''}${node.collision ? '<br>collision detected' : ''}`;
-    tooltip.style.left = `${Math.min(event.offsetX + 14, stage.clientWidth - 330)}px`;
-    tooltip.style.top = `${event.offsetY + 14}px`;
+    tooltip.style.left = `${Math.min(event.clientX - stage.getBoundingClientRect().left + 14, stage.clientWidth - 330)}px`;
+    tooltip.style.top = `${event.clientY - stage.getBoundingClientRect().top + 14}px`;
     tooltip.style.display = 'block';
   });
 
   stage.addEventListener('mousedown', (event) => {
     if (mode !== '3d') return;
+    moved = false;
     drag = {x: event.clientX, y: event.clientY, yaw, pitch};
     stage.classList.add('dragging');
   });
   window.addEventListener('mouseup', () => { drag = null; stage.classList.remove('dragging'); });
   stage.addEventListener('mouseleave', () => { if (!drag) tooltip.style.display = 'none'; });
   stage.addEventListener('click', (event) => {
-    if (drag) return;
+    if (moved) { moved = false; return; }
     const hit = hitAt(event);
     if (!hit) return;
     const node = hit.node;
@@ -349,13 +338,26 @@
     return String(value).replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   }
 
-  fetch('/api/graph', {cache: 'no-store'})
-    .then((response) => {
-      if (!response.ok) throw new Error(`graph request failed: ${response.status}`);
-      return response.json();
-    })
-    .then((value) => { data = value; draw(); })
-    .catch((error) => { stats.textContent = error.message; });
+  function loadGraph() {
+    const sequence = ++loadSequence;
+    return fetch('/api/graph', {cache: 'no-store'})
+      .then((response) => {
+        if (!response.ok) throw new Error(`graph request failed: ${response.status}`);
+        return response.json();
+      })
+      .then((value) => {
+        if (sequence !== loadSequence) return;
+        data = value;
+        draw();
+      })
+      .catch((error) => {
+        if (sequence === loadSequence) stats.textContent = error.message;
+      });
+  }
+
+  const events = new EventSource('/events');
+  events.addEventListener('changed', () => loadGraph());
+  loadGraph();
 })();
 </script>
 </body>

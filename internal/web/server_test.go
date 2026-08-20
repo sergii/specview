@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sergii/specview/internal/config"
 	"github.com/sergii/specview/internal/specs"
@@ -45,20 +46,22 @@ Observe useful Git state.
 		Server:  config.Server{Host: "127.0.0.1", Port: 7331},
 	}
 	server := NewServer(root, cfg, store, NewHub())
+	projectKey := server.projects[0].Key
 
 	board := httptest.NewRecorder()
 	server.index(board, httptest.NewRequest(http.MethodGet, "/", nil))
 	if board.Code != http.StatusOK {
 		t.Fatalf("board status = %d, want %d", board.Code, http.StatusOK)
 	}
-	wantLink := `/spec?path=H07-git-status-observation.md`
-	if !strings.Contains(board.Body.String(), wantLink) {
-		t.Fatalf("board does not contain detail link %q", wantLink)
+	body := board.Body.String()
+	if !strings.Contains(body, "project="+projectKey) || !strings.Contains(body, "path=H07-git-status-observation.md") {
+		t.Fatal("board does not contain project-scoped specification link")
 	}
-	if !strings.Contains(board.Body.String(), `class="dense-id">H07</span>`) {
+	if !strings.Contains(body, `class="dense-id">H07</span>`) {
 		t.Fatal("board does not render explicit stable display ID H07")
 	}
 
+	wantLink := "/spec?project=" + projectKey + "&path=" + filename
 	detail := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, wantLink, nil)
 	server.detail(detail, request)
@@ -67,6 +70,88 @@ Observe useful Git state.
 	}
 	if !strings.Contains(detail.Body.String(), "Git status observation") {
 		t.Fatal("detail page does not contain specification title")
+	}
+}
+
+func TestCompactProjectPathKeepsParentAndCurrentDirectory(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "Users", "serhii", "repos", "sergii", "specview")
+	if got := compactProjectPath(root); got != "sergii/specview" {
+		t.Fatalf("compactProjectPath(%q) = %q, want sergii/specview", root, got)
+	}
+}
+
+func TestGraphProjectionResolvesSpecificationRelations(t *testing.T) {
+	root := t.TempDir()
+	specRoot := filepath.Join(root, "specs")
+	if err := os.MkdirAll(specRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(specRoot, "H01-base.md"), []byte("# Base\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(specRoot, "H02-dependent.md"), []byte("---\nspecview:\n  status: in_progress\n  depends_on: [H01]\n---\n# Dependent\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	store := specs.NewStore(specRoot, "*.md")
+	if err := store.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{
+		Version: 1,
+		Project: config.Project{Name: "Graph", Root: "."},
+		Specs:   config.Specs{Path: "specs", Pattern: "*.md"},
+		Server:  config.Server{Host: "127.0.0.1", Port: 7331},
+	}
+	server := NewServer(root, cfg, store, NewHub())
+	graph := server.graphData(time.Now())
+	if len(graph.Nodes) != 2 {
+		t.Fatalf("graph nodes = %d, want 2", len(graph.Nodes))
+	}
+	if len(graph.Edges) != 1 {
+		t.Fatalf("graph edges = %d, want 1", len(graph.Edges))
+	}
+	edge := graph.Edges[0]
+	if edge.Missing || edge.Type != "depends_on" {
+		t.Fatalf("unexpected graph edge: %#v", edge)
+	}
+	if !strings.Contains(edge.From, "H01-base.md") || !strings.Contains(edge.To, "H02-dependent.md") {
+		t.Fatalf("unexpected graph direction: %#v", edge)
+	}
+}
+
+func TestGraphPageRendersBothModes(t *testing.T) {
+	root := t.TempDir()
+	specRoot := filepath.Join(root, "specs")
+	if err := os.MkdirAll(specRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store := specs.NewStore(specRoot, "*.md")
+	if err := store.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{
+		Version: 1,
+		Project: config.Project{Name: "Graph", Root: "."},
+		Specs:   config.Specs{Path: "specs", Pattern: "*.md"},
+		Server:  config.Server{Host: "127.0.0.1", Port: 7331},
+	}
+	server := NewServer(root, cfg, store, NewHub())
+
+	for _, tt := range []struct {
+		url, want string
+	}{
+		{"/graph", `data-mode="2d"`},
+		{"/graph?mode=3d", `data-mode="3d"`},
+	} {
+		response := httptest.NewRecorder()
+		server.graphPage(response, httptest.NewRequest(http.MethodGet, tt.url, nil))
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s status = %d", tt.url, response.Code)
+		}
+		if !strings.Contains(response.Body.String(), tt.want) {
+			t.Fatalf("%s does not render %s", tt.url, tt.want)
+		}
 	}
 }
 

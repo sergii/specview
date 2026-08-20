@@ -10,11 +10,9 @@
     body { margin: 0; background: #0b0d10; color: #f5f7fa; }
     header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 24px 32px; border-bottom: 1px solid #242831; }
     h1 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
-    .project { display: flex; align-items: center; gap: 8px; margin-top: 5px; color: #aeb6c2; font-size: 13px; }
-    .badge { padding: 2px 6px; border: 1px solid #3a4350; border-radius: 999px; color: #c8d0da; font-size: 9px; font-weight: 800; letter-spacing: .08em; }
+    .project { margin-top: 5px; color: #aeb6c2; font-size: 13px; }
     .muted { color: #8f98a6; font-size: 12px; }
     main { padding: 28px 32px 48px; }
-    .demo-note { margin: -4px 0 22px; color: #8f98a6; font-size: 12px; }
     .board { display: grid; grid-template-columns: repeat(3, minmax(240px, 1fr)); gap: 18px; align-items: start; }
     .column { min-width: 0; }
     .column-title { display: flex; justify-content: space-between; margin-bottom: 12px; color: #aeb6c2; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
@@ -34,13 +32,12 @@
 <header>
   <div>
     <h1>Specview</h1>
-    <div class="project"><span>{{.ProjectName}}</span>{{if .Demo}}<span class="badge">DEMO</span>{{end}}</div>
+    <div class="project">{{.ProjectName}}</div>
     <div class="muted">{{.SpecsPath}}</div>
   </div>
   <div class="muted">{{.Total}} specs · live</div>
 </header>
 <main>
-  {{if .Demo}}<div class="demo-note">Demo data - edit a specification status to see Specview update live.</div>{{end}}
   <div class="board">
     <section class="column"><div class="column-title"><span>New</span><span class="count">{{len .New}}</span></div>{{range .New}}{{template "card" .}}{{else}}<div class="empty">No new specs</div>{{end}}</section>
     <section class="column"><div class="column-title"><span>In progress</span><span class="count">{{len .InProgress}}</span></div>{{range .InProgress}}{{template "card" .}}{{else}}<div class="empty">Nothing in progress</div>{{end}}</section>

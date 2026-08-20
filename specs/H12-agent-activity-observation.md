@@ -104,8 +104,8 @@ Agent activity is an overlay, not a fourth workflow status.
 Current presentation:
 
 - workflow state keeps the square markers for New, In progress, and Done.
-- active work uses a tiny animated square-outline glyph with an asymmetric filled corner.
-- the asymmetry makes rotation visible while preserving the square visual language.
+- active work uses a tiny **square-in-square** glyph: a static outline square containing a smaller filled square.
+- the inner square steps around the four inner corners while activity is live, so motion remains legible without introducing a circular spinner.
 - the agent label sits beside the glyph and beside the existing relative modification age.
 - Classic, Dense, and Flow render the same activity semantics without changing workflow state.
 - animation respects `prefers-reduced-motion` and becomes static when reduced motion is requested.
@@ -138,7 +138,7 @@ publisher starts
   -> activity JSON appears atomically
   -> activity watcher refreshes the projection
   -> SSE reloads the board
-  -> H12 shows square activity glyph + Codex
+  -> H12 shows square-in-square activity glyph + Codex
   -> publisher updates heartbeat every 5 seconds
 ```
 

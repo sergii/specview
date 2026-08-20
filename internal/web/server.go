@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,8 @@ import (
 var templateFS embed.FS
 
 var explicitSpecIDPattern = regexp.MustCompile(`(?i)^([a-z]{1,8}(?:[-_]?\d{1,5}))(?:[-_]|$)`)
+
+const orphanedAfter = 15 * time.Minute
 
 type Hub struct {
 	mu      sync.Mutex
@@ -133,14 +136,20 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 type boardSpec struct {
 	specs.Spec
-	ProjectKey string
-	Activity   []activity.Record
+	ProjectKey     string
+	Activity       []activity.Record
+	Orphaned       bool
+	AgentCollision bool
+	CodeCollisions []string
 }
 
 type boardData struct {
 	ProjectKey, ProjectName, ProjectPath, ProjectDisplayPath, SpecsPath string
 	New, InProgress, Done, Invalid                                      []boardSpec
 	Total                                                               int
+	ActiveSessions                                                      int
+	OrphanedCount                                                       int
+	CollisionCount                                                      int
 }
 
 type workspaceData struct {
@@ -176,11 +185,12 @@ func projectSourceKey(root string) string {
 
 func present(source ProjectSource, item specs.Spec, now time.Time) boardSpec {
 	view := boardSpec{Spec: item, ProjectKey: source.Key}
-	if source.Activity == nil {
-		return view
+	if source.Activity != nil {
+		projectRelativePath := filepath.ToSlash(filepath.Join(source.Config.Specs.Path, item.Path))
+		view.Activity = source.Activity.ActiveFor(projectRelativePath, now)
 	}
-	projectRelativePath := filepath.ToSlash(filepath.Join(source.Config.Specs.Path, item.Path))
-	view.Activity = source.Activity.ActiveFor(projectRelativePath, now)
+	view.Orphaned = item.Status == specs.StatusInProgress && len(view.Activity) == 0 && now.Sub(item.ModifiedAt) >= orphanedAfter
+	view.AgentCollision = len(view.Activity) > 1
 	return view
 }
 
@@ -209,7 +219,63 @@ func buildBoardData(source ProjectSource, now time.Time) boardData {
 			data.Done = append(data.Done, view)
 		}
 	}
+	annotateBoardSignals(&data)
 	return data
+}
+
+func annotateBoardSignals(data *boardData) {
+	groups := []*[]boardSpec{&data.New, &data.InProgress, &data.Done, &data.Invalid}
+	fileOwners := make(map[string]map[string]struct{})
+	activeSessions := make(map[string]struct{})
+
+	for _, group := range groups {
+		for i := range *group {
+			item := &(*group)[i]
+			if item.Orphaned {
+				data.OrphanedCount++
+			}
+			if item.AgentCollision {
+				data.CollisionCount++
+			}
+			for _, record := range item.Activity {
+				activeSessions[record.SessionID] = struct{}{}
+				for _, file := range record.Files {
+					owners := fileOwners[file]
+					if owners == nil {
+						owners = make(map[string]struct{})
+						fileOwners[file] = owners
+					}
+					owners[item.Path] = struct{}{}
+				}
+			}
+		}
+	}
+	data.ActiveSessions = len(activeSessions)
+
+	for _, group := range groups {
+		for i := range *group {
+			item := &(*group)[i]
+			collisions := make([]string, 0)
+			seen := make(map[string]struct{})
+			for _, record := range item.Activity {
+				for _, file := range record.Files {
+					if len(fileOwners[file]) < 2 {
+						continue
+					}
+					if _, ok := seen[file]; ok {
+						continue
+					}
+					seen[file] = struct{}{}
+					collisions = append(collisions, file)
+				}
+			}
+			sort.Strings(collisions)
+			item.CodeCollisions = collisions
+			if len(collisions) > 0 {
+				data.CollisionCount++
+			}
+		}
+	}
 }
 
 func (s *Server) index(w http.ResponseWriter, _ *http.Request) {

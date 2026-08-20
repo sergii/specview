@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Specview - {{.ProjectName}}</title>
+  <title>Specview{{if .Multi}} - Workspace{{else}} - {{.ProjectName}}{{end}}</title>
   <script>
     try {
       document.documentElement.dataset.view = localStorage.getItem('specview:view') || 'classic';
@@ -18,10 +18,10 @@
     :root {
       color-scheme: light;
       font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --page: #ffffff;
-      --surface: #ffffff;
-      --panel: #ffffff;
-      --card: #ffffff;
+      --page: #fff;
+      --surface: #fff;
+      --panel: #fff;
+      --card: #fff;
       --text: #151515;
       --muted: #6f6f69;
       --quiet: #a0a099;
@@ -37,12 +37,7 @@
     html, body { min-height: 100%; }
     body { margin: 0; background: var(--page); color: var(--text); -webkit-font-smoothing: antialiased; }
     button { font: inherit; }
-    .app-shell {
-      min-height: 100vh;
-      background: var(--surface);
-      border: 1px solid var(--line);
-      overflow: hidden;
-    }
+    .app-shell { min-height: 100vh; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
     .topbar {
       min-height: 54px;
       display: grid;
@@ -52,28 +47,14 @@
       padding: 0 var(--page-gutter);
       border-bottom: 1px solid var(--line);
     }
-    .brand {
-      justify-self: start;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 15px;
-      font-weight: 500;
-      letter-spacing: -0.012em;
-      text-decoration: none;
-    }
+    .brand { justify-self: start; color: var(--text); font: 500 15px/1 inherit; letter-spacing: -0.012em; text-decoration: none; }
     .center-nav { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
     .view-label, .activity-label { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
     .activity-cluster { display: inline-flex; align-items: center; gap: 6px; }
     .view-switch, .activity-switch { display: inline-flex; border: 1px solid var(--line); }
     .view-button, .activity-button {
-      min-height: 28px;
-      padding: 0 10px;
-      border: 0;
-      border-right: 1px solid var(--line);
-      background: #fff;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: 11px;
+      min-height: 28px; padding: 0 10px; border: 0; border-right: 1px solid var(--line);
+      background: #fff; color: var(--muted); cursor: pointer; font-size: 11px;
     }
     .view-button:last-child, .activity-button:last-child { border-right: 0; }
     .view-button:hover, .activity-button:hover { color: var(--text); background: #fafafa; }
@@ -82,279 +63,117 @@
     html[data-view="flow"] .view-button[data-view="flow"],
     html[data-activity="nested"] .activity-button[data-activity="nested"],
     html[data-activity="corner"] .activity-button[data-activity="corner"],
-    html[data-activity="brand"] .activity-button[data-activity="brand"] {
-      color: var(--text);
-      background: #f2f2ef;
-    }
+    html[data-activity="brand"] .activity-button[data-activity="brand"] { color: var(--text); background: #f2f2ef; }
     .top-status { justify-self: end; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
     .live { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
     .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--done); }
     .live.offline { color: var(--muted); }
     .live.offline .live-dot { background: var(--error); }
-    main { padding: clamp(24px, 2.6vw, 36px) var(--page-gutter) 30px; }
+
+    main { padding: clamp(24px, 2.6vw, 36px) var(--page-gutter) 42px; }
+    .workspace-summary { margin-bottom: clamp(28px, 3vw, 42px); border-top: 1px solid var(--line); }
+    .workspace-summary-head {
+      display: flex; align-items: baseline; gap: 12px; min-height: 38px; padding: 10px 0 8px;
+      color: var(--muted); font-size: 10px; letter-spacing: .2em; text-transform: uppercase;
+    }
+    .workspace-summary-head span { color: var(--quiet); font-size: 10px; letter-spacing: .04em; text-transform: none; }
+    .workspace-row {
+      display: grid; grid-template-columns: minmax(180px, 1fr) repeat(4, auto); gap: 18px;
+      align-items: center; min-height: 34px; border-top: 1px solid var(--line); color: inherit; text-decoration: none;
+    }
+    .workspace-row:last-child { border-bottom: 1px solid var(--line); }
+    .workspace-row:hover .workspace-project { color: var(--text); }
+    .workspace-project { overflow: hidden; color: var(--muted); font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+    .workspace-metric { color: var(--quiet); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .workspace-metric strong { color: var(--muted); font-weight: 500; }
+
+    .project-view + .project-view { margin-top: clamp(46px, 5vw, 72px); padding-top: clamp(32px, 4vw, 52px); border-top: 1px solid var(--line); }
     .project-header { min-width: 0; margin-bottom: clamp(20px, 2vw, 28px); }
-    .project-breadcrumb {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      min-width: 0;
-      color: var(--quiet);
-      font-size: 11px;
-      line-height: 1.4;
-      white-space: nowrap;
-    }
-    .project-breadcrumb-label {
-      flex: 0 0 auto;
-      color: var(--muted);
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: .2em;
-      text-transform: uppercase;
-    }
-    .project-breadcrumb code {
-      min-width: 0;
-      overflow-x: auto;
-      color: var(--muted);
-      font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      scrollbar-width: none;
-    }
-    .project-breadcrumb code::-webkit-scrollbar { display: none; }
-    .board-wrap {
-      width: 100%;
-      min-width: 0;
-      overflow-x: auto;
-      overscroll-behavior-x: contain;
-      scrollbar-gutter: stable;
-      padding-bottom: 4px;
-    }
-    .board {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: clamp(6px, .7vw, 10px);
-      width: 100%;
-      min-width: 0;
-      align-items: start;
-    }
-    .column {
-      min-width: 0;
-      overflow: hidden;
-      border: 1px solid var(--line);
-      background: var(--panel);
-    }
-    .column-head {
-      min-height: 48px;
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 8px;
-      padding: 0 12px;
-      border-bottom: 1px solid var(--line);
-    }
+    .project-breadcrumb { display: flex; align-items: center; gap: 14px; min-width: 0; color: var(--quiet); font-size: 11px; line-height: 1.4; white-space: nowrap; }
+    .project-breadcrumb-label { flex: 0 0 auto; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+    .project-breadcrumb code { min-width: 0; overflow: hidden; color: var(--muted); font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+
+    .board-wrap { width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-gutter: stable; padding-bottom: 4px; }
+    .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(6px, .7vw, 10px); width: 100%; min-width: 0; align-items: start; }
+    .column { min-width: 0; overflow: hidden; border: 1px solid var(--line); background: var(--panel); }
+    .column-head { min-height: 48px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); }
     .column-name { display: flex; align-items: center; min-width: 0; gap: 9px; }
     .column-index { color: var(--quiet); font-size: 10px; font-variant-numeric: tabular-nums; letter-spacing: .12em; }
     .status-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 0; }
     .status-dot.new { background: var(--new); }
     .status-dot.progress { background: var(--progress); }
     .status-dot.done { background: var(--done); }
-    .column-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #595953; font-size: 12px; font-weight: 600; }
+    .column-title { overflow: hidden; color: #595953; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
     .count { flex: 0 0 auto; color: var(--quiet); font-size: 11px; font-variant-numeric: tabular-nums; }
-    .cards {
-      display: grid;
-      gap: 6px;
-      padding: 6px;
-    }
-    .card {
-      display: block;
-      min-width: 0;
-      padding: 12px 12px 10px;
-      border: 1px solid var(--line);
-      background: var(--card);
-      color: inherit;
-      text-decoration: none;
-      cursor: pointer;
-      transition: border-color .12s ease, background .12s ease;
-    }
+    .cards { display: grid; gap: 6px; padding: 6px; }
+    .card { display: block; min-width: 0; padding: 12px 12px 10px; border: 1px solid var(--line); background: var(--card); color: inherit; text-decoration: none; cursor: pointer; transition: border-color .12s ease, background .12s ease; }
     .card:hover { border-color: var(--line-strong); background: #fcfcfb; }
     .title { overflow-wrap: anywhere; font-size: 13px; font-weight: 560; line-height: 1.38; letter-spacing: -0.012em; }
-    .meta {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 10px;
-      margin-top: 9px;
-      color: var(--quiet);
-      font-size: 10px;
-      line-height: 1.35;
-    }
-    .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .meta { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 9px; color: var(--quiet); font-size: 10px; line-height: 1.35; }
+    .path { overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
     .age { white-space: nowrap; font-variant-numeric: tabular-nums; }
     .dense-id, .dense-age { display: none; }
     .empty { padding: 20px 12px 22px; color: var(--quiet); font-size: 11px; }
-    .invalid {
-      margin-top: 8px;
-      border: 1px solid #e2c9c5;
-      background: #fffdfd;
-    }
+    .invalid { margin-top: 8px; border: 1px solid #e2c9c5; background: #fffdfd; }
     .invalid .column-head { border-color: #e2c9c5; }
     .invalid .status-dot { background: var(--error); }
     .invalid .cards { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
     .error { margin-top: 8px; color: var(--error); font-size: 10px; line-height: 1.45; }
 
-    html[data-view="dense"] .cards {
-      display: block;
-      padding: 0;
-    }
-    html[data-view="dense"] .card {
-      display: grid;
-      grid-template-columns: 20px minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 6px;
-      min-height: 36px;
-      padding: 8px;
-      border: 0;
-      border-bottom: 1px solid var(--line);
-    }
+    html[data-view="dense"] .cards { display: block; padding: 0; }
+    html[data-view="dense"] .card { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 6px; min-height: 36px; padding: 8px; border: 0; border-bottom: 1px solid var(--line); }
     html[data-view="dense"] .card:last-child { border-bottom: 0; }
     html[data-view="dense"] .card:hover { background: #fafafa; }
-    html[data-view="dense"] .dense-id {
-      display: block;
-      overflow: hidden;
-      color: var(--quiet);
-      font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      letter-spacing: .06em;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    html[data-view="dense"] .dense-age {
-      display: block;
-      color: var(--quiet);
-      font-size: 10px;
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-    }
-    html[data-view="dense"] .card-copy { min-width: 0; }
-    html[data-view="dense"] .title {
-      overflow: hidden;
-      font-size: 12px;
-      font-weight: 500;
-      line-height: 1.3;
-      overflow-wrap: normal;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    html[data-view="dense"] .meta { display: none; }
-    html[data-view="dense"] .error { grid-column: 2 / -1; margin-top: 0; }
+    html[data-view="dense"] .dense-id,
+    html[data-view="flow"] .dense-id { display: block; overflow: hidden; color: var(--quiet); font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .06em; text-overflow: ellipsis; white-space: nowrap; }
+    html[data-view="dense"] .dense-age,
+    html[data-view="flow"] .dense-age { display: block; color: var(--quiet); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    html[data-view="dense"] .card-copy,
+    html[data-view="flow"] .card-copy { min-width: 0; }
+    html[data-view="dense"] .title,
+    html[data-view="flow"] .title { overflow: hidden; font-size: 12px; font-weight: 500; line-height: 1.3; overflow-wrap: normal; text-overflow: ellipsis; white-space: nowrap; }
+    html[data-view="dense"] .meta,
+    html[data-view="flow"] .meta { display: none; }
+    html[data-view="dense"] .error,
+    html[data-view="flow"] .error { grid-column: 2 / -1; margin-top: 0; }
 
     html[data-view="flow"] .board { gap: clamp(22px, 3vw, 46px); }
-    html[data-view="flow"] .column {
-      overflow: visible;
-      border: 0;
-      background: transparent;
-    }
-    html[data-view="flow"] .column-head {
-      min-height: 32px;
-      padding: 0 2px 8px;
-      border: 0;
-    }
-    html[data-view="flow"] .cards {
-      display: block;
-      padding: 0;
-    }
-    html[data-view="flow"] .card {
-      display: grid;
-      grid-template-columns: 18px minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 6px;
-      min-height: 31px;
-      padding: 5px 0;
-      border: 0;
-      background: transparent;
-    }
+    html[data-view="flow"] .column { overflow: visible; border: 0; background: transparent; }
+    html[data-view="flow"] .column-head { min-height: 32px; padding: 0 2px 8px; border: 0; }
+    html[data-view="flow"] .cards { display: block; padding: 0; }
+    html[data-view="flow"] .card { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 6px; min-height: 31px; padding: 5px 0; border: 0; background: transparent; }
     html[data-view="flow"] .card:hover { background: transparent; }
     html[data-view="flow"] .card:hover .title { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
-    html[data-view="flow"] .dense-id {
-      display: block;
-      overflow: hidden;
-      color: var(--quiet);
-      font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      letter-spacing: .06em;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    html[data-view="flow"] .dense-age {
-      display: block;
-      color: var(--quiet);
-      font-size: 10px;
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-    }
-    html[data-view="flow"] .card-copy { min-width: 0; }
-    html[data-view="flow"] .title {
-      overflow: hidden;
-      font-size: 12px;
-      font-weight: 500;
-      line-height: 1.3;
-      overflow-wrap: normal;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    html[data-view="flow"] .meta { display: none; }
     html[data-view="flow"] .empty { padding: 8px 2px; }
     html[data-view="flow"] .invalid { border: 0; background: transparent; }
     html[data-view="flow"] .invalid .column-head { border: 0; }
-    html[data-view="flow"] .error { grid-column: 2 / -1; margin-top: 0; }
 
     @media (max-width: 979px) and (min-width: 800px) {
-      .board {
-        grid-template-columns: none;
-        grid-auto-flow: column;
-        grid-auto-columns: minmax(300px, 44vw);
-        width: max-content;
-        min-width: 100%;
-      }
+      .board { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(300px, 44vw); width: max-content; min-width: 100%; }
     }
-
     @media (max-width: 799px) {
-      .topbar {
-        grid-template-columns: 1fr auto;
-        grid-template-areas: "brand status" "center center";
-        gap: 8px 16px;
-        min-height: 72px;
-        padding-top: 10px;
-        padding-bottom: 10px;
-      }
+      .topbar { grid-template-columns: 1fr auto; grid-template-areas: "brand status" "center center"; gap: 8px 16px; min-height: 72px; padding-top: 10px; padding-bottom: 10px; }
       .brand { grid-area: brand; }
       .center-nav { grid-area: center; justify-self: start; justify-content: flex-start; }
       .top-status { grid-area: status; }
       main { padding-top: 24px; }
-      .project-header { margin-bottom: 20px; }
+      .workspace-row { grid-template-columns: minmax(0, 1fr) repeat(3, auto); gap: 10px; }
+      .workspace-row .workspace-metric:last-child { display: none; }
       .board-wrap { overflow-x: visible; scrollbar-gutter: auto; }
-      .board {
-        display: grid;
-        grid-template-columns: 1fr;
-        grid-auto-flow: row;
-        grid-auto-columns: auto;
-        gap: 12px;
-        width: 100%;
-        min-width: 0;
-      }
+      .board { grid-template-columns: 1fr; grid-auto-flow: row; grid-auto-columns: auto; gap: 12px; width: 100%; min-width: 0; }
       html[data-view="flow"] .board { gap: 20px; }
       .column { width: 100%; }
     }
-
     @media (max-width: 520px) {
       .view-label, .activity-label { display: none; }
       .top-status > span:first-child { display: none; }
       .project-breadcrumb-label { display: none; }
+      .workspace-row { grid-template-columns: minmax(0, 1fr) auto; }
+      .workspace-row .workspace-metric:nth-last-child(-n+3) { display: none; }
       .column-head { min-height: 44px; }
       .card { padding: 11px 10px 9px; }
-      html[data-view="dense"] .card {
-        grid-template-columns: 20px minmax(0, 1fr) auto;
-        padding: 8px;
-      }
-      html[data-view="flow"] .card {
-        grid-template-columns: 18px minmax(0, 1fr) auto;
-        padding: 8px 0;
-      }
+      html[data-view="dense"] .card { grid-template-columns: 20px minmax(0, 1fr) auto; padding: 8px; }
+      html[data-view="flow"] .card { grid-template-columns: 18px minmax(0, 1fr) auto; padding: 8px 0; }
     }
   </style>
 </head>
@@ -378,39 +197,25 @@
         </div>
       </div>
     </div>
-    <div class="top-status"><span>{{.Total}} specs</span><span class="live offline" id="connection-state"><span class="live-dot"></span><span id="connection-label">Connecting</span></span></div>
+    <div class="top-status"><span>{{.WorkspaceTotal}} specs</span><span class="live offline" id="connection-state"><span class="live-dot"></span><span id="connection-label">Connecting</span></span></div>
   </header>
   <main>
-    <section class="project-header">
-      <nav class="project-breadcrumb" aria-label="Project path">
-        <span class="project-breadcrumb-label">Project</span>
-        <code>{{.ProjectPath}}</code>
-      </nav>
-    </section>
-
-    <div class="board-wrap">
-      <div class="board">
-        <section class="column">
-          <div class="column-head"><div class="column-name"><span class="column-index">01</span><span class="status-dot new"></span><span class="column-title">New</span></div><span class="count">{{len .New}}</span></div>
-          <div class="cards">{{range .New}}{{template "card" .}}{{else}}<div class="empty">No new specifications.</div>{{end}}</div>
-        </section>
-        <section class="column">
-          <div class="column-head"><div class="column-name"><span class="column-index">02</span><span class="status-dot progress"></span><span class="column-title">In progress</span></div><span class="count">{{len .InProgress}}</span></div>
-          <div class="cards">{{range .InProgress}}{{template "card" .}}{{else}}<div class="empty">Nothing in progress.</div>{{end}}</div>
-        </section>
-        <section class="column">
-          <div class="column-head"><div class="column-name"><span class="column-index">03</span><span class="status-dot done"></span><span class="column-title">Done</span></div><span class="count">{{len .Done}}</span></div>
-          <div class="cards">{{range .Done}}{{template "card" .}}{{else}}<div class="empty">Nothing done yet.</div>{{end}}</div>
-        </section>
-      </div>
-    </div>
-
-    {{if .Invalid}}
-    <section class="invalid">
-      <div class="column-head"><div class="column-name"><span class="column-index">!</span><span class="status-dot"></span><span class="column-title">Metadata errors</span></div><span class="count">{{len .Invalid}}</span></div>
-      <div class="cards">{{range .Invalid}}{{template "invalid-card" .}}{{end}}</div>
+    {{if .Multi}}
+    <section class="workspace-summary" aria-label="Workspace summary">
+      <div class="workspace-summary-head">Workspace <span>{{len .Projects}} projects</span></div>
+      {{range .Projects}}
+      <a class="workspace-row" href="#{{.ProjectKey}}">
+        <code class="workspace-project" title="{{.ProjectPath}}">{{.ProjectDisplayPath}}</code>
+        <span class="workspace-metric"><strong>{{len .New}}</strong> new</span>
+        <span class="workspace-metric"><strong>{{len .InProgress}}</strong> working</span>
+        <span class="workspace-metric"><strong>{{len .Done}}</strong> done</span>
+        <span class="workspace-metric"><strong>{{.Total}}</strong> total</span>
+      </a>
+      {{end}}
     </section>
     {{end}}
+
+    {{range .Projects}}{{template "project-board" .}}{{end}}
   </main>
 </div>
 <script>
@@ -430,9 +235,7 @@
     const next = ['classic', 'dense', 'flow'].includes(view) ? view : 'classic';
     document.documentElement.dataset.view = next;
     viewButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.view === next)));
-    if (persist) {
-      try { localStorage.setItem('specview:view', next); } catch (_) {}
-    }
+    if (persist) { try { localStorage.setItem('specview:view', next); } catch (_) {} }
   };
   setView(document.documentElement.dataset.view, false);
   viewButtons.forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
@@ -442,18 +245,14 @@
     const next = ['nested', 'corner', 'brand'].includes(activity) ? activity : 'nested';
     document.documentElement.dataset.activity = next;
     activityButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.activity === next)));
-    if (persist) {
-      try { localStorage.setItem('specview:activity', next); } catch (_) {}
-    }
+    if (persist) { try { localStorage.setItem('specview:activity', next); } catch (_) {} }
   };
   setActivity(document.documentElement.dataset.activity, false);
   activityButtons.forEach((button) => button.addEventListener('click', () => setActivity(button.dataset.activity)));
 
   document.addEventListener('click', (event) => {
     const link = event.target.closest('a.card');
-    if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-      return;
-    }
+    if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     window.location.assign(link.href);
   }, true);
@@ -462,8 +261,41 @@
 </html>
 {{end}}
 
+{{define "project-board"}}
+<section class="project-view" id="{{.ProjectKey}}">
+  <header class="project-header">
+    <nav class="project-breadcrumb" aria-label="Project path">
+      <span class="project-breadcrumb-label">Project</span>
+      <code title="{{.ProjectPath}}">{{.ProjectDisplayPath}}</code>
+    </nav>
+  </header>
+  <div class="board-wrap">
+    <div class="board">
+      <section class="column">
+        <div class="column-head"><div class="column-name"><span class="column-index">01</span><span class="status-dot new"></span><span class="column-title">New</span></div><span class="count">{{len .New}}</span></div>
+        <div class="cards">{{range .New}}{{template "card" .}}{{else}}<div class="empty">No new specifications.</div>{{end}}</div>
+      </section>
+      <section class="column">
+        <div class="column-head"><div class="column-name"><span class="column-index">02</span><span class="status-dot progress"></span><span class="column-title">In progress</span></div><span class="count">{{len .InProgress}}</span></div>
+        <div class="cards">{{range .InProgress}}{{template "card" .}}{{else}}<div class="empty">Nothing in progress.</div>{{end}}</div>
+      </section>
+      <section class="column">
+        <div class="column-head"><div class="column-name"><span class="column-index">03</span><span class="status-dot done"></span><span class="column-title">Done</span></div><span class="count">{{len .Done}}</span></div>
+        <div class="cards">{{range .Done}}{{template "card" .}}{{else}}<div class="empty">Nothing done yet.</div>{{end}}</div>
+      </section>
+    </div>
+  </div>
+  {{if .Invalid}}
+  <section class="invalid">
+    <div class="column-head"><div class="column-name"><span class="column-index">!</span><span class="status-dot"></span><span class="column-title">Metadata errors</span></div><span class="count">{{len .Invalid}}</span></div>
+    <div class="cards">{{range .Invalid}}{{template "invalid-card" .}}{{end}}</div>
+  </section>
+  {{end}}
+</section>
+{{end}}
+
 {{define "card"}}
-<a class="card" href="/spec?path={{urlquery .Path}}">
+<a class="card" href="/spec?project={{urlquery .ProjectKey}}&path={{urlquery .Path}}">
   <span class="dense-id">{{specID .Path}}</span>
   <span class="card-copy">
     <span class="title">{{.Title}}</span>
@@ -474,7 +306,7 @@
 {{end}}
 
 {{define "invalid-card"}}
-<a class="card" href="/spec?path={{urlquery .Path}}">
+<a class="card" href="/spec?project={{urlquery .ProjectKey}}&path={{urlquery .Path}}">
   <span class="dense-id">{{specID .Path}}</span>
   <span class="card-copy">
     <span class="title">{{.Title}}</span>

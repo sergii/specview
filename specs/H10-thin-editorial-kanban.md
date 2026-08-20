@@ -42,6 +42,16 @@ The intended character is **thin industrial editorial kanban**:
 - whitespace should be invested primarily in the top hero and in large headings.
 - the board area should scan quickly and efficiently.
 
+## Responsive behavior
+
+- desktop widths at 980px and above render all three workflow columns fluidly within the available viewport width.
+- desktop layout must not force a fixed minimum board width that clips the Done column on ordinary laptop screens.
+- medium widths below 980px preserve kanban geometry using horizontal overflow with approximately two columns visible.
+- mobile widths below 720px preserve one large readable column at a time with horizontal swipe or scroll.
+- project title, page gutters, hero spacing, and eyebrow rule scale fluidly with the viewport.
+- long paths and titles must not force a column wider than its responsive grid track.
+- the top bar may reflow on small screens while keeping project status and view context readable.
+
 ## Atoms
 
 - `Brand`: Specview wordmark.
@@ -79,7 +89,9 @@ The intended character is **thin industrial editorial kanban**:
 - workflow remains New, In progress, Done.
 - cards remain clickable to specification detail.
 - live SSE refresh remains unchanged.
-- board supports horizontal overflow on narrow screens.
+- all three columns fit without clipping on ordinary desktop and laptop viewport widths.
+- board supports horizontal overflow instead of crushed columns on medium and narrow screens.
+- mobile preserves readable one-column-at-a-time kanban navigation.
 - no add-card, add-column, drag-and-drop or task-management controls.
 - white background is used throughout the application.
 - corners are square, not rounded.

@@ -84,19 +84,46 @@
       line-height: 1.5;
     }
     article {
+      max-width: 900px;
       color: #4d4d48;
-      line-height: 1.65;
+      font-size: 14px;
+      line-height: 1.72;
     }
+    article > :first-child { margin-top: 0; }
+    article h2,
+    article h3,
+    article h4 {
+      color: var(--text);
+      font-weight: 560;
+      letter-spacing: -0.02em;
+    }
+    article h2 { margin: 34px 0 10px; font-size: 20px; line-height: 1.25; }
+    article h3 { margin: 28px 0 8px; font-size: 16px; line-height: 1.35; }
+    article h4 { margin: 24px 0 8px; font-size: 14px; line-height: 1.4; }
+    article p { margin: 0 0 16px; }
+    article ul,
+    article ol { margin: 0 0 18px; padding-left: 22px; }
+    article li { margin: 4px 0; }
+    article a { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    article blockquote { margin: 20px 0; padding-left: 14px; border-left: 1px solid var(--line); color: var(--muted); }
+    article code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; }
+    article :not(pre) > code { padding: 1px 4px; border: 1px solid var(--line); }
     article pre {
-      margin: 0;
-      padding: 0;
+      margin: 20px 0;
+      padding: 14px 16px;
       overflow: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
+      border: 1px solid var(--line);
       background: transparent;
-      color: inherit;
-      font: 13px/1.75 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #41413d;
+      font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
+    article pre code { font: inherit; }
+    article table { width: 100%; margin: 20px 0; border-collapse: collapse; font-size: 13px; }
+    article th,
+    article td { padding: 8px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    article th { color: var(--text); font-weight: 560; }
+    article hr { margin: 28px 0; border: 0; border-top: 1px solid var(--line); }
+    article input[type="checkbox"] { margin-right: 7px; accent-color: var(--text); }
     @media (max-width: 720px) {
       .topbar { grid-template-columns: 1fr auto; padding: 0 16px; }
       .view-label { display: none; }
@@ -105,6 +132,7 @@
       h1 { font-size: 56px; }
       .metadata { gap: 8px 14px; }
       .rule { margin: 26px 0 22px; }
+      article h2 { font-size: 18px; }
     }
   </style>
 </head>
@@ -121,7 +149,7 @@
     <div class="metadata"><span class="status">{{.Spec.Status}}</span><span class="path">{{.Spec.Path}}</span><span>Modified {{since .Spec.ModifiedAt}}</span></div>
     <div class="rule"></div>
     {{if .Spec.Error}}<div class="error">{{.Spec.Error}}</div>{{end}}
-    <article><pre>{{.Spec.Body}}</pre></article>
+    <article>{{markdownBody .Spec.Body .Spec.Title}}</article>
   </main>
 </div>
 <script>const events = new EventSource('/events'); events.addEventListener('changed', () => window.location.reload());</script>

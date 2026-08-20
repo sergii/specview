@@ -6,13 +6,33 @@ Specview is a read-only observer for Markdown specifications used during fast, a
 
 The filesystem is the source of truth. Specview watches specification files and renders their current state as a live local dashboard. It does not own tasks, edit specifications, generate specifications, or write status changes.
 
+## Repository model
+
+Specview and its demo are separate repositories.
+
+Canonical target layout:
+
+```text
+github.com/specview/specview
+github.com/specview/specview-demo
+```
+
+Responsibilities:
+
+- `specview/specview` contains the Go binary, dashboard, configuration contract, installer, CI, and release workflows.
+- `specview/specview-demo` is a normal Git repository used to demonstrate Specview with realistic specifications and implementation code.
+- the Specview binary must not embed or vendor the demo specifications.
+- the demo repository has independent Git history and may evolve independently from Specview releases.
+
+During the initial bootstrap, the implementation repository may temporarily live under another owner before being transferred to the Specview organization.
+
 ## Vertical slice
 
 The v0.0.1 proof of concept must support this complete path:
 
 ```text
 install Specview
-    -> initialize or start demo
+    -> enter a repository
     -> read .specview.yaml
     -> discover specs/**/*.md
     -> parse specview.status
@@ -22,6 +42,8 @@ install Specview
     -> notify browser over SSE
     -> show the updated state
 ```
+
+The demo validates the same path by being cloned as an ordinary repository and observed with the same binary.
 
 ## Configuration
 
@@ -45,8 +67,9 @@ server:
 Rules:
 
 - `project.name` is optional.
-- When `project.name` is empty, the repository directory name is used.
-- `project.demo: true` may be used by bundled fixture projects to mark demo data in the UI.
+- when `project.name` is empty, the repository directory name is used.
+- `project.demo: true` is an optional generic presentation hint.
+- `project.demo` does not enable hidden data, network access, cloning, or special observation behavior.
 - `specs.path` is relative to the repository root.
 - the server binds to loopback by default.
 
@@ -107,6 +130,7 @@ Required elements:
 - specification cards with title, path, and modified age
 - Metadata errors section when needed
 - specification detail view
+- optional small `DEMO` marker when `project.demo: true`
 
 Explicitly avoid in v0.0.1:
 
@@ -122,43 +146,67 @@ Explicitly avoid in v0.0.1:
 
 The UI should feel like an activity/observation surface, not a task manager.
 
-## Demo Project
+## Demo repository
 
-The repository contains a bundled `demo/` fixture with exactly 10 specifications.
+The companion repository is:
 
-Distribution:
+```text
+https://github.com/specview/specview-demo
+```
 
+It is a real project, not a fixture embedded in the Specview binary.
+
+Expected structure:
+
+```text
+specview-demo/
+├── .git/
+├── .specview.yaml
+├── README.md
+├── specs/
+│   ├── 01-project-setup.md
+│   ├── ...
+│   └── 10-release.md
+└── implementation files
+```
+
+Initial dataset:
+
+- exactly 10 specifications
 - 4 `new`
 - 3 `in_progress`
 - 3 `done`
-
-### Isolated demo
-
-```bash
-specview demo
-```
-
-Runs an isolated temporary **Demo Project** and must not modify the current repository.
-
-### Demo data in the current repository
-
-```bash
-specview init --demo
-```
-
-Initializes the current uninitialized repository with `.specview.yaml` and the 10 demo specifications. It must refuse to overwrite an existing `.specview.yaml` or a conflicting demo spec file.
+- a small but real implementation so specs can correspond to code changes
 
 Demo configuration:
 
 ```yaml
+version: 1
+
 project:
   name: "Demo Project"
   demo: true
+
+specs:
+  path: specs
+  pattern: "*.md"
+
+server:
+  host: 127.0.0.1
+  port: 7331
 ```
 
-When `project.demo` is true, the dashboard shows a small `DEMO` badge and a short note telling the user to edit specification status to see live updates. Demo styling must remain visually subordinate to the normal dashboard.
+Primary demo flow:
 
-The demo fixture also serves as a deterministic integration-test dataset.
+```bash
+git clone https://github.com/specview/specview-demo.git
+cd specview-demo
+specview
+```
+
+Users must be able to edit the demo specs, observe live transitions, commit changes, reset the repository, branch it, or use an AI coding agent inside it exactly like any other Git project.
+
+The main Specview repository should reference this companion repository in its README and documentation but must not copy its dataset into release binaries.
 
 ## CLI
 
@@ -168,11 +216,11 @@ Required commands:
 specview
 specview serve
 specview init
-specview init --demo
-specview demo
 specview version
 specview help
 ```
+
+There is intentionally no special `specview demo` or `specview init --demo` command in v0.0.1. Demo usage is ordinary Git usage.
 
 ## Distribution
 
@@ -209,10 +257,19 @@ v0.0.1 does not include:
 - task management
 - specification generation
 - LLM integration
-- Git integration
-- GitHub integration
+- Git integration inside Specview
+- GitHub API integration inside Specview
 - ontology or semantic validation
+- embedded demo dataset
+- automatic demo repository cloning
 
 ## Definition of done
 
-The POC is complete when a user can install the binary, run `specview demo`, see Demo Project with 10 cards, change a demo spec from one valid status to another, and observe the card move to the correct column automatically without manually refreshing the browser.
+The POC is complete when:
+
+1. a user can install the Specview binary;
+2. a user can initialize any repository with `specview init` and observe its specs;
+3. the external `specview-demo` repository can be cloned normally;
+4. running `specview` inside the demo repository shows Demo Project with 10 specifications;
+5. editing one specification status moves its card automatically without manual browser refresh;
+6. the Specview release binary contains no demo specification dataset.

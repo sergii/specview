@@ -8,30 +8,44 @@ Website: **specview.sh**
 
 See [`SPEC.md`](SPEC.md) for the canonical v0.0.1 POC specification.
 
-## Try the demo
+## Architecture
 
-After installing Specview, the fastest first-run experience is:
+Specview observes a repository. The filesystem is the source of truth. Specview does not edit specifications or manage their state.
 
-```bash
-specview demo
+```text
+agent / developer
+      -> edits specs/*.md
+      -> Specview observes
+      -> live dashboard updates
 ```
 
-This starts an isolated **Demo Project** with 10 bundled specifications and does not change the current repository. The dashboard marks the project with a small `DEMO` badge.
+The demo is intentionally a separate Git repository. Demo files, implementation code, and Git history are not embedded into the Specview binary.
 
-The demo contains:
+## Try the demo
 
-- 4 `new` specs
-- 3 `in_progress` specs
-- 3 `done` specs
+Canonical companion repository:
 
-To copy the same fixture into a fresh repository instead:
+```text
+https://github.com/specview/specview-demo
+```
+
+Once the Specview GitHub organization is available:
 
 ```bash
-specview init --demo
+git clone https://github.com/specview/specview-demo.git
+cd specview-demo
 specview
 ```
 
-Then edit any file under `specs/`, for example change `status: new` to `status: in_progress`. The card moves automatically without manually refreshing the browser.
+The demo repository is a real project with its own `.git`, `.specview.yaml`, `specs/`, implementation, and history. Its config sets:
+
+```yaml
+project:
+  name: "Demo Project"
+  demo: true
+```
+
+Specview only understands the generic `project.demo` flag so the UI can display a small `DEMO` marker. It does not know or ship the demo dataset itself.
 
 ## Install
 
@@ -80,7 +94,7 @@ server:
   port: 7331
 ```
 
-`project.name` is optional. When empty, Specview uses the repository directory name. Demo projects additionally set `project.demo: true` so the UI can identify fixture data without changing the observation model.
+`project.name` is optional. When empty, Specview uses the repository directory name.
 
 The leading dot in `.specview.yaml` is intentional: it is tooling metadata, not project documentation.
 
@@ -147,6 +161,7 @@ The POC UI is deliberately minimal:
 - simple specification cards
 - metadata errors when present
 - one detail view
+- optional `DEMO` marker driven by config
 - no sidebar
 - no filters
 - no drag and drop
@@ -161,6 +176,7 @@ Included:
 - one Go binary
 - `.specview.yaml`
 - optional project name
+- optional generic demo marker
 - `specs/` by default
 - `new`, `in_progress`, `done`
 - recursive Markdown discovery
@@ -168,18 +184,17 @@ Included:
 - Markdown source preview
 - live browser refresh over SSE
 - metadata-error visibility
-- `specview demo`
-- `specview init --demo`
-- 10 bundled demo specifications
-- minimal `DEMO` indication in the UI
 - loopback HTTP server by default
 - GitHub Actions CI
 - macOS/Linux release archives for amd64/arm64
 - SHA-256 checksums
 - `install.sh`
+- external companion demo repository reference
 
 Explicitly not included:
 
+- embedded demo files
+- automatic demo cloning
 - database
 - authentication
 - write API

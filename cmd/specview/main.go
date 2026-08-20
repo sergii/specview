@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/sergii/specview/demo"
 	"github.com/sergii/specview/internal/config"
 	"github.com/sergii/specview/internal/specs"
 	"github.com/sergii/specview/internal/watch"
@@ -36,9 +35,7 @@ func run(args []string) error {
 	case "serve":
 		return serve()
 	case "init":
-		return initProject(args[1:])
-	case "demo":
-		return serveDemo()
+		return initProject()
 	case "version", "--version", "-v":
 		fmt.Printf("Specview %s\n", version)
 		return nil
@@ -50,24 +47,10 @@ func run(args []string) error {
 	}
 }
 
-func initProject(args []string) error {
+func initProject() error {
 	root, err := os.Getwd()
 	if err != nil {
 		return err
-	}
-
-	if len(args) == 1 && args[0] == "--demo" {
-		created, err := demo.Create(root)
-		if err != nil {
-			return err
-		}
-		fmt.Println("✓ Created .specview.yaml for Demo Project")
-		fmt.Printf("✓ Created %d demo specifications in specs/\n", created)
-		fmt.Println("\nRun 'specview' to start observing demo specifications.")
-		return nil
-	}
-	if len(args) > 0 {
-		return fmt.Errorf("unknown init option %q; supported option: --demo", args[0])
 	}
 
 	createdConfig, createdSpecs, err := config.Init(root)
@@ -87,21 +70,6 @@ func initProject(args []string) error {
 	}
 	fmt.Println("\nRun 'specview' to start observing specifications.")
 	return nil
-}
-
-func serveDemo() error {
-	root, err := os.MkdirTemp("", "specview-demo-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(root)
-
-	created, err := demo.Create(root)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Specview Demo Project · %d demo specs\n", created)
-	return serveRoot(root)
 }
 
 func serve() error {
@@ -164,12 +132,10 @@ func printHelp() {
 	fmt.Printf(`Specview - live, read-only observation for Markdown specifications.
 
 Usage:
-  specview                 Start the dashboard in the current repository
-  specview serve           Start the dashboard in the current repository
-  specview init            Create .specview.yaml and specs/
-  specview init --demo     Initialize the current repository with 10 demo specs
-  specview demo            Run an isolated Demo Project without changing the current repository
-  specview version         Print the version
-  specview help            Show this help
+  specview              Start the dashboard in the current repository
+  specview serve        Start the dashboard in the current repository
+  specview init         Create .specview.yaml and specs/
+  specview version      Print the version
+  specview help         Show this help
 `)
 }

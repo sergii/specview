@@ -72,9 +72,14 @@ func TestBoardRendersFreshAgentActivity(t *testing.T) {
 		`specview-activity-glyph corner`,
 		`specview-activity-glyph brand`,
 		">CX<",
+		`class="card active-spec"`,
+		`data-blink="off"`,
+		`data-blink="on"`,
+		`specview-active-blink`,
+		`>rev `,
 	} {
 		if !strings.Contains(body, want) {
-			t.Fatalf("board does not render activity marker %q", want)
+			t.Fatalf("board does not render activity marker or control %q", want)
 		}
 	}
 }

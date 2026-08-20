@@ -47,14 +47,29 @@
       padding: 0 var(--page-gutter);
       border-bottom: 1px solid var(--line);
     }
-    .brand { justify-self: start; color: var(--text); font: 500 15px/1 inherit; letter-spacing: -0.012em; text-decoration: none; }
+    .brand {
+      justify-self: start;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 500;
+      line-height: 1;
+      letter-spacing: -0.012em;
+      text-decoration: none;
+    }
     .center-nav { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
     .view-label, .activity-label { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
     .activity-cluster { display: inline-flex; align-items: center; gap: 6px; }
     .view-switch, .activity-switch { display: inline-flex; border: 1px solid var(--line); }
     .view-button, .activity-button {
-      min-height: 28px; padding: 0 10px; border: 0; border-right: 1px solid var(--line);
-      background: #fff; color: var(--muted); cursor: pointer; font-size: 11px;
+      min-height: 28px;
+      padding: 0 10px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
     }
     .view-button:last-child, .activity-button:last-child { border-right: 0; }
     .view-button:hover, .activity-button:hover { color: var(--text); background: #fafafa; }
@@ -64,6 +79,8 @@
     html[data-activity="nested"] .activity-button[data-activity="nested"],
     html[data-activity="corner"] .activity-button[data-activity="corner"],
     html[data-activity="brand"] .activity-button[data-activity="brand"] { color: var(--text); background: #f2f2ef; }
+    .graph-link { color: var(--muted); font-size: 11px; text-decoration: none; }
+    .graph-link:hover { color: var(--text); }
     .top-status { justify-self: end; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
     .live { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
     .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--done); }
@@ -73,19 +90,33 @@
     main { padding: clamp(24px, 2.6vw, 36px) var(--page-gutter) 42px; }
     .workspace-summary { margin-bottom: clamp(28px, 3vw, 42px); border-top: 1px solid var(--line); }
     .workspace-summary-head {
-      display: flex; align-items: baseline; gap: 12px; min-height: 38px; padding: 10px 0 8px;
-      color: var(--muted); font-size: 10px; letter-spacing: .2em; text-transform: uppercase;
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-height: 38px;
+      padding: 10px 0 8px;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
     }
     .workspace-summary-head span { color: var(--quiet); font-size: 10px; letter-spacing: .04em; text-transform: none; }
     .workspace-row {
-      display: grid; grid-template-columns: minmax(180px, 1fr) repeat(4, auto); gap: 18px;
-      align-items: center; min-height: 34px; border-top: 1px solid var(--line); color: inherit; text-decoration: none;
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) repeat(6, auto);
+      gap: 18px;
+      align-items: center;
+      min-height: 34px;
+      border-top: 1px solid var(--line);
+      color: inherit;
+      text-decoration: none;
     }
     .workspace-row:last-child { border-bottom: 1px solid var(--line); }
     .workspace-row:hover .workspace-project { color: var(--text); }
     .workspace-project { overflow: hidden; color: var(--muted); font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
     .workspace-metric { color: var(--quiet); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .workspace-metric strong { color: var(--muted); font-weight: 500; }
+    .workspace-metric.alert strong { color: var(--error); }
 
     .project-view + .project-view { margin-top: clamp(46px, 5vw, 72px); padding-top: clamp(32px, 4vw, 52px); border-top: 1px solid var(--line); }
     .project-header { min-width: 0; margin-bottom: clamp(20px, 2vw, 28px); }
@@ -157,8 +188,9 @@
       .center-nav { grid-area: center; justify-self: start; justify-content: flex-start; }
       .top-status { grid-area: status; }
       main { padding-top: 24px; }
-      .workspace-row { grid-template-columns: minmax(0, 1fr) repeat(3, auto); gap: 10px; }
-      .workspace-row .workspace-metric:last-child { display: none; }
+      .workspace-row { grid-template-columns: minmax(0, 1fr) repeat(4, auto); gap: 10px; }
+      .workspace-row .workspace-metric:nth-of-type(4),
+      .workspace-row .workspace-metric:nth-of-type(5) { display: none; }
       .board-wrap { overflow-x: visible; scrollbar-gutter: auto; }
       .board { grid-template-columns: 1fr; grid-auto-flow: row; grid-auto-columns: auto; gap: 12px; width: 100%; min-width: 0; }
       html[data-view="flow"] .board { gap: 20px; }
@@ -169,7 +201,7 @@
       .top-status > span:first-child { display: none; }
       .project-breadcrumb-label { display: none; }
       .workspace-row { grid-template-columns: minmax(0, 1fr) auto; }
-      .workspace-row .workspace-metric:nth-last-child(-n+3) { display: none; }
+      .workspace-row .workspace-metric:not(:last-child) { display: none; }
       .column-head { min-height: 44px; }
       .card { padding: 11px 10px 9px; }
       html[data-view="dense"] .card { grid-template-columns: 20px minmax(0, 1fr) auto; padding: 8px; }
@@ -196,6 +228,7 @@
           <button class="activity-button" type="button" data-activity="brand" aria-pressed="false">Brand</button>
         </div>
       </div>
+      <a class="graph-link" href="/graph">Graph</a>
     </div>
     <div class="top-status"><span>{{.WorkspaceTotal}} specs</span><span class="live offline" id="connection-state"><span class="live-dot"></span><span id="connection-label">Connecting</span></span></div>
   </header>
@@ -207,9 +240,11 @@
       <a class="workspace-row" href="#{{.ProjectKey}}">
         <code class="workspace-project" title="{{.ProjectPath}}">{{.ProjectDisplayPath}}</code>
         <span class="workspace-metric"><strong>{{len .New}}</strong> new</span>
-        <span class="workspace-metric"><strong>{{len .InProgress}}</strong> working</span>
+        <span class="workspace-metric"><strong>{{len .InProgress}}</strong> in progress</span>
         <span class="workspace-metric"><strong>{{len .Done}}</strong> done</span>
-        <span class="workspace-metric"><strong>{{.Total}}</strong> total</span>
+        <span class="workspace-metric"><strong>{{.ActiveSessions}}</strong> agents</span>
+        <span class="workspace-metric {{if .OrphanedCount}}alert{{end}}"><strong>{{.OrphanedCount}}</strong> idle</span>
+        <span class="workspace-metric {{if .CollisionCount}}alert{{end}}"><strong>{{.CollisionCount}}</strong> collisions</span>
       </a>
       {{end}}
     </section>

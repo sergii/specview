@@ -143,6 +143,20 @@ In every mode:
 - `prefers-reduced-motion` disables Nested and Corner animation.
 - inactive or stale specifications render no activity mark.
 
+### Snake loader
+
+A second, independent presentation layer may be enabled with `Loader Off / On` while live activity exists.
+
+- the loader appears at the beginning of live specification rows/cards rather than beside the agent label.
+- it is a 2x3 matrix of tiny square cells.
+- the bright cell advances around the matrix perimeter while a short fading tail follows it, producing a compact snake-like loading motion.
+- Blink and Loader are independent; either, both, or neither may be enabled.
+- the preference is local presentation state persisted as `specview:loader` in browser `localStorage`.
+- only specifications with a fresh activity heartbeat render the loader; `in_progress` alone never does.
+- Dense, Dense Detail, and Flow keep the shared ID/title axis: the loader occupies otherwise quiet space at the beginning of the ID track instead of shifting the title column.
+- Classic and Classic Light add enough left inset to keep the loader from overlapping title content.
+- `prefers-reduced-motion` freezes the loader into a static six-square matrix instead of animating it.
+
 ## Reference publisher
 
 The repository contains a standalone development publisher at:
@@ -223,6 +237,7 @@ Adapters should generate opaque session IDs, publish explicit agent identity, up
 - invalid runtime records do not break the specification dashboard.
 - Flow, Dense, and Classic render the same activity projection without changing its semantics.
 - Nested, Corner, and Brand can be switched independently from workflow view mode.
+- Blink and snake Loader can be switched independently from each other and from activity-glyph mode.
 - the selected activity presentation survives reloads and SSE-driven refreshes.
 - reduced-motion preference disables activity animation.
 - the standalone reference publisher exercises the full presence lifecycle without becoming part of the Specview binary.

@@ -117,14 +117,21 @@ func (s *Store) ActiveSignature(now time.Time) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	ids := make([]string, 0)
+	parts := make([]string, 0)
 	for _, record := range s.records {
-		if record.State == "working" && fresh(record, now) {
-			ids = append(ids, record.SessionID)
+		if record.State != "working" || !fresh(record, now) {
+			continue
 		}
+		parts = append(parts, strings.Join([]string{
+			record.SessionID,
+			record.Spec,
+			record.Agent.ID,
+			record.Agent.Label,
+			record.State,
+		}, "\x1f"))
 	}
-	sort.Strings(ids)
-	return strings.Join(ids, "\x00")
+	sort.Strings(parts)
+	return strings.Join(parts, "\x00")
 }
 
 func (s *Store) Errors() []ParseError {

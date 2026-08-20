@@ -56,7 +56,7 @@
       color: var(--muted);
       font-size: 12px;
     }
-    .metadata .status { color: var(--text); text-transform: capitalize; }
+    .metadata .status { color: var(--text); }
     .metadata .path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--quiet); }
     .rule { margin: 34px 0 28px; border-top: 1px solid var(--line); }
     .error {
@@ -146,7 +146,7 @@
   </header>
   <main>
     <h1>{{.Spec.Title}}</h1>
-    <div class="metadata"><span class="status">{{.Spec.Status}}</span><span class="path">{{.Spec.Path}}</span><span>Modified {{since .Spec.ModifiedAt}}</span></div>
+    <div class="metadata"><span class="status">{{if eq .Spec.Status "in_progress"}}In Progress{{else if eq .Spec.Status "new"}}New{{else if eq .Spec.Status "done"}}Done{{else}}{{.Spec.Status}}{{end}}</span><span class="path">{{.Spec.Path}}</span><span>Modified {{since .Spec.ModifiedAt}}</span></div>
     <div class="rule"></div>
     {{if .Spec.Error}}<div class="error">{{.Spec.Error}}</div>{{end}}
     <article>{{markdownBody .Spec.Body .Spec.Title}}</article>

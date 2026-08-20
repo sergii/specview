@@ -36,11 +36,111 @@
       letter-spacing: .02em;
     }
 
+    .loader-cluster { display: inline-flex; align-items: center; gap: 6px; }
+    .loader-label { color: #6f6f69; font-size: 12px; letter-spacing: .02em; }
+    .loader-switch { display: inline-flex; border: 1px solid #d8d8d2; }
+    .loader-button {
+      min-height: 28px;
+      padding: 0 10px;
+      border: 0;
+      border-right: 1px solid #d8d8d2;
+      background: #fff;
+      color: #6f6f69;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .loader-button:last-child { border-right: 0; }
+    .loader-button:hover { color: #151515; background: #fafafa; }
+    html[data-loader="off"] .loader-button[data-loader="off"],
+    html[data-loader="on"] .loader-button[data-loader="on"] { color: #151515; background: #f2f2ef; }
+
+    .card.active-spec { position: relative; }
+    @keyframes specview-snake-trail {
+      0%, 15% {
+        background: #6f6f69;
+        box-shadow: 5px 0 rgba(111,111,105,.16), 5px 5px rgba(111,111,105,.10), 5px 10px rgba(111,111,105,.10), 0 10px rgba(111,111,105,.18), 0 5px rgba(111,111,105,.42);
+      }
+      16%, 32% {
+        background: rgba(111,111,105,.42);
+        box-shadow: 5px 0 #6f6f69, 5px 5px rgba(111,111,105,.16), 5px 10px rgba(111,111,105,.10), 0 10px rgba(111,111,105,.10), 0 5px rgba(111,111,105,.18);
+      }
+      33%, 49% {
+        background: rgba(111,111,105,.18);
+        box-shadow: 5px 0 rgba(111,111,105,.42), 5px 5px #6f6f69, 5px 10px rgba(111,111,105,.16), 0 10px rgba(111,111,105,.10), 0 5px rgba(111,111,105,.10);
+      }
+      50%, 65% {
+        background: rgba(111,111,105,.10);
+        box-shadow: 5px 0 rgba(111,111,105,.18), 5px 5px rgba(111,111,105,.42), 5px 10px #6f6f69, 0 10px rgba(111,111,105,.16), 0 5px rgba(111,111,105,.10);
+      }
+      66%, 82% {
+        background: rgba(111,111,105,.10);
+        box-shadow: 5px 0 rgba(111,111,105,.10), 5px 5px rgba(111,111,105,.18), 5px 10px rgba(111,111,105,.42), 0 10px #6f6f69, 0 5px rgba(111,111,105,.16);
+      }
+      83%, 100% {
+        background: rgba(111,111,105,.16);
+        box-shadow: 5px 0 rgba(111,111,105,.10), 5px 5px rgba(111,111,105,.10), 5px 10px rgba(111,111,105,.18), 0 10px rgba(111,111,105,.42), 0 5px #6f6f69;
+      }
+    }
+    html[data-loader="on"] .card.active-spec::before {
+      content: "";
+      position: absolute;
+      z-index: 1;
+      left: 11px;
+      top: 50%;
+      width: 2px;
+      height: 2px;
+      margin-top: -6px;
+      background: #6f6f69;
+      animation: specview-snake-trail 1.25s steps(1, end) infinite;
+      pointer-events: none;
+    }
+    html[data-loader="on"][data-view="classic"] .card.active-spec,
+    html[data-loader="on"][data-view="classic2"] .card.active-spec { padding-left: 30px; }
+    html[data-loader="on"][data-view="dense"] .card.active-spec::before,
+    html[data-loader="on"][data-view="dense2"] .card.active-spec::before { left: 7px; }
+    html[data-loader="on"][data-view="flow"] .card.active-spec::before { left: 1px; }
+
     @media (prefers-reduced-motion: reduce) {
       .specview-activity-inner,
       .specview-activity-corner-frame { animation: none; }
+      html[data-loader="on"] .card.active-spec::before {
+        animation: none;
+        background: #6f6f69;
+        box-shadow: 5px 0 rgba(111,111,105,.22), 5px 5px rgba(111,111,105,.22), 5px 10px rgba(111,111,105,.22), 0 10px rgba(111,111,105,.22), 0 5px rgba(111,111,105,.22);
+      }
+    }
+    @media (max-width: 520px) {
+      .loader-label { display: none; }
     }
   </style>
+
+  <script>
+    (() => {
+      if (window.__specviewLoaderControl) return;
+      window.__specviewLoaderControl = true;
+      const root = document.documentElement;
+      let initial = 'off';
+      try { initial = localStorage.getItem('specview:loader') === 'on' ? 'on' : 'off'; } catch (_) {}
+      root.dataset.loader = initial;
+
+      const nav = document.querySelector('.center-nav');
+      if (!nav) return;
+      const cluster = document.createElement('div');
+      cluster.className = 'loader-cluster';
+      cluster.innerHTML = '<span class="loader-label">Loader</span><div class="loader-switch" role="group" aria-label="Snake loader on live specifications"><button class="loader-button" type="button" data-loader="off">Off</button><button class="loader-button" type="button" data-loader="on">On</button></div>';
+      const graph = nav.querySelector('.graph-link');
+      if (graph) nav.insertBefore(cluster, graph); else nav.appendChild(cluster);
+      const buttons = cluster.querySelectorAll('.loader-button');
+      const setLoader = (value, persist = true) => {
+        const next = value === 'on' ? 'on' : 'off';
+        root.dataset.loader = next;
+        buttons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.loader === next)));
+        if (persist) { try { localStorage.setItem('specview:loader', next); } catch (_) {} }
+      };
+      setLoader(initial, false);
+      buttons.forEach((button) => button.addEventListener('click', () => setLoader(button.dataset.loader)));
+    })();
+  </script>
 
   <svg class="specview-activity-glyph nested" width="9" height="9" viewBox="0 0 10 10" aria-hidden="true" style="overflow:visible;">
     <rect x="0.75" y="0.75" width="8.5" height="8.5" fill="none" stroke="currentColor" stroke-width="1"/>

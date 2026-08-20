@@ -21,29 +21,33 @@ The intended character is **thin industrial editorial workflow**:
 - typography carries hierarchy more than decoration.
 - numbered structures such as `01`, `02`, `03`.
 - restrained workflow color used as small square markers, not large badges.
-- full project filesystem context rendered as a quiet path breadcrumb.
+- compact project filesystem context rendered as a quiet path breadcrumb.
 - one thin application shell around the whole board.
 
 ## Project context
 
-The board identifies the observed project by its resolved filesystem path rather than by a large project-name heading.
+The canonical identity of the observed project remains its full resolved filesystem path, but the board renders only the final two components: parent folder plus current project folder.
 
 Example:
 
 ```text
-PROJECT   /Users/example/repos/specview
+PROJECT   sergii/specview
 ```
 
-`PROJECT` and the path are separated by whitespace only. Do not insert a decorative slash between the label and a path that already begins with `/`.
+The complete resolved path remains available as hover/title metadata, for example:
+
+```text
+/Users/serhii/repos/sergii/specview
+```
 
 Reasons:
 
 - agent-first development can create many short-lived or similarly named projects.
-- a project name alone is not enough to distinguish local, devbox, monorepo, sibling, and ephemeral workspaces.
-- the resolved path is the most concrete identity of the filesystem Specview is actually observing.
-- the path should remain complete and horizontally scrollable on narrow screens rather than silently changing its meaning through truncation.
+- a project name alone is not enough to distinguish personal, company, devbox, monorepo, sibling, and ephemeral workspaces.
+- the parent/current pair usually provides the useful namespace context without exposing long machine-specific prefixes in the primary reading path.
+- the full resolved path remains the concrete internal identity and is never discarded.
 
-The previous `Source / specs` block is removed from the board because `specs.path` is redundant once full project context is visible. The board may still use the configured specs path internally.
+The previous `Source / specs` block is removed because `specs.path` is redundant once useful project context is visible. The board may still use the configured specs path internally.
 
 ## View modes
 
@@ -68,7 +72,7 @@ Specview supports three presentations of the same live workflow state.
 - renders the workflow as a near-typographic stream: display ID, title, and relative age with almost no surrounding chrome.
 - keeps New, In progress, and Done as semantic groups without turning them into table-like containers.
 - uses whitespace, typography, square status markers, and subtle hover treatment instead of boxes.
-- is the preferred visual surface for future rapidly changing live agent activity because it minimizes visual noise around changing state.
+- is the preferred visual surface for rapidly changing live agent activity because it minimizes visual noise around changing state.
 
 The header contains a `Classic / Dense / Flow` switch. The selected mode is local presentation state and is persisted in browser `localStorage`, so SSE refreshes do not reset it.
 
@@ -117,12 +121,12 @@ AUTH-03  Authentication flow
 
 ## Layout balance
 
-- the top bar and project path establish context without consuming hero-scale vertical space.
+- the top bar and compact project path establish context without consuming hero-scale vertical space.
 - the workflow body should begin quickly and remain easy to scan.
 - Classic spends more space on individual specification cards.
 - Dense materially increases information density while keeping structural lines.
 - Flow spends the least visual chrome and relies primarily on typography and whitespace.
-- Dense and Flow align specification titles with the workflow title track so row titles begin directly beneath labels such as `In progress` rather than drifting to the right behind an oversized ID column.
+- Dense and Flow align specification titles close to the workflow marker/title track instead of leaving an oversized ID gutter.
 - workflow counts stay visually attached to the workflow label, for example `In progress 5`, instead of being pushed to the far right edge of the column header.
 
 ## Responsive behavior
@@ -147,12 +151,12 @@ AUTH-03  Authentication flow
 - Flow mode keeps borderless typographic rows inside each vertical status group.
 - no horizontal swipe is required to reach another workflow state.
 
-Page gutters, project breadcrumb spacing, and workflow spacing scale fluidly with the viewport. Long paths and titles must not force a column or row wider than its available track.
+Page gutters, project context spacing, and workflow spacing scale fluidly with the viewport. Long titles must not force a column or row wider than its available track.
 
 ## Atoms
 
 - `Brand`: Specview product text and home link using the body sans language.
-- `ProjectBreadcrumb`: `PROJECT` plus the full resolved filesystem path, without a decorative slash separator.
+- `ProjectBreadcrumb`: `PROJECT` plus `parent/current`; full resolved path on hover.
 - `ViewSwitch`: Classic / Dense / Flow presentation selector.
 - `ColumnIndex`: two-digit structural index.
 - `StatusSquare`: restrained workflow state marker.
@@ -193,14 +197,14 @@ Page gutters, project breadcrumb spacing, and workflow spacing scale fluidly wit
 - Flow mode renders specifications without card, row, or column borders.
 - selected mode survives reloads and SSE-driven page refreshes.
 - specifications remain clickable to the detail page in all modes.
-- live SSE refresh remains unchanged.
+- live SSE refresh remains available.
 - workflow markers are square and New is neutral graphite.
 - Live remains a circular connection signal.
-- the board shows the complete resolved project filesystem path instead of a large project-name hero.
-- `PROJECT` is followed directly by the filesystem path without an extra slash separator.
+- the board shows `parent/current` project identity rather than a large project-name hero or a long absolute path.
+- hovering the compact project identity exposes the full resolved filesystem path.
 - the redundant Source / specs block is not shown.
 - Specview brand text uses the same sans language on board and detail pages.
-- Dense and Flow specification titles align with the workflow-title track.
+- Dense and Flow specification titles use a tight ID/title geometry close to the workflow marker track.
 - workflow counts render adjacent to their workflow titles rather than at the far right edge.
 - all three columns fit without clipping on ordinary desktop and laptop viewport widths.
 - tablet widths preserve kanban and may use horizontal overflow.

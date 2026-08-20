@@ -1,6 +1,7 @@
 package activity
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,6 +56,58 @@ func TestActiveForReturnsOnlyFreshWorkingSessions(t *testing.T) {
 	}
 	if got := AgentLabel(active[0]); got != "Codex" {
 		t.Fatalf("agent label = %q, want Codex", got)
+	}
+}
+
+func TestActiveSignatureIgnoresHeartbeatButTracksVisibleSemantics(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 8, 20, 18, 0, 30, 0, time.UTC)
+	path := filepath.Join(root, "session.json")
+
+	write := func(spec, label, heartbeat string) {
+		t.Helper()
+		body := fmt.Sprintf(`{
+  "version": 1,
+  "session_id": "session-1",
+  "agent": {"id": "codex", "label": %q},
+  "spec": %q,
+  "state": "working",
+  "heartbeat_at": %q
+}`, label, spec, heartbeat)
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	store := NewStore(root)
+	write("specs/H10.md", "Codex", "2026-08-20T18:00:20Z")
+	if err := store.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	initial := store.ActiveSignature(now)
+
+	write("specs/H10.md", "Codex", "2026-08-20T18:00:25Z")
+	if err := store.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.ActiveSignature(now); got != initial {
+		t.Fatalf("heartbeat-only update changed signature: %q != %q", got, initial)
+	}
+
+	write("specs/H11.md", "Codex", "2026-08-20T18:00:25Z")
+	if err := store.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.ActiveSignature(now); got == initial {
+		t.Fatal("moving an active session to another spec did not change signature")
+	}
+
+	write("specs/H10.md", "Codex Prime", "2026-08-20T18:00:25Z")
+	if err := store.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.ActiveSignature(now); got == initial {
+		t.Fatal("changing the visible agent label did not change signature")
 	}
 }
 

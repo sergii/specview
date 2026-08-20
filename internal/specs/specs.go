@@ -119,8 +119,8 @@ func scan(root, pattern string) ([]Spec, error) {
 }
 
 type metadata struct {
-	Status     Status
-	HasStatus  bool
+	Status    Status
+	HasStatus bool
 	DependsOn []string
 	Blocks    []string
 }

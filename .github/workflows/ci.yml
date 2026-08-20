@@ -18,7 +18,13 @@ jobs:
           go-version: '1.26.5'
           cache: false
       - name: Check formatting
-        run: test -z "$(gofmt -l .)"
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "Unformatted Go files:"
+            echo "$unformatted"
+            exit 1
+          fi
       - name: Verify modules
         run: go mod tidy && git diff --exit-code -- go.mod
       - name: Vet

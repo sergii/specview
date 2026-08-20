@@ -1,3 +1,4 @@
 /specview
 /dist/
+.specview/runtime/
 .DS_Store

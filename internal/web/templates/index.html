@@ -4,49 +4,445 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Specview - {{.ProjectName}}</title>
+  <title>Specview{{if .Multi}} - Workspace{{else}} - {{.ProjectName}}{{end}}</title>
+  <script>
+    try {
+      document.documentElement.dataset.view = localStorage.getItem('specview:view') || 'classic';
+      document.documentElement.dataset.activity = localStorage.getItem('specview:activity') || 'nested';
+      document.documentElement.dataset.blink = localStorage.getItem('specview:blink') || 'off';
+    } catch (_) {
+      document.documentElement.dataset.view = 'classic';
+      document.documentElement.dataset.activity = 'nested';
+      document.documentElement.dataset.blink = 'off';
+    }
+  </script>
   <style>
-    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { margin: 0; background: #0b0d10; color: #f5f7fa; }
-    header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 24px 32px; border-bottom: 1px solid #242831; }
-    h1 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
-    .project { margin-top: 5px; color: #aeb6c2; font-size: 13px; }
-    .muted { color: #8f98a6; font-size: 12px; }
-    main { padding: 28px 32px 48px; }
-    .board { display: grid; grid-template-columns: repeat(3, minmax(240px, 1fr)); gap: 18px; align-items: start; }
-    .column { min-width: 0; }
-    .column-title { display: flex; justify-content: space-between; margin-bottom: 12px; color: #aeb6c2; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-    .count { color: #667080; }
-    .card { display: block; margin-bottom: 10px; padding: 14px 15px; border: 1px solid #2b303a; border-radius: 10px; background: #13171d; color: inherit; text-decoration: none; }
-    .card:hover { border-color: #555f6f; background: #171c23; }
-    .title { font-size: 14px; font-weight: 650; line-height: 1.35; }
-    .meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; color: #778190; font-size: 11px; }
-    .invalid { margin-top: 28px; padding-top: 22px; border-top: 1px solid #242831; }
-    .invalid .card { border-color: #6f3e3e; }
-    .error { margin-top: 8px; color: #ef9a9a; font-size: 12px; }
-    .empty { padding: 18px 0; color: #596271; font-size: 12px; }
-    @media (max-width: 850px) { header, main { padding-left: 18px; padding-right: 18px; } .board { grid-template-columns: 1fr; } }
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --page: #fff;
+      --surface: #fff;
+      --panel: #fff;
+      --card: #fff;
+      --text: #151515;
+      --muted: #6f6f69;
+      --quiet: #a0a099;
+      --line: #d8d8d2;
+      --line-strong: #c8c8c2;
+      --new: #85857e;
+      --progress: #c39423;
+      --done: #2f8a57;
+      --error: #b04b43;
+      --page-gutter: clamp(16px, 2.4vw, 32px);
+      --workflow-id-track: 28px;
+      --workflow-title-gap: 10px;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body { margin: 0; background: var(--page); color: var(--text); -webkit-font-smoothing: antialiased; }
+    button { font: inherit; }
+    .app-shell { min-height: 100vh; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+    .topbar {
+      min-height: 54px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 16px;
+      padding: 0 var(--page-gutter);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand {
+      justify-self: start;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 500;
+      line-height: 1;
+      letter-spacing: -0.012em;
+      text-decoration: none;
+    }
+    .center-nav { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .view-label, .activity-label, .blink-label { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
+    .activity-cluster, .blink-cluster { display: inline-flex; align-items: center; gap: 6px; }
+    .view-switch, .activity-switch, .blink-switch { display: inline-flex; border: 1px solid var(--line); }
+    .view-button, .activity-button, .blink-button {
+      min-height: 28px;
+      padding: 0 10px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .view-button:last-child, .activity-button:last-child, .blink-button:last-child { border-right: 0; }
+    .view-button:hover, .activity-button:hover, .blink-button:hover { color: var(--text); background: #fafafa; }
+    html[data-view="classic"] .view-button[data-view="classic"],
+    html[data-view="classic2"] .view-button[data-view="classic2"],
+    html[data-view="dense"] .view-button[data-view="dense"],
+    html[data-view="dense2"] .view-button[data-view="dense2"],
+    html[data-view="flow"] .view-button[data-view="flow"],
+    html[data-activity="nested"] .activity-button[data-activity="nested"],
+    html[data-activity="corner"] .activity-button[data-activity="corner"],
+    html[data-activity="brand"] .activity-button[data-activity="brand"],
+    html[data-blink="off"] .blink-button[data-blink="off"],
+    html[data-blink="on"] .blink-button[data-blink="on"] { color: var(--text); background: #f2f2ef; }
+    .graph-link { color: var(--muted); font-size: 11px; text-decoration: none; }
+    .graph-link:hover { color: var(--text); }
+    .top-status { justify-self: end; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+    .top-project { color: var(--muted); font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: nowrap; }
+    .top-count { color: var(--quiet); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .live { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--done); }
+    .live.offline { color: var(--muted); }
+    .live.offline .live-dot { background: var(--error); }
+
+    main { padding: clamp(24px, 2.6vw, 36px) var(--page-gutter) 42px; }
+    .workspace-summary { margin-bottom: clamp(28px, 3vw, 42px); border-top: 1px solid var(--line); }
+    .workspace-summary-head {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-height: 38px;
+      padding: 10px 0 8px;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+    }
+    .workspace-summary-head span { color: var(--quiet); font-size: 10px; letter-spacing: .04em; text-transform: none; }
+    .workspace-row {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) repeat(6, auto);
+      gap: 18px;
+      align-items: center;
+      min-height: 34px;
+      border-top: 1px solid var(--line);
+      color: inherit;
+      text-decoration: none;
+    }
+    .workspace-row:last-child { border-bottom: 1px solid var(--line); }
+    .workspace-row:hover .workspace-project { color: var(--text); }
+    .workspace-project { overflow: hidden; color: var(--muted); font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+    .workspace-metric { color: var(--quiet); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .workspace-metric strong { color: var(--muted); font-weight: 500; }
+    .workspace-metric.alert strong { color: var(--error); }
+
+    .project-view + .project-view { margin-top: clamp(46px, 5vw, 72px); padding-top: clamp(32px, 4vw, 52px); border-top: 1px solid var(--line); }
+    main > .project-view:first-child .project-header { display: none; }
+    .project-header { min-width: 0; margin-bottom: clamp(20px, 2vw, 28px); }
+    .project-breadcrumb { display: flex; align-items: center; gap: 14px; min-width: 0; color: var(--quiet); font-size: 11px; line-height: 1.4; white-space: nowrap; }
+    .project-breadcrumb-label { flex: 0 0 auto; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+    .project-breadcrumb code { min-width: 0; overflow: hidden; color: var(--muted); font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+
+    .board-wrap { width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-gutter: stable; padding-bottom: 4px; }
+    .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(6px, .7vw, 10px); width: 100%; min-width: 0; align-items: start; }
+    .column { min-width: 0; overflow: hidden; border: 1px solid var(--line); background: var(--panel); }
+    .column-head { min-height: 48px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+    .column-name { display: flex; align-items: center; min-width: 0; gap: 9px; }
+    .column-index { color: var(--quiet); font-size: 10px; font-variant-numeric: tabular-nums; letter-spacing: .12em; }
+    .status-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 0; }
+    .status-dot.new { background: var(--new); }
+    .status-dot.progress { background: var(--progress); }
+    .status-dot.done { background: var(--done); }
+    .column-title { overflow: hidden; color: #595953; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .count { flex: 0 0 auto; color: var(--quiet); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .cards { display: grid; gap: 6px; padding: 6px; }
+    .card { display: block; min-width: 0; padding: 12px 12px 10px; border: 1px solid var(--line); background: var(--card); color: inherit; text-decoration: none; cursor: pointer; transition: border-color .12s ease, background .12s ease; }
+    .card:hover { border-color: var(--line-strong); background: #fcfcfb; }
+    @keyframes specview-active-blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: .42; }
+    }
+    html[data-blink="on"] .card.active-spec { animation: specview-active-blink 1.4s steps(1, end) infinite; }
+    .title { overflow-wrap: anywhere; font-size: 13px; font-weight: 560; line-height: 1.38; letter-spacing: -0.012em; }
+    .meta { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 9px; color: var(--quiet); font-size: 10px; line-height: 1.35; }
+    .path { overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+    .age { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .dense-id, .dense-age { display: none; }
+    .empty { padding: 20px 12px 22px; color: var(--quiet); font-size: 11px; }
+    .invalid { margin-top: 8px; border: 1px solid #e2c9c5; background: #fffdfd; }
+    .invalid .column-head { border-color: #e2c9c5; }
+    .invalid .status-dot { background: var(--error); }
+    .invalid .cards { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+    .error { margin-top: 8px; color: var(--error); font-size: 10px; line-height: 1.45; }
+
+    html[data-view="classic2"] .card { border-color: transparent; }
+    html[data-view="classic2"] .card:hover { border-color: transparent; }
+
+    html[data-view="dense"] .cards,
+    html[data-view="dense2"] .cards { display: block; padding: 0; }
+    html[data-view="dense"] .card,
+    html[data-view="dense2"] .card {
+      display: grid;
+      grid-template-columns: var(--workflow-id-track) minmax(0, 1fr) auto;
+      column-gap: var(--workflow-title-gap);
+      align-items: center;
+      padding: 8px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    html[data-view="dense"] .column-head,
+    html[data-view="dense2"] .column-head { padding-left: 8px; }
+    html[data-view="dense"] .column-name,
+    html[data-view="dense2"] .column-name,
+    html[data-view="flow"] .column-name {
+      display: grid;
+      grid-template-columns: var(--workflow-id-track) 6px auto;
+      column-gap: var(--workflow-title-gap);
+      align-items: center;
+    }
+    html[data-view="dense"] .column-index,
+    html[data-view="dense2"] .column-index,
+    html[data-view="flow"] .column-index,
+    html[data-view="dense"] .dense-id,
+    html[data-view="dense2"] .dense-id,
+    html[data-view="flow"] .dense-id { width: 100%; text-align: right; }
+    html[data-view="dense"] .card { min-height: 36px; }
+    html[data-view="dense2"] .card { min-height: 48px; padding-top: 7px; padding-bottom: 7px; }
+    html[data-view="dense"] .card:last-child,
+    html[data-view="dense2"] .card:last-child { border-bottom: 0; }
+    html[data-view="dense"] .card:hover,
+    html[data-view="dense2"] .card:hover { background: #fafafa; }
+    html[data-view="dense"] .dense-id,
+    html[data-view="dense2"] .dense-id,
+    html[data-view="flow"] .dense-id { display: block; overflow: hidden; color: var(--quiet); font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .06em; text-overflow: ellipsis; white-space: nowrap; }
+    html[data-view="dense"] .dense-age,
+    html[data-view="dense2"] .dense-age,
+    html[data-view="flow"] .dense-age { display: block; color: var(--quiet); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    html[data-view="dense"] .card-copy,
+    html[data-view="dense2"] .card-copy,
+    html[data-view="flow"] .card-copy { min-width: 0; }
+    html[data-view="dense"] .title,
+    html[data-view="dense2"] .title,
+    html[data-view="flow"] .title { overflow: hidden; font-size: 12px; font-weight: 500; line-height: 1.3; overflow-wrap: normal; text-overflow: ellipsis; white-space: nowrap; }
+    html[data-view="dense"] .meta,
+    html[data-view="flow"] .meta { display: none; }
+    html[data-view="dense2"] .meta {
+      display: block;
+      margin-top: 3px;
+      color: var(--quiet);
+      font-size: 9px;
+      line-height: 1.25;
+    }
+    html[data-view="dense2"] .meta .path { display: block; }
+    html[data-view="dense2"] .meta .age { display: none; }
+    html[data-view="dense"] .error,
+    html[data-view="dense2"] .error,
+    html[data-view="flow"] .error { grid-column: 2 / -1; margin-top: 0; }
+
+    html[data-view="flow"] .board { gap: clamp(22px, 3vw, 46px); }
+    html[data-view="flow"] .column { overflow: visible; border: 0; background: transparent; }
+    html[data-view="flow"] .column-head { min-height: 32px; padding: 0 2px 8px; border: 0; }
+    html[data-view="flow"] .cards { display: block; padding: 0; }
+    html[data-view="flow"] .card {
+      display: grid;
+      grid-template-columns: var(--workflow-id-track) minmax(0, 1fr) auto;
+      column-gap: var(--workflow-title-gap);
+      align-items: center;
+      min-height: 31px;
+      padding: 5px 0 5px 2px;
+      border: 0;
+      background: transparent;
+    }
+    html[data-view="flow"] .card:hover { background: transparent; }
+    html[data-view="flow"] .card:hover .title { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    html[data-view="flow"] .empty { padding: 8px 2px; }
+    html[data-view="flow"] .invalid { border: 0; background: transparent; }
+    html[data-view="flow"] .invalid .column-head { border: 0; }
+
+    @media (prefers-reduced-motion: reduce) {
+      html[data-blink="on"] .card.active-spec { animation: none; opacity: 1; }
+    }
+    @media (max-width: 979px) and (min-width: 800px) {
+      .board { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(300px, 44vw); width: max-content; min-width: 100%; }
+    }
+    @media (max-width: 799px) {
+      .topbar { grid-template-columns: 1fr auto; grid-template-areas: "brand status" "center center"; gap: 8px 16px; min-height: 72px; padding-top: 10px; padding-bottom: 10px; }
+      .brand { grid-area: brand; }
+      .center-nav { grid-area: center; justify-self: start; justify-content: flex-start; }
+      .top-status { grid-area: status; }
+      main { padding-top: 24px; }
+      .workspace-row { grid-template-columns: minmax(0, 1fr) repeat(4, auto); gap: 10px; }
+      .workspace-row .workspace-metric:nth-of-type(4),
+      .workspace-row .workspace-metric:nth-of-type(5) { display: none; }
+      .board-wrap { overflow-x: visible; scrollbar-gutter: auto; }
+      .board { grid-template-columns: 1fr; grid-auto-flow: row; grid-auto-columns: auto; gap: 12px; width: 100%; min-width: 0; }
+      html[data-view="flow"] .board { gap: 20px; }
+      .column { width: 100%; }
+    }
+    @media (max-width: 520px) {
+      .view-label, .activity-label, .blink-label { display: none; }
+      .top-project { display: none; }
+      .workspace-row { grid-template-columns: minmax(0, 1fr) auto; }
+      .workspace-row .workspace-metric:not(:last-child) { display: none; }
+      .column-head { min-height: 44px; }
+      .card { padding: 11px 10px 9px; }
+      html[data-view="dense"] .card,
+      html[data-view="dense2"] .card { grid-template-columns: var(--workflow-id-track) minmax(0, 1fr) auto; column-gap: var(--workflow-title-gap); padding-left: 8px; padding-right: 8px; }
+      html[data-view="flow"] .card { grid-template-columns: var(--workflow-id-track) minmax(0, 1fr) auto; column-gap: var(--workflow-title-gap); padding: 8px 0 8px 2px; }
+    }
   </style>
 </head>
 <body>
-<header>
-  <div>
-    <h1>Specview</h1>
-    <div class="project">{{.ProjectName}}</div>
-    <div class="muted">{{.SpecsPath}}</div>
-  </div>
-  <div class="muted">{{.Total}} specs · live</div>
-</header>
-<main>
-  <div class="board">
-    <section class="column"><div class="column-title"><span>New</span><span class="count">{{len .New}}</span></div>{{range .New}}{{template "card" .}}{{else}}<div class="empty">No new specs</div>{{end}}</section>
-    <section class="column"><div class="column-title"><span>In progress</span><span class="count">{{len .InProgress}}</span></div>{{range .InProgress}}{{template "card" .}}{{else}}<div class="empty">Nothing in progress</div>{{end}}</section>
-    <section class="column"><div class="column-title"><span>Done</span><span class="count">{{len .Done}}</span></div>{{range .Done}}{{template "card" .}}{{else}}<div class="empty">Nothing done yet</div>{{end}}</section>
-  </div>
-  {{if .Invalid}}<section class="invalid"><div class="column-title"><span>Metadata errors</span><span class="count">{{len .Invalid}}</span></div>{{range .Invalid}}<a class="card" href="/spec?path={{urlquery .Path}}"><div class="title">{{.Title}}</div><div class="meta"><span>{{.Path}}</span><span>{{since .ModifiedAt}}</span></div><div class="error">{{.Error}}</div></a>{{end}}</section>{{end}}
-</main>
-<script>const events = new EventSource('/events'); events.addEventListener('changed', () => window.location.reload());</script>
+<div class="app-shell">
+  <header class="topbar">
+    <a class="brand" href="/">Specview</a>
+    <div class="center-nav">
+      <span class="view-label">Specification board</span>
+      <div class="view-switch" role="group" aria-label="Board view">
+        <button class="view-button" type="button" data-view="classic" aria-pressed="true">Classic</button>
+        <button class="view-button" type="button" data-view="classic2" aria-pressed="false">Classic Light</button>
+        <button class="view-button" type="button" data-view="dense" aria-pressed="false">Dense</button>
+        <button class="view-button" type="button" data-view="dense2" aria-pressed="false">Dense Detail</button>
+        <button class="view-button" type="button" data-view="flow" aria-pressed="false">Flow</button>
+      </div>
+      <div class="activity-cluster">
+        <span class="activity-label">Activity</span>
+        <div class="activity-switch" role="group" aria-label="Activity indicator">
+          <button class="activity-button" type="button" data-activity="nested" aria-pressed="true">Nested</button>
+          <button class="activity-button" type="button" data-activity="corner" aria-pressed="false">Corner</button>
+          <button class="activity-button" type="button" data-activity="brand" aria-pressed="false">Brand</button>
+        </div>
+      </div>
+      <div class="blink-cluster">
+        <span class="blink-label">Blink</span>
+        <div class="blink-switch" role="group" aria-label="Blink live specifications">
+          <button class="blink-button" type="button" data-blink="off" aria-pressed="true">Off</button>
+          <button class="blink-button" type="button" data-blink="on" aria-pressed="false">On</button>
+        </div>
+      </div>
+      <a class="graph-link" href="/graph">Graph</a>
+    </div>
+    <div class="top-status">{{if .Multi}}<span>{{len .Projects}} projects</span><span class="top-count">· {{.WorkspaceTotal}} specs</span>{{else}}<code class="top-project" title="{{.ProjectPath}}">{{.ProjectDisplayPath}}</code><span class="top-count">· {{.WorkspaceTotal}} specs</span>{{end}}<span class="live offline" id="connection-state"><span class="live-dot"></span><span id="connection-label">Connecting</span></span></div>
+  </header>
+  <main>
+    {{if .Multi}}
+    <section class="workspace-summary" aria-label="Workspace summary">
+      <div class="workspace-summary-head">Workspace <span>{{len .Projects}} projects</span></div>
+      {{range .Projects}}
+      <a class="workspace-row" href="#{{.ProjectKey}}">
+        <code class="workspace-project" title="{{.ProjectPath}}">{{.ProjectDisplayPath}}</code>
+        <span class="workspace-metric"><strong>{{len .New}}</strong> new</span>
+        <span class="workspace-metric"><strong>{{len .InProgress}}</strong> in progress</span>
+        <span class="workspace-metric"><strong>{{len .Done}}</strong> done</span>
+        <span class="workspace-metric"><strong>{{.ActiveSessions}}</strong> agents</span>
+        <span class="workspace-metric {{if .OrphanedCount}}alert{{end}}"><strong>{{.OrphanedCount}}</strong> idle</span>
+        <span class="workspace-metric {{if .CollisionCount}}alert{{end}}"><strong>{{.CollisionCount}}</strong> collisions</span>
+      </a>
+      {{end}}
+    </section>
+    {{end}}
+
+    {{range .Projects}}{{template "project-board" .}}{{end}}
+  </main>
+  <footer style="position:fixed;left:12px;bottom:8px;z-index:3;color:#a0a099;font:9px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;pointer-events:none;">rev {{.Revision}}</footer>
+</div>
+<script>
+  const events = new EventSource('/events');
+  const connectionState = document.getElementById('connection-state');
+  const connectionLabel = document.getElementById('connection-label');
+  const setConnection = (online) => {
+    connectionState.classList.toggle('offline', !online);
+    connectionLabel.textContent = online ? 'Live' : 'Offline';
+  };
+  events.addEventListener('open', () => setConnection(true));
+  events.addEventListener('error', () => setConnection(false));
+  events.addEventListener('changed', () => window.location.reload());
+
+  const viewButtons = document.querySelectorAll('.view-button');
+  const setView = (view, persist = true) => {
+    const next = ['classic', 'classic2', 'dense', 'dense2', 'flow'].includes(view) ? view : 'classic';
+    document.documentElement.dataset.view = next;
+    viewButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.view === next)));
+    if (persist) { try { localStorage.setItem('specview:view', next); } catch (_) {} }
+  };
+  setView(document.documentElement.dataset.view, false);
+  viewButtons.forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
+
+  const activityButtons = document.querySelectorAll('.activity-button');
+  const setActivity = (activity, persist = true) => {
+    const next = ['nested', 'corner', 'brand'].includes(activity) ? activity : 'nested';
+    document.documentElement.dataset.activity = next;
+    activityButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.activity === next)));
+    if (persist) { try { localStorage.setItem('specview:activity', next); } catch (_) {} }
+  };
+  setActivity(document.documentElement.dataset.activity, false);
+  activityButtons.forEach((button) => button.addEventListener('click', () => setActivity(button.dataset.activity)));
+
+  const blinkButtons = document.querySelectorAll('.blink-button');
+  const setBlink = (blink, persist = true) => {
+    const next = blink === 'on' ? 'on' : 'off';
+    document.documentElement.dataset.blink = next;
+    blinkButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.blink === next)));
+    if (persist) { try { localStorage.setItem('specview:blink', next); } catch (_) {} }
+  };
+  setBlink(document.documentElement.dataset.blink, false);
+  blinkButtons.forEach((button) => button.addEventListener('click', () => setBlink(button.dataset.blink)));
+
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('a.card');
+    if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    window.location.assign(link.href);
+  }, true);
+</script>
 </body>
 </html>
 {{end}}
-{{define "card"}}<a class="card" href="/spec?path={{urlquery .Path}}"><div class="title">{{.Title}}</div><div class="meta"><span>{{.Path}}</span><span>{{since .ModifiedAt}}</span></div></a>{{end}}
+
+{{define "project-board"}}
+<section class="project-view" id="{{.ProjectKey}}">
+  <header class="project-header">
+    <nav class="project-breadcrumb" aria-label="Project path">
+      <span class="project-breadcrumb-label">Project</span>
+      <code title="{{.ProjectPath}}">{{.ProjectDisplayPath}}</code>
+    </nav>
+  </header>
+  <div class="board-wrap">
+    <div class="board">
+      <section class="column">
+        <div class="column-head"><div class="column-name"><span class="column-index">01</span><span class="status-dot new"></span><span class="column-title">New</span></div><span class="count">{{len .New}}</span></div>
+        <div class="cards">{{range .New}}{{template "card" .}}{{else}}<div class="empty">No new specifications.</div>{{end}}</div>
+      </section>
+      <section class="column">
+        <div class="column-head"><div class="column-name"><span class="column-index">02</span><span class="status-dot progress"></span><span class="column-title">In progress</span></div><span class="count">{{len .InProgress}}</span></div>
+        <div class="cards">{{range .InProgress}}{{template "card" .}}{{else}}<div class="empty">Nothing in progress.</div>{{end}}</div>
+      </section>
+      <section class="column">
+        <div class="column-head"><div class="column-name"><span class="column-index">03</span><span class="status-dot done"></span><span class="column-title">Done</span></div><span class="count">{{len .Done}}</span></div>
+        <div class="cards">{{range .Done}}{{template "card" .}}{{else}}<div class="empty">Nothing done yet.</div>{{end}}</div>
+      </section>
+    </div>
+  </div>
+  {{if .Invalid}}
+  <section class="invalid">
+    <div class="column-head"><div class="column-name"><span class="column-index">!</span><span class="status-dot"></span><span class="column-title">Metadata errors</span></div><span class="count">{{len .Invalid}}</span></div>
+    <div class="cards">{{range .Invalid}}{{template "invalid-card" .}}{{end}}</div>
+  </section>
+  {{end}}
+</section>
+{{end}}
+
+{{define "card"}}
+<a class="card" href="/spec?project={{urlquery .ProjectKey}}&path={{urlquery .Path}}">
+  <span class="dense-id">{{specID .Path}}</span>
+  <span class="card-copy">
+    <span class="title">{{.Title}}</span>
+    <span class="meta"><span class="path">{{.Path}}</span><span class="age">{{since .ModifiedAt}}</span></span>
+  </span>
+  <span class="dense-age">{{since .ModifiedAt}}</span>
+</a>
+{{end}}
+
+{{define "invalid-card"}}
+<a class="card" href="/spec?project={{urlquery .ProjectKey}}&path={{urlquery .Path}}">
+  <span class="dense-id">{{specID .Path}}</span>
+  <span class="card-copy">
+    <span class="title">{{.Title}}</span>
+    <span class="meta"><span class="path">{{.Path}}</span><span class="age">{{since .ModifiedAt}}</span></span>
+  </span>
+  <span class="dense-age">{{since .ModifiedAt}}</span>
+  <span class="error">{{.Error}}</span>
+</a>
+{{end}}

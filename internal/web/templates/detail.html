@@ -1,5 +1,165 @@
 {{define "detail.html"}}
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{.Spec.Title}} - Specview</title><style>
-:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{margin:0;background:#0b0d10;color:#f5f7fa}header{padding:22px 32px;border-bottom:1px solid #242831}header a{color:#aeb6c2;text-decoration:none;font-size:13px}main{max-width:860px;margin:0 auto;padding:36px 28px 72px}.eyebrow{color:#8f98a6;font-size:12px;text-transform:uppercase;letter-spacing:.08em}h1{margin:8px 0 12px;font-size:30px;letter-spacing:-.03em}.metadata{display:flex;flex-wrap:wrap;gap:8px 18px;margin-bottom:28px;color:#8f98a6;font-size:12px}.status{color:#d7dde6}.error{margin:18px 0;padding:12px 14px;border:1px solid #6f3e3e;border-radius:8px;color:#ef9a9a;background:#1d1315}article{border-top:1px solid #242831;padding-top:28px;color:#d7dce4;line-height:1.65}article pre{overflow:auto;padding:14px;border-radius:8px;background:#11151a}@media(max-width:700px){header{padding:18px}main{padding:26px 18px 56px}}
-</style></head><body><header><a href="/">← Specview / {{.ProjectName}}</a></header><main><div class="eyebrow">{{.Spec.Path}}</div><h1>{{.Spec.Title}}</h1><div class="metadata"><span class="status">{{.Spec.Status}}</span><span>modified {{since .Spec.ModifiedAt}}</span></div>{{if .Spec.Error}}<div class="error">{{.Spec.Error}}</div>{{end}}<article><pre>{{.Spec.Body}}</pre></article></main><script>const events=new EventSource('/events');events.addEventListener('changed',()=>window.location.reload());</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Spec.Title}} - Specview</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --page: #ffffff;
+      --surface: #ffffff;
+      --text: #151515;
+      --muted: #6f6f69;
+      --quiet: #a0a099;
+      --line: #d8d8d2;
+      --new: #85857e;
+      --progress: #c39423;
+      --done: #2f8a57;
+      --error: #b04b43;
+      --accent: #496b7a;
+      --accent-soft: #edf2f3;
+      --code-bg: #f6f6f3;
+      --table-head: #f8f8f5;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body { margin: 0; background: var(--page); color: var(--text); -webkit-font-smoothing: antialiased; }
+    .app-shell { min-height: 100vh; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+    .topbar {
+      min-height: 54px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 16px;
+      padding: 0 26px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { color: var(--text); font-family: inherit; font-size: 15px; font-weight: 500; letter-spacing: -0.012em; text-decoration: none; }
+    .brand:hover { color: var(--text); }
+    .view-label { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
+    .back { justify-self: end; color: var(--muted); font-size: 12px; text-decoration: none; }
+    .back:hover { color: var(--text); }
+    main { max-width: 1280px; padding: 48px 68px 84px; }
+    h1 {
+      max-width: 980px;
+      margin: 0;
+      font-size: clamp(62px, 9vw, 96px);
+      font-weight: 420;
+      line-height: .92;
+      letter-spacing: -0.07em;
+    }
+    .metadata {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 22px;
+      margin-top: 30px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .metadata .status { display: inline-flex; align-items: center; gap: 8px; color: var(--text); }
+    .status-square { width: 6px; height: 6px; flex: 0 0 auto; }
+    .status-square.new { background: var(--new); }
+    .status-square.progress { background: var(--progress); }
+    .status-square.done { background: var(--done); }
+    .metadata .path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--quiet); }
+    .rule { margin: 34px 0 28px; border-top: 1px solid var(--line); }
+    .error {
+      margin-bottom: 22px;
+      padding: 12px 14px;
+      border: 1px solid #e2c9c5;
+      background: #fffdfd;
+      color: var(--error);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    article {
+      max-width: 900px;
+      color: #4d4d48;
+      font-size: 14px;
+      line-height: 1.72;
+    }
+    article > :first-child { margin-top: 0; }
+    article h2,
+    article h3,
+    article h4 {
+      color: var(--text);
+      font-weight: 560;
+      letter-spacing: -0.02em;
+    }
+    article h2 { margin: 38px 0 12px; padding-top: 14px; border-top: 1px solid #eeeeea; font-size: 20px; line-height: 1.25; }
+    article h2:first-child { padding-top: 0; border-top: 0; }
+    article h3 { margin: 28px 0 8px; font-size: 16px; line-height: 1.35; }
+    article h4 { margin: 24px 0 8px; color: var(--muted); font-size: 14px; line-height: 1.4; }
+    article p { margin: 0 0 16px; }
+    article strong { color: #2b2b28; font-weight: 650; }
+    article ul,
+    article ol { margin: 0 0 18px; padding-left: 22px; }
+    article li { margin: 4px 0; }
+    article li::marker { color: var(--accent); }
+    article a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    article a:hover { color: #315565; }
+    article blockquote {
+      margin: 22px 0;
+      padding: 10px 14px;
+      border-left: 2px solid #9fb3bb;
+      background: #fafcfc;
+      color: var(--muted);
+    }
+    article blockquote > :last-child { margin-bottom: 0; }
+    article code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; }
+    article :not(pre) > code {
+      padding: 1px 4px;
+      border: 1px solid #d9e0e2;
+      background: var(--accent-soft);
+      color: #405862;
+    }
+    article pre {
+      margin: 22px 0;
+      padding: 15px 17px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      background: var(--code-bg);
+      color: #41413d;
+      font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    article pre code { font: inherit; }
+    article table { width: 100%; margin: 22px 0; border-collapse: collapse; font-size: 13px; }
+    article th,
+    article td { padding: 8px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    article th { background: var(--table-head); color: var(--text); font-weight: 560; }
+    article tbody tr:hover { background: #fcfcfa; }
+    article hr { margin: 30px 0; border: 0; border-top: 1px solid var(--line); }
+    article input[type="checkbox"] { margin-right: 7px; accent-color: var(--accent); }
+    @media (max-width: 720px) {
+      .topbar { grid-template-columns: 1fr auto; padding: 0 16px; }
+      .view-label { display: none; }
+      main { padding: 38px 16px 56px; }
+      h1 { font-size: 56px; }
+      .metadata { gap: 8px 14px; }
+      .rule { margin: 26px 0 22px; }
+      article h2 { font-size: 18px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Back to Specview board">Specview</a>
+    <div class="view-label">Specification</div>
+    <a class="back" href="/">← Board</a>
+  </header>
+  <main>
+    <h1>{{.Spec.Title}}</h1>
+    <div class="metadata"><span class="status"><span class="status-square {{if eq .Spec.Status "in_progress"}}progress{{else if eq .Spec.Status "new"}}new{{else if eq .Spec.Status "done"}}done{{end}}"></span>{{if eq .Spec.Status "in_progress"}}In Progress{{else if eq .Spec.Status "new"}}New{{else if eq .Spec.Status "done"}}Done{{else}}{{.Spec.Status}}{{end}}</span><span class="path">{{.Spec.Path}}</span><span>Modified {{since .Spec.ModifiedAt}}</span></div>
+    <div class="rule"></div>
+    {{if .Spec.Error}}<div class="error">{{.Spec.Error}}</div>{{end}}
+    <article>{{markdownBody .Spec.Body .Spec.Title}}</article>
+  </main>
+</div>
+<script>const events = new EventSource('/events'); events.addEventListener('changed', () => window.location.reload());</script>
+</body>
+</html>
 {{end}}

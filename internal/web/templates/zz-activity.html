@@ -3,14 +3,17 @@
 <span style="display:inline-flex;align-items:center;gap:5px;margin-right:8px;color:#6f6f69;vertical-align:middle;">
   <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true" style="display:block;flex:0 0 auto;overflow:visible;">
     <style>
-      @keyframes specview-activity-turn { to { transform: rotate(360deg); } }
-      .specview-activity-frame { transform-origin: 5px 5px; animation: specview-activity-turn 1.6s linear infinite; }
-      @media (prefers-reduced-motion: reduce) { .specview-activity-frame { animation: none; } }
+      @keyframes specview-activity-step {
+        0%, 24% { transform: translate(0, 0); }
+        25%, 49% { transform: translate(4px, 0); }
+        50%, 74% { transform: translate(4px, 4px); }
+        75%, 100% { transform: translate(0, 4px); }
+      }
+      .specview-activity-inner { animation: specview-activity-step 1.6s steps(1, end) infinite; }
+      @media (prefers-reduced-motion: reduce) { .specview-activity-inner { animation: none; } }
     </style>
-    <g class="specview-activity-frame">
-      <rect x="1" y="1" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1"/>
-      <rect x="1" y="1" width="2" height="2" fill="currentColor"/>
-    </g>
+    <rect x="0.75" y="0.75" width="8.5" height="8.5" fill="none" stroke="currentColor" stroke-width="1"/>
+    <rect class="specview-activity-inner" x="2" y="2" width="2" height="2" fill="currentColor"/>
   </svg>
   <span>{{if eq (len .Activity) 1}}{{range .Activity}}{{agentLabel .}}{{end}}{{else}}{{len .Activity}} agents{{end}}</span>
 </span>

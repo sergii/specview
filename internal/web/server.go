@@ -143,6 +143,13 @@ type boardData struct {
 	Total                                                               int
 }
 
+type workspaceData struct {
+	boardData
+	Projects       []boardData
+	WorkspaceTotal int
+	Multi          bool
+}
+
 func projectName(source ProjectSource) string {
 	if name := strings.TrimSpace(source.Config.Project.Name); name != "" {
 		return name
@@ -210,7 +217,20 @@ func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "no projects configured", http.StatusInternalServerError)
 		return
 	}
-	data := buildBoardData(s.projects[0], time.Now())
+	now := time.Now()
+	boards := make([]boardData, 0, len(s.projects))
+	workspaceTotal := 0
+	for _, source := range s.projects {
+		board := buildBoardData(source, now)
+		boards = append(boards, board)
+		workspaceTotal += board.Total
+	}
+	data := workspaceData{
+		boardData:      boards[0],
+		Projects:       boards,
+		WorkspaceTotal: workspaceTotal,
+		Multi:          len(boards) > 1,
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
 		http.Error(w, "render dashboard", http.StatusInternalServerError)

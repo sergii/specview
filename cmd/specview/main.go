@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -134,6 +135,22 @@ func serveRoot(configRoot string) error {
 	for _, parseErr := range activityStore.Errors() {
 		slog.Warn("invalid agent activity", "path", parseErr.Path, "error", parseErr.Message)
 	}
+
+	var activitySignatureMu sync.Mutex
+	activitySignature := activityStore.ActiveSignature(time.Now())
+	broadcastActivityIfChanged := func(now time.Time) {
+		current := activityStore.ActiveSignature(now)
+		activitySignatureMu.Lock()
+		changed := current != activitySignature
+		if changed {
+			activitySignature = current
+		}
+		activitySignatureMu.Unlock()
+		if changed {
+			hub.Broadcast()
+		}
+	}
+
 	activityWatcher, err := watch.New(activityRoot, func() {
 		if err := activityStore.Refresh(); err != nil {
 			slog.Error("refresh agent activity", "error", err)
@@ -142,7 +159,7 @@ func serveRoot(configRoot string) error {
 		for _, parseErr := range activityStore.Errors() {
 			slog.Warn("invalid agent activity", "path", parseErr.Path, "error", parseErr.Message)
 		}
-		hub.Broadcast()
+		broadcastActivityIfChanged(time.Now())
 	})
 	if err != nil {
 		return fmt.Errorf("start activity watcher: %w", err)
@@ -155,17 +172,12 @@ func serveRoot(configRoot string) error {
 	go func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
-		previous := activityStore.ActiveSignature(time.Now())
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case now := <-ticker.C:
-				current := activityStore.ActiveSignature(now)
-				if current != previous {
-					previous = current
-					hub.Broadcast()
-				}
+				broadcastActivityIfChanged(now)
 			}
 		}
 	}()

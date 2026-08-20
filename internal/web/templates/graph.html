@@ -314,6 +314,41 @@
     return {x: x1, y: y2, z: z2};
   }
 
+  function project3DPoint(point, size) {
+    const rotated = rotate3D(point);
+    const camera = 900;
+    const scale = camera / Math.max(250, camera + rotated.z);
+    return {
+      x: size.width / 2 + rotated.x * scale,
+      y: size.height / 2 + rotated.y * scale,
+      z: rotated.z,
+      scale,
+    };
+  }
+
+  function drawProjectPlane(project, z, top, bottom, size) {
+    const corners = [
+      {x: -330, y: top, z},
+      {x: 330, y: top, z},
+      {x: 330, y: bottom, z},
+      {x: -330, y: bottom, z},
+    ].map((point) => project3DPoint(point, size));
+    ctx.save();
+    ctx.globalAlpha = .55;
+    ctx.strokeStyle = colors.line;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = colors.quiet;
+    ctx.font = '500 9px Inter, system-ui, sans-serif';
+    ctx.fillText(project, corners[0].x + 4, corners[0].y - 6);
+  }
+
   function draw3D() {
     hitboxes = [];
     const size = sizeCanvas(Math.max(620, window.innerHeight - 160));
@@ -335,11 +370,14 @@
     }
 
     const projected = new Map();
-    for (const [id, point] of points) {
-      const r = rotate3D(point);
-      const camera = 900;
-      const scale = camera / Math.max(250, camera + r.z);
-      projected.set(id, {x: size.width / 2 + r.x * scale, y: size.height / 2 + r.y * scale, z: r.z, scale});
+    for (const [id, point] of points) projected.set(id, project3DPoint(point, size));
+
+    const maxRows = Math.max(1, ...statusRows.values());
+    const planeTop = -140;
+    const planeBottom = Math.max(80, (maxRows - 1) * 62 - 10);
+    for (const project of projectNames) {
+      const z = (projectIndex.get(project) - (projectNames.length - 1) / 2) * 190;
+      drawProjectPlane(project, z, planeTop, planeBottom, size);
     }
 
     for (const edge of data.edges) {

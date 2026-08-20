@@ -76,6 +76,7 @@
     html[data-view="classic"] .view-button[data-view="classic"],
     html[data-view="classic2"] .view-button[data-view="classic2"],
     html[data-view="dense"] .view-button[data-view="dense"],
+    html[data-view="dense2"] .view-button[data-view="dense2"],
     html[data-view="flow"] .view-button[data-view="flow"],
     html[data-activity="nested"] .activity-button[data-activity="nested"],
     html[data-activity="corner"] .activity-button[data-activity="corner"],
@@ -158,21 +159,41 @@
     html[data-view="classic2"] .card { border-color: transparent; }
     html[data-view="classic2"] .card:hover { border-color: transparent; }
 
-    html[data-view="dense"] .cards { display: block; padding: 0; }
-    html[data-view="dense"] .card { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 0; min-height: 36px; padding: 8px; border: 0; border-bottom: 1px solid var(--line); }
-    html[data-view="dense"] .card:last-child { border-bottom: 0; }
-    html[data-view="dense"] .card:hover { background: #fafafa; }
+    html[data-view="dense"] .cards,
+    html[data-view="dense2"] .cards { display: block; padding: 0; }
+    html[data-view="dense"] .card,
+    html[data-view="dense2"] .card { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 0; padding: 8px; border: 0; border-bottom: 1px solid var(--line); }
+    html[data-view="dense"] .card { min-height: 36px; }
+    html[data-view="dense2"] .card { min-height: 48px; padding-top: 7px; padding-bottom: 7px; }
+    html[data-view="dense"] .card:last-child,
+    html[data-view="dense2"] .card:last-child { border-bottom: 0; }
+    html[data-view="dense"] .card:hover,
+    html[data-view="dense2"] .card:hover { background: #fafafa; }
     html[data-view="dense"] .dense-id,
+    html[data-view="dense2"] .dense-id,
     html[data-view="flow"] .dense-id { display: block; overflow: hidden; color: var(--quiet); font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .06em; text-overflow: ellipsis; white-space: nowrap; }
     html[data-view="dense"] .dense-age,
+    html[data-view="dense2"] .dense-age,
     html[data-view="flow"] .dense-age { display: block; color: var(--quiet); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
     html[data-view="dense"] .card-copy,
+    html[data-view="dense2"] .card-copy,
     html[data-view="flow"] .card-copy { min-width: 0; }
     html[data-view="dense"] .title,
+    html[data-view="dense2"] .title,
     html[data-view="flow"] .title { overflow: hidden; font-size: 12px; font-weight: 500; line-height: 1.3; overflow-wrap: normal; text-overflow: ellipsis; white-space: nowrap; }
     html[data-view="dense"] .meta,
     html[data-view="flow"] .meta { display: none; }
+    html[data-view="dense2"] .meta {
+      display: block;
+      margin-top: 3px;
+      color: var(--quiet);
+      font-size: 9px;
+      line-height: 1.25;
+    }
+    html[data-view="dense2"] .meta .path { display: block; }
+    html[data-view="dense2"] .meta .age { display: none; }
     html[data-view="dense"] .error,
+    html[data-view="dense2"] .error,
     html[data-view="flow"] .error { grid-column: 2 / -1; margin-top: 0; }
 
     html[data-view="flow"] .board { gap: clamp(22px, 3vw, 46px); }
@@ -210,7 +231,8 @@
       .workspace-row .workspace-metric:not(:last-child) { display: none; }
       .column-head { min-height: 44px; }
       .card { padding: 11px 10px 9px; }
-      html[data-view="dense"] .card { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 0; padding: 8px; }
+      html[data-view="dense"] .card,
+      html[data-view="dense2"] .card { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 0; padding-left: 8px; padding-right: 8px; }
       html[data-view="flow"] .card { grid-template-columns: 26px minmax(0, 1fr) auto; gap: 0; padding: 8px 0; }
     }
   </style>
@@ -225,6 +247,7 @@
         <button class="view-button" type="button" data-view="classic" aria-pressed="true">Classic</button>
         <button class="view-button" type="button" data-view="classic2" aria-pressed="false">Classic 2</button>
         <button class="view-button" type="button" data-view="dense" aria-pressed="false">Dense</button>
+        <button class="view-button" type="button" data-view="dense2" aria-pressed="false">Dense 2</button>
         <button class="view-button" type="button" data-view="flow" aria-pressed="false">Flow</button>
       </div>
       <div class="activity-cluster">
@@ -274,7 +297,7 @@
 
   const viewButtons = document.querySelectorAll('.view-button');
   const setView = (view, persist = true) => {
-    const next = ['classic', 'classic2', 'dense', 'flow'].includes(view) ? view : 'classic';
+    const next = ['classic', 'classic2', 'dense', 'dense2', 'flow'].includes(view) ? view : 'classic';
     document.documentElement.dataset.view = next;
     viewButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.view === next)));
     if (persist) { try { localStorage.setItem('specview:view', next); } catch (_) {} }

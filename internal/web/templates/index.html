@@ -74,6 +74,7 @@
     .view-button:last-child, .activity-button:last-child { border-right: 0; }
     .view-button:hover, .activity-button:hover { color: var(--text); background: #fafafa; }
     html[data-view="classic"] .view-button[data-view="classic"],
+    html[data-view="classic2"] .view-button[data-view="classic2"],
     html[data-view="dense"] .view-button[data-view="dense"],
     html[data-view="flow"] .view-button[data-view="flow"],
     html[data-activity="nested"] .activity-button[data-activity="nested"],
@@ -154,6 +155,9 @@
     .invalid .cards { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
     .error { margin-top: 8px; color: var(--error); font-size: 10px; line-height: 1.45; }
 
+    html[data-view="classic2"] .card { border-color: transparent; }
+    html[data-view="classic2"] .card:hover { border-color: transparent; }
+
     html[data-view="dense"] .cards { display: block; padding: 0; }
     html[data-view="dense"] .card { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 0; min-height: 36px; padding: 8px; border: 0; border-bottom: 1px solid var(--line); }
     html[data-view="dense"] .card:last-child { border-bottom: 0; }
@@ -219,6 +223,7 @@
       <span class="view-label">Specification board</span>
       <div class="view-switch" role="group" aria-label="Board view">
         <button class="view-button" type="button" data-view="classic" aria-pressed="true">Classic</button>
+        <button class="view-button" type="button" data-view="classic2" aria-pressed="false">Classic 2</button>
         <button class="view-button" type="button" data-view="dense" aria-pressed="false">Dense</button>
         <button class="view-button" type="button" data-view="flow" aria-pressed="false">Flow</button>
       </div>
@@ -269,7 +274,7 @@
 
   const viewButtons = document.querySelectorAll('.view-button');
   const setView = (view, persist = true) => {
-    const next = ['classic', 'dense', 'flow'].includes(view) ? view : 'classic';
+    const next = ['classic', 'classic2', 'dense', 'flow'].includes(view) ? view : 'classic';
     document.documentElement.dataset.view = next;
     viewButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.view === next)));
     if (persist) { try { localStorage.setItem('specview:view', next); } catch (_) {} }

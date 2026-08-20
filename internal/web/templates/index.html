@@ -5,6 +5,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Specview - {{.ProjectName}}</title>
+  <script>
+    try {
+      document.documentElement.dataset.view = localStorage.getItem('specview:view') || 'classic';
+    } catch (_) {
+      document.documentElement.dataset.view = 'classic';
+    }
+  </script>
   <style>
     :root {
       color-scheme: light;
@@ -27,6 +34,7 @@
     * { box-sizing: border-box; }
     html, body { min-height: 100%; }
     body { margin: 0; background: var(--page); color: var(--text); -webkit-font-smoothing: antialiased; }
+    button { font: inherit; }
     .app-shell {
       min-height: 100vh;
       background: var(--surface);
@@ -42,8 +50,34 @@
       padding: 0 var(--page-gutter);
       border-bottom: 1px solid var(--line);
     }
-    .brand { font-size: 15px; font-weight: 650; letter-spacing: -0.02em; }
+    .brand {
+      justify-self: start;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      text-decoration: none;
+    }
+    .center-nav { display: flex; align-items: center; gap: 14px; }
     .view-label { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
+    .view-switch { display: inline-flex; border: 1px solid var(--line); }
+    .view-button {
+      min-height: 28px;
+      padding: 0 10px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .view-button:last-child { border-right: 0; }
+    .view-button:hover { color: var(--text); background: #fafafa; }
+    html[data-view="classic"] .view-button[data-view="classic"],
+    html[data-view="dense"] .view-button[data-view="dense"] {
+      color: var(--text);
+      background: #f2f2ef;
+    }
     .top-status { justify-self: end; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
     .live { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
     .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--done); }
@@ -162,6 +196,7 @@
     }
     .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .age { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .dense-id, .dense-age { display: none; }
     .empty { padding: 20px 12px 22px; color: var(--quiet); font-size: 11px; }
     .invalid {
       margin-top: 8px;
@@ -173,7 +208,52 @@
     .invalid .cards { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
     .error { margin-top: 8px; color: var(--error); font-size: 10px; line-height: 1.45; }
 
-    @media (max-width: 979px) {
+    html[data-view="dense"] .cards {
+      display: block;
+      padding: 0;
+    }
+    html[data-view="dense"] .card {
+      display: grid;
+      grid-template-columns: 62px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      min-height: 36px;
+      padding: 8px 10px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    html[data-view="dense"] .card:last-child { border-bottom: 0; }
+    html[data-view="dense"] .card:hover { background: #fafafa; }
+    html[data-view="dense"] .dense-id {
+      display: block;
+      overflow: hidden;
+      color: var(--quiet);
+      font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: .06em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    html[data-view="dense"] .dense-age {
+      display: block;
+      color: var(--quiet);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    html[data-view="dense"] .card-copy { min-width: 0; }
+    html[data-view="dense"] .title {
+      overflow: hidden;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.3;
+      overflow-wrap: normal;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    html[data-view="dense"] .meta { display: none; }
+    html[data-view="dense"] .error { grid-column: 2 / -1; margin-top: 0; }
+
+    @media (max-width: 979px) and (min-width: 800px) {
       .project-header { align-items: start; }
       .board {
         grid-template-columns: none;
@@ -184,17 +264,17 @@
       }
     }
 
-    @media (max-width: 719px) {
+    @media (max-width: 799px) {
       .topbar {
         grid-template-columns: 1fr auto;
-        grid-template-areas: "brand status" "view view";
+        grid-template-areas: "brand status" "center center";
         gap: 8px 16px;
-        min-height: 64px;
+        min-height: 72px;
         padding-top: 10px;
         padding-bottom: 10px;
       }
       .brand { grid-area: brand; }
-      .view-label { grid-area: view; justify-self: start; }
+      .center-nav { grid-area: center; justify-self: start; }
       .top-status { grid-area: status; }
       main { padding-top: 32px; }
       .project-header {
@@ -205,26 +285,42 @@
       }
       .project-meta { text-align: left; padding-bottom: 0; }
       h1 { font-size: clamp(48px, 15vw, 64px); }
+      .board-wrap { overflow-x: visible; scrollbar-gutter: auto; }
       .board {
-        grid-auto-columns: minmax(280px, 86vw);
-        scroll-snap-type: x proximity;
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-auto-flow: row;
+        grid-auto-columns: auto;
+        gap: 12px;
+        width: 100%;
+        min-width: 0;
       }
-      .column { scroll-snap-align: start; }
+      .column { width: 100%; }
     }
 
-    @media (max-width: 420px) {
+    @media (max-width: 520px) {
+      .view-label { display: none; }
       .top-status > span:first-child { display: none; }
-      .view-label { font-size: 11px; }
       .column-head { min-height: 44px; }
       .card { padding: 11px 10px 9px; }
+      html[data-view="dense"] .card {
+        grid-template-columns: 54px minmax(0, 1fr) auto;
+        padding: 8px 9px;
+      }
     }
   </style>
 </head>
 <body>
 <div class="app-shell">
   <header class="topbar">
-    <div class="brand">Specview</div>
-    <div class="view-label">Specification board</div>
+    <a class="brand" href="/">Specview</a>
+    <div class="center-nav">
+      <span class="view-label">Specification board</span>
+      <div class="view-switch" role="group" aria-label="Board density">
+        <button class="view-button" type="button" data-view="classic" aria-pressed="true">Classic</button>
+        <button class="view-button" type="button" data-view="dense" aria-pressed="false">Dense</button>
+      </div>
+    </div>
     <div class="top-status"><span>{{.Total}} specs</span><span class="live offline" id="connection-state"><span class="live-dot"></span><span id="connection-label">Connecting</span></span></div>
   </header>
   <main>
@@ -256,7 +352,7 @@
     {{if .Invalid}}
     <section class="invalid">
       <div class="column-head"><div class="column-name"><span class="column-index">!</span><span class="status-dot"></span><span class="column-title">Metadata errors</span></div><span class="count">{{len .Invalid}}</span></div>
-      <div class="cards">{{range .Invalid}}<a class="card" href="/spec?path={{urlquery .Path}}"><div class="title">{{.Title}}</div><div class="meta"><span class="path">{{.Path}}</span><span class="age">{{since .ModifiedAt}}</span></div><div class="error">{{.Error}}</div></a>{{end}}</div>
+      <div class="cards">{{range .Invalid}}{{template "invalid-card" .}}{{end}}</div>
     </section>
     {{end}}
   </main>
@@ -273,6 +369,18 @@
   events.addEventListener('error', () => setConnection(false));
   events.addEventListener('changed', () => window.location.reload());
 
+  const viewButtons = document.querySelectorAll('.view-button');
+  const setView = (view, persist = true) => {
+    const next = view === 'dense' ? 'dense' : 'classic';
+    document.documentElement.dataset.view = next;
+    viewButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.view === next)));
+    if (persist) {
+      try { localStorage.setItem('specview:view', next); } catch (_) {}
+    }
+  };
+  setView(document.documentElement.dataset.view, false);
+  viewButtons.forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
+
   document.addEventListener('click', (event) => {
     const link = event.target.closest('a.card');
     if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
@@ -285,4 +393,26 @@
 </body>
 </html>
 {{end}}
-{{define "card"}}<a class="card" href="/spec?path={{urlquery .Path}}"><div class="title">{{.Title}}</div><div class="meta"><span class="path">{{.Path}}</span><span class="age">{{since .ModifiedAt}}</span></div></a>{{end}}
+
+{{define "card"}}
+<a class="card" href="/spec?path={{urlquery .Path}}">
+  <span class="dense-id">{{specID .Path}}</span>
+  <span class="card-copy">
+    <span class="title">{{.Title}}</span>
+    <span class="meta"><span class="path">{{.Path}}</span><span class="age">{{since .ModifiedAt}}</span></span>
+  </span>
+  <span class="dense-age">{{since .ModifiedAt}}</span>
+</a>
+{{end}}
+
+{{define "invalid-card"}}
+<a class="card" href="/spec?path={{urlquery .Path}}">
+  <span class="dense-id">{{specID .Path}}</span>
+  <span class="card-copy">
+    <span class="title">{{.Title}}</span>
+    <span class="meta"><span class="path">{{.Path}}</span><span class="age">{{since .ModifiedAt}}</span></span>
+  </span>
+  <span class="dense-age">{{since .ModifiedAt}}</span>
+  <span class="error">{{.Error}}</span>
+</a>
+{{end}}

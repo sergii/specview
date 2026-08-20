@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/sergii/specview/internal/activity"
 	"github.com/sergii/specview/internal/config"
@@ -150,6 +151,24 @@ func serveRoot(configRoot string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		previous := activityStore.ActiveSignature(time.Now())
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case now := <-ticker.C:
+				current := activityStore.ActiveSignature(now)
+				if current != previous {
+					previous = current
+					hub.Broadcast()
+				}
+			}
+		}
+	}()
 
 	server := webui.NewServer(projectRoot, cfg, store, hub)
 	server.SetActivityStore(activityStore)

@@ -67,7 +67,7 @@
 {{end}}
 
 {{define "card"}}
-<a class="card" href="/spec?project={{urlquery .ProjectKey}}&path={{urlquery .Path}}">
+<a class="card{{if .Activity}} active-spec{{end}}" href="/spec?project={{urlquery .ProjectKey}}&path={{urlquery .Path}}">
   <span class="dense-id">{{specID .Path}}</span>
   <span class="card-copy">
     <span class="title">{{.Title}}</span>
@@ -78,7 +78,7 @@
 {{end}}
 
 {{define "invalid-card"}}
-<a class="card" href="/spec?project={{urlquery .ProjectKey}}&path={{urlquery .Path}}">
+<a class="card{{if .Activity}} active-spec{{end}}" href="/spec?project={{urlquery .ProjectKey}}&path={{urlquery .Path}}">
   <span class="dense-id">{{specID .Path}}</span>
   <span class="card-copy">
     <span class="title">{{.Title}}</span>

@@ -35,26 +35,7 @@
     .view-label { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
     .back { justify-self: end; color: var(--muted); font-size: 12px; text-decoration: none; }
     .back:hover { color: var(--text); }
-    main { max-width: 1280px; padding: 56px 68px 84px; }
-    .eyebrow-row {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 18px;
-    }
-    .eyebrow {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: .24em;
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-    .eyebrow-line {
-      width: 128px;
-      border-top: 1px solid var(--line);
-      transform: translateY(1px);
-    }
+    main { max-width: 1280px; padding: 48px 68px 84px; }
     h1 {
       max-width: 980px;
       margin: 0;
@@ -128,7 +109,6 @@
       .topbar { grid-template-columns: 1fr auto; padding: 0 16px; }
       .view-label { display: none; }
       main { padding: 38px 16px 56px; }
-      .eyebrow-line { width: 92px; }
       h1 { font-size: 56px; }
       .metadata { gap: 8px 14px; }
       .rule { margin: 26px 0 22px; }
@@ -144,7 +124,6 @@
     <a class="back" href="/">← Board</a>
   </header>
   <main>
-    <div class="eyebrow-row"><div class="eyebrow">Specification</div><div class="eyebrow-line"></div></div>
     <h1>{{.Spec.Title}}</h1>
     <div class="metadata"><span class="status">{{.Spec.Status}}</span><span class="path">{{.Spec.Path}}</span><span>Modified {{since .Spec.ModifiedAt}}</span></div>
     <div class="rule"></div>

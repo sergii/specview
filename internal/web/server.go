@@ -49,16 +49,36 @@ func (h *Hub) Broadcast() {
 	}
 }
 
+type ProjectSource struct {
+	Key      string
+	Root     string
+	Config   config.Config
+	Store    *specs.Store
+	Activity *activity.Store
+}
+
+func NewProjectSource(root string, cfg config.Config, store *specs.Store, activityStore *activity.Store) ProjectSource {
+	return ProjectSource{
+		Key:      projectSourceKey(root),
+		Root:     filepath.Clean(root),
+		Config:   cfg,
+		Store:    store,
+		Activity: activityStore,
+	}
+}
+
 type Server struct {
-	root     string
-	cfg      config.Config
-	store    *specs.Store
-	activity *activity.Store
-	hub      *Hub
-	tmpl     *template.Template
+	projects  []ProjectSource
+	serverCfg config.Server
+	hub       *Hub
+	tmpl      *template.Template
 }
 
 func NewServer(root string, cfg config.Config, store *specs.Store, hub *Hub) *Server {
+	return NewWorkspaceServer([]ProjectSource{NewProjectSource(root, cfg, store, nil)}, cfg.Server, hub)
+}
+
+func NewWorkspaceServer(projects []ProjectSource, serverCfg config.Server, hub *Hub) *Server {
 	funcs := template.FuncMap{
 		"since":      func(t time.Time) string { return since(t) },
 		"specID":     specDisplayID,
@@ -68,10 +88,15 @@ func NewServer(root string, cfg config.Config, store *specs.Store, hub *Hub) *Se
 		},
 	}
 	tmpl := template.Must(template.New("index.html").Funcs(funcs).ParseFS(templateFS, "templates/*.html"))
-	return &Server{root: root, cfg: cfg, store: store, hub: hub, tmpl: tmpl}
+	return &Server{projects: projects, serverCfg: serverCfg, hub: hub, tmpl: tmpl}
 }
 
-func (s *Server) SetActivityStore(store *activity.Store) { s.activity = store }
+func (s *Server) SetActivityStore(store *activity.Store) {
+	if len(s.projects) == 0 {
+		return
+	}
+	s.projects[0].Activity = store
+}
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux := http.NewServeMux()
@@ -83,7 +108,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		_, _ = w.Write([]byte("ok\n"))
 	})
 	server := &http.Server{
-		Addr:    fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.Port),
+		Addr:    fmt.Sprintf("%s:%d", s.serverCfg.Host, s.serverCfg.Port),
 		Handler: securityHeaders(mux),
 		BaseContext: func(net.Listener) context.Context {
 			return ctx
@@ -108,20 +133,21 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 type boardSpec struct {
 	specs.Spec
-	Activity []activity.Record
+	ProjectKey string
+	Activity   []activity.Record
 }
 
 type boardData struct {
-	ProjectName, ProjectPath, ProjectDisplayPath, SpecsPath string
-	New, InProgress, Done, Invalid                          []boardSpec
-	Total                                                   int
+	ProjectKey, ProjectName, ProjectPath, ProjectDisplayPath, SpecsPath string
+	New, InProgress, Done, Invalid                                      []boardSpec
+	Total                                                               int
 }
 
-func (s *Server) projectName() string {
-	if name := strings.TrimSpace(s.cfg.Project.Name); name != "" {
+func projectName(source ProjectSource) string {
+	if name := strings.TrimSpace(source.Config.Project.Name); name != "" {
 		return name
 	}
-	return filepath.Base(s.root)
+	return filepath.Base(source.Root)
 }
 
 func compactProjectPath(root string) string {
@@ -135,29 +161,34 @@ func compactProjectPath(root string) string {
 	return filepath.ToSlash(filepath.Join(parent, base))
 }
 
-func (s *Server) present(item specs.Spec, now time.Time) boardSpec {
-	view := boardSpec{Spec: item}
-	if s.activity == nil {
+func projectSourceKey(root string) string {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(filepath.ToSlash(filepath.Clean(root))))
+	return fmt.Sprintf("p-%08x", hash.Sum32())
+}
+
+func present(source ProjectSource, item specs.Spec, now time.Time) boardSpec {
+	view := boardSpec{Spec: item, ProjectKey: source.Key}
+	if source.Activity == nil {
 		return view
 	}
-	projectRelativePath := filepath.ToSlash(filepath.Join(s.cfg.Specs.Path, item.Path))
-	view.Activity = s.activity.ActiveFor(projectRelativePath, now)
+	projectRelativePath := filepath.ToSlash(filepath.Join(source.Config.Specs.Path, item.Path))
+	view.Activity = source.Activity.ActiveFor(projectRelativePath, now)
 	return view
 }
 
-func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
-	items := s.store.All()
-	now := time.Now()
-	fullProjectPath := filepath.ToSlash(filepath.Clean(s.root))
+func buildBoardData(source ProjectSource, now time.Time) boardData {
+	items := source.Store.All()
 	data := boardData{
-		ProjectName:        s.projectName(),
-		ProjectPath:        fullProjectPath,
-		ProjectDisplayPath: compactProjectPath(s.root),
-		SpecsPath:          s.cfg.Specs.Path,
+		ProjectKey:         source.Key,
+		ProjectName:        projectName(source),
+		ProjectPath:        filepath.ToSlash(filepath.Clean(source.Root)),
+		ProjectDisplayPath: compactProjectPath(source.Root),
+		SpecsPath:          source.Config.Specs.Path,
 		Total:              len(items),
 	}
 	for _, item := range items {
-		view := s.present(item, now)
+		view := present(source, item, now)
 		if item.Error != "" {
 			data.Invalid = append(data.Invalid, view)
 			continue
@@ -171,15 +202,45 @@ func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 			data.Done = append(data.Done, view)
 		}
 	}
+	return data
+}
+
+func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
+	if len(s.projects) == 0 {
+		http.Error(w, "no projects configured", http.StatusInternalServerError)
+		return
+	}
+	data := buildBoardData(s.projects[0], time.Now())
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
 		http.Error(w, "render dashboard", http.StatusInternalServerError)
 	}
 }
 
+func (s *Server) projectForRequest(r *http.Request) (ProjectSource, bool) {
+	if len(s.projects) == 0 {
+		return ProjectSource{}, false
+	}
+	key := r.URL.Query().Get("project")
+	if key == "" {
+		return s.projects[0], true
+	}
+	for _, source := range s.projects {
+		if source.Key == key {
+			return source, true
+		}
+	}
+	return ProjectSource{}, false
+}
+
 func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
+	source, ok := s.projectForRequest(r)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 	path := r.URL.Query().Get("path")
-	item, ok := s.store.Find(path)
+	item, ok := source.Store.Find(path)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -188,7 +249,7 @@ func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	if err := s.tmpl.ExecuteTemplate(w, "detail.html", struct {
 		ProjectName string
 		Spec        specs.Spec
-	}{s.projectName(), item}); err != nil {
+	}{projectName(source), item}); err != nil {
 		http.Error(w, "render specification", http.StatusInternalServerError)
 	}
 }

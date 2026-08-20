@@ -112,9 +112,9 @@ type boardSpec struct {
 }
 
 type boardData struct {
-	ProjectName, ProjectPath, SpecsPath string
-	New, InProgress, Done, Invalid      []boardSpec
-	Total                               int
+	ProjectName, ProjectPath, ProjectDisplayPath, SpecsPath string
+	New, InProgress, Done, Invalid                          []boardSpec
+	Total                                                   int
 }
 
 func (s *Server) projectName() string {
@@ -122,6 +122,17 @@ func (s *Server) projectName() string {
 		return name
 	}
 	return filepath.Base(s.root)
+}
+
+func compactProjectPath(root string) string {
+	clean := filepath.Clean(root)
+	base := filepath.Base(clean)
+	parentPath := filepath.Dir(clean)
+	parent := filepath.Base(parentPath)
+	if parent == "." || parent == string(filepath.Separator) || parent == base {
+		return filepath.ToSlash(base)
+	}
+	return filepath.ToSlash(filepath.Join(parent, base))
 }
 
 func (s *Server) present(item specs.Spec, now time.Time) boardSpec {
@@ -137,11 +148,13 @@ func (s *Server) present(item specs.Spec, now time.Time) boardSpec {
 func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	items := s.store.All()
 	now := time.Now()
+	fullProjectPath := filepath.ToSlash(filepath.Clean(s.root))
 	data := boardData{
-		ProjectName: s.projectName(),
-		ProjectPath: filepath.ToSlash(filepath.Clean(s.root)),
-		SpecsPath:   s.cfg.Specs.Path,
-		Total:       len(items),
+		ProjectName:        s.projectName(),
+		ProjectPath:        fullProjectPath,
+		ProjectDisplayPath: compactProjectPath(s.root),
+		SpecsPath:          s.cfg.Specs.Path,
+		Total:              len(items),
 	}
 	for _, item := range items {
 		view := s.present(item, now)

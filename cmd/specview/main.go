@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/sergii/specview/internal/activity"
 	"github.com/sergii/specview/internal/config"
 	"github.com/sergii/specview/internal/specs"
 	"github.com/sergii/specview/internal/watch"
@@ -124,10 +125,34 @@ func serveRoot(configRoot string) error {
 	}
 	defer watcher.Close()
 
+	activityRoot := filepath.Join(projectRoot, activity.RelativeDir)
+	activityStore := activity.NewStore(activityRoot)
+	if err := activityStore.Refresh(); err != nil {
+		return err
+	}
+	for _, parseErr := range activityStore.Errors() {
+		slog.Warn("invalid agent activity", "path", parseErr.Path, "error", parseErr.Message)
+	}
+	activityWatcher, err := watch.New(activityRoot, func() {
+		if err := activityStore.Refresh(); err != nil {
+			slog.Error("refresh agent activity", "error", err)
+			return
+		}
+		for _, parseErr := range activityStore.Errors() {
+			slog.Warn("invalid agent activity", "path", parseErr.Path, "error", parseErr.Message)
+		}
+		hub.Broadcast()
+	})
+	if err != nil {
+		return fmt.Errorf("start activity watcher: %w", err)
+	}
+	defer activityWatcher.Close()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	server := webui.NewServer(projectRoot, cfg, store, hub)
+	server.SetActivityStore(activityStore)
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 
 	projectName := cfg.Project.Name

@@ -113,6 +113,20 @@ func (s *Store) ActiveFor(spec string, now time.Time) []Record {
 	return active
 }
 
+func (s *Store) ActiveSignature(now time.Time) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ids := make([]string, 0)
+	for _, record := range s.records {
+		if record.State == "working" && fresh(record, now) {
+			ids = append(ids, record.SessionID)
+		}
+	}
+	sort.Strings(ids)
+	return strings.Join(ids, "\x00")
+}
+
 func (s *Store) Errors() []ParseError {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

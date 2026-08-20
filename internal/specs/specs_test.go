@@ -3,6 +3,7 @@ package specs
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -39,6 +40,38 @@ func TestSpecReadsStatus(t *testing.T) {
 	}
 	if item.Status != StatusInProgress || item.Error != "" {
 		t.Fatalf("unexpected item: %#v", item)
+	}
+}
+
+func TestSpecReadsRelationshipMetadata(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "H05.md")
+	data := []byte(`---
+specview:
+  status: in_progress
+  depends_on:
+    - H03
+    - H04
+  blocks: [H08, "H09", H08]
+---
+# Relationships
+`)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	item, err := parseFile(path, "H05.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.Error != "" {
+		t.Fatalf("unexpected metadata error: %s", item.Error)
+	}
+	if !reflect.DeepEqual(item.DependsOn, []string{"H03", "H04"}) {
+		t.Fatalf("depends_on = %#v", item.DependsOn)
+	}
+	if !reflect.DeepEqual(item.Blocks, []string{"H08", "H09"}) {
+		t.Fatalf("blocks = %#v", item.Blocks)
 	}
 }
 

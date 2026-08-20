@@ -1,6 +1,6 @@
 ---
 specview:
-  status: new
+  status: in_progress
 ---
 
 # Agent activity observation
@@ -28,13 +28,15 @@ It does not claim tasks, edit specifications, start agents, or write activity st
 
 The durable specification remains Markdown. Runtime activity must not require rewriting Markdown front matter on every heartbeat because that would create repository churn, noisy filesystem events, and misleading Git history.
 
-## Presence contract
+## POC filesystem transport
 
-A future implementation may observe ignored local runtime records such as:
+The current POC observes local runtime records at:
 
 ```text
 .specview/runtime/activity/<session-id>.json
 ```
+
+The runtime directory is ephemeral project-local state and should be ignored by Git.
 
 Example:
 
@@ -53,7 +55,11 @@ Example:
 }
 ```
 
-The exact transport is not fixed by this spec. A local socket, process adapter, MCP integration, or other low-overhead presence source may later replace or complement files while preserving the same semantic contract.
+`spec` is project-relative and therefore includes the configured specs directory such as `specs/`.
+
+Only JSON records with `version: 1`, a session ID, spec path, state, and heartbeat are projected. Invalid activity files are ignored for presentation and logged as warnings instead of breaking the specification observer.
+
+The filesystem transport is intentionally replaceable. A local socket, process adapter, MCP integration, or other low-overhead presence source may later complement it while preserving the same semantic contract.
 
 ## Agent identity
 
@@ -67,13 +73,13 @@ Prefer explicit metadata supplied by the integration that owns the session:
 
 Process-name or environment inspection may be used only as a best-effort adapter technique, not as canonical identity.
 
-Unknown agents remain valid and should render as `Agent` or another neutral label rather than being guessed incorrectly.
+Unknown agents remain valid and render as `Agent` rather than being guessed incorrectly.
 
 ## Multiple agents
 
 More than one agent may work on the same specification or on different specifications concurrently.
 
-The projection must support:
+The projection supports:
 
 ```text
 Spec A -> Codex
@@ -81,32 +87,30 @@ Spec B -> Claude Code
 Spec C -> Codex + OpenCode
 ```
 
-The UI may collapse multiple sessions into `2 agents` when space is limited while preserving the full session list for a future detail view.
+A single active session renders its agent label. Multiple live sessions on one specification collapse to `<n> agents` in the compact board presentation.
 
 ## Liveness
 
 Activity is valid only while its heartbeat is fresh.
 
-A future implementation should define a short liveness TTL. When the latest heartbeat expires, the session becomes stale and must stop rendering as actively working without requiring the agent to perform cleanup perfectly.
+The current POC uses a **30 second TTL**. A `working` session is active while its heartbeat remains inside that window. When the heartbeat expires, Specview detects the active-session signature change and sends one SSE refresh, so a dead session disappears even if the agent never performs cleanup.
 
-The TTL should be long enough to tolerate brief pauses and filesystem scheduling delays, but short enough that a dead process does not appear active for minutes.
+Filesystem changes to activity records use the same 250 ms polling watcher mechanism as the current specification POC and also trigger SSE refresh.
 
 ## Visual language
 
 Agent activity is an overlay, not a fourth workflow status.
 
-Suggested presentation:
+Current presentation:
 
-- keep the square workflow markers for New, In progress, and Done.
-- show active work with a tiny animated **square-outline activity glyph**, not a large circular loading spinner.
-- rotate or step the square subtly while the heartbeat is live.
-- place a quiet agent label beside it, for example `Codex`, `Claude Code`, or `2 agents`.
-- do not animate inactive or stale specifications.
-- Classic may show activity in card metadata.
-- Dense may show it as a compact trailing field.
-- Flow is the most natural mode for continuously changing activity because it has almost no surrounding chrome.
+- workflow state keeps the square markers for New, In progress, and Done.
+- active work uses a tiny animated square-outline glyph with an asymmetric filled corner.
+- the asymmetry makes rotation visible while preserving the square visual language.
+- the agent label sits beside the glyph and beside the existing relative modification age.
+- Classic, Dense, and Flow render the same activity semantics without changing workflow state.
+- animation respects `prefers-reduced-motion` and becomes static when reduced motion is requested.
 
-Animation must respect `prefers-reduced-motion`.
+Do not animate inactive or stale specifications.
 
 ## Privacy and paths
 
@@ -116,6 +120,19 @@ Do not include prompts, conversation content, credentials, user identity, hostna
 
 Only publish the minimum information required to correlate a session with a specification and render useful activity state.
 
+## Publisher adapters still needed
+
+The observer side is now implemented, but producers remain future work.
+
+Useful adapters include:
+
+- Codex wrapper / hook.
+- Claude Code hook.
+- OpenCode integration.
+- generic shell helper for any agent that can periodically rewrite one heartbeat JSON file.
+
+Adapters should generate opaque session IDs, publish explicit agent identity, update heartbeat atomically, and remove their record on clean exit when possible. Correct cleanup is an optimization; TTL expiry remains the reliability mechanism.
+
 ## Acceptance criteria
 
 - workflow status and live agent activity remain separate concepts.
@@ -123,6 +140,9 @@ Only publish the minimum information required to correlate a session with a spec
 - Specview remains read-only.
 - agent identity is explicit when available and neutral when unknown.
 - multiple simultaneous agent sessions are representable.
-- stale sessions disappear from active presentation automatically after a heartbeat TTL.
+- stale sessions disappear from active presentation automatically after a 30 second heartbeat TTL.
 - runtime presence does not require repeated Markdown edits.
-- Flow, Dense, and Classic can render the same activity projection differently without changing its semantics.
+- activity filesystem changes participate in SSE live refresh.
+- invalid runtime records do not break the specification dashboard.
+- Flow, Dense, and Classic render the same activity projection without changing its semantics.
+- publisher adapters can be added without changing the observer contract.

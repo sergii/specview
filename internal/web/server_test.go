@@ -29,6 +29,11 @@ specview:
 # Git status observation
 
 Observe useful Git state.
+
+## Initial questions
+
+- branch name
+- clean tree
 `
 	if err := os.WriteFile(filepath.Join(specRoot, filename), []byte(document), 0o644); err != nil {
 		t.Fatal(err)
@@ -68,8 +73,17 @@ Observe useful Git state.
 	if detail.Code != http.StatusOK {
 		t.Fatalf("detail status = %d, want %d", detail.Code, http.StatusOK)
 	}
-	if !strings.Contains(detail.Body.String(), "Git status observation") {
-		t.Fatal("detail page does not contain specification title")
+	detailBody := detail.Body.String()
+	for _, want := range []string{"Git status observation", "<h2", "Initial questions", "<ul>"} {
+		if !strings.Contains(detailBody, want) {
+			t.Fatalf("detail page missing rendered Markdown %q", want)
+		}
+	}
+	if strings.Contains(detailBody, "## Initial questions") {
+		t.Fatal("detail page still exposes raw Markdown heading syntax")
+	}
+	if strings.Count(detailBody, "<h1") != 1 {
+		t.Fatalf("detail page h1 count = %d, want 1", strings.Count(detailBody, "<h1"))
 	}
 }
 

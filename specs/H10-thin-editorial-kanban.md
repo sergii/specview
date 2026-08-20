@@ -31,8 +31,10 @@ The board identifies the observed project by its resolved filesystem path rather
 Example:
 
 ```text
-PROJECT / /Users/example/repos/specview
+PROJECT   /Users/example/repos/specview
 ```
+
+`PROJECT` and the path are separated by whitespace only. Do not insert a decorative slash between the label and a path that already begins with `/`.
 
 Reasons:
 
@@ -109,6 +111,8 @@ AUTH-03  Authentication flow
 - 1px structural borders where the selected view uses structure.
 - square edges for the application shell, columns, cards, rows, and detail elements.
 - system sans typography with monospaced filesystem paths and display IDs.
+- the `Specview` brand text uses the same system sans family, medium weight, and restrained tracking as body titles rather than behaving like a separate display logo font.
+- board and detail page use the same brand typography.
 - no external font or runtime asset dependency.
 
 ## Layout balance
@@ -147,8 +151,8 @@ Page gutters, project breadcrumb spacing, and workflow spacing scale fluidly wit
 
 ## Atoms
 
-- `Brand`: Specview wordmark and home link.
-- `ProjectBreadcrumb`: full resolved filesystem path of the observed project.
+- `Brand`: Specview product text and home link using the body sans language.
+- `ProjectBreadcrumb`: `PROJECT` plus the full resolved filesystem path, without a decorative slash separator.
 - `ViewSwitch`: Classic / Dense / Flow presentation selector.
 - `ColumnIndex`: two-digit structural index.
 - `StatusSquare`: restrained workflow state marker.
@@ -193,7 +197,9 @@ Page gutters, project breadcrumb spacing, and workflow spacing scale fluidly wit
 - workflow markers are square and New is neutral graphite.
 - Live remains a circular connection signal.
 - the board shows the complete resolved project filesystem path instead of a large project-name hero.
+- `PROJECT` is followed directly by the filesystem path without an extra slash separator.
 - the redundant Source / specs block is not shown.
+- Specview brand text uses the same sans language on board and detail pages.
 - Dense and Flow specification titles align with the workflow-title track.
 - workflow counts render adjacent to their workflow titles rather than at the far right edge.
 - all three columns fit without clipping on ordinary desktop and laptop viewport widths.

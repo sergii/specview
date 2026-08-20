@@ -82,6 +82,7 @@
     .graph-link { color: var(--muted); font-size: 11px; text-decoration: none; }
     .graph-link:hover { color: var(--text); }
     .top-status { justify-self: end; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+    .top-project { color: var(--muted); font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: nowrap; }
     .live { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
     .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--done); }
     .live.offline { color: var(--muted); }
@@ -119,6 +120,7 @@
     .workspace-metric.alert strong { color: var(--error); }
 
     .project-view + .project-view { margin-top: clamp(46px, 5vw, 72px); padding-top: clamp(32px, 4vw, 52px); border-top: 1px solid var(--line); }
+    main > .project-view:first-child .project-header { display: none; }
     .project-header { min-width: 0; margin-bottom: clamp(20px, 2vw, 28px); }
     .project-breadcrumb { display: flex; align-items: center; gap: 14px; min-width: 0; color: var(--quiet); font-size: 11px; line-height: 1.4; white-space: nowrap; }
     .project-breadcrumb-label { flex: 0 0 auto; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
@@ -230,7 +232,7 @@
       </div>
       <a class="graph-link" href="/graph">Graph</a>
     </div>
-    <div class="top-status"><span>{{.WorkspaceTotal}} specs</span><span class="live offline" id="connection-state"><span class="live-dot"></span><span id="connection-label">Connecting</span></span></div>
+    <div class="top-status">{{if .Multi}}<span>{{len .Projects}} projects</span>{{else}}<code class="top-project" title="{{.ProjectPath}}">{{.ProjectDisplayPath}}</code>{{end}}<span class="live offline" id="connection-state"><span class="live-dot"></span><span id="connection-label">Connecting</span></span></div>
   </header>
   <main>
     {{if .Multi}}

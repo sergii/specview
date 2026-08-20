@@ -99,9 +99,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 type boardData struct {
-	ProjectName, SpecsPath         string
-	New, InProgress, Done, Invalid []specs.Spec
-	Total                          int
+	ProjectName, ProjectPath, SpecsPath string
+	New, InProgress, Done, Invalid      []specs.Spec
+	Total                               int
 }
 
 func (s *Server) projectName() string {
@@ -113,7 +113,12 @@ func (s *Server) projectName() string {
 
 func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	items := s.store.All()
-	data := boardData{ProjectName: s.projectName(), SpecsPath: s.cfg.Specs.Path, Total: len(items)}
+	data := boardData{
+		ProjectName: s.projectName(),
+		ProjectPath: filepath.ToSlash(filepath.Clean(s.root)),
+		SpecsPath:   s.cfg.Specs.Path,
+		Total:       len(items),
+	}
 	for _, item := range items {
 		if item.Error != "" {
 			data.Invalid = append(data.Invalid, item)

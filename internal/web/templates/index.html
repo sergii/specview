@@ -46,6 +46,8 @@
     .top-status { justify-self: end; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
     .live { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
     .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--done); }
+    .live.offline { color: var(--muted); }
+    .live.offline .live-dot { background: var(--error); }
     main { padding: 44px 28px 30px; }
     .project-header {
       display: flex;
@@ -175,7 +177,7 @@
   <header class="topbar">
     <div class="brand">Specview</div>
     <div class="view-label">Specification board</div>
-    <div class="top-status"><span>{{.Total}} specs</span><span class="live"><span class="live-dot"></span>Live</span></div>
+    <div class="top-status"><span>{{.Total}} specs</span><span class="live offline" id="connection-state"><span class="live-dot"></span><span id="connection-label">Connecting</span></span></div>
   </header>
   <main>
     <section class="project-header">
@@ -211,7 +213,18 @@
     {{end}}
   </main>
 </div>
-<script>const events = new EventSource('/events'); events.addEventListener('changed', () => window.location.reload());</script>
+<script>
+  const events = new EventSource('/events');
+  const connectionState = document.getElementById('connection-state');
+  const connectionLabel = document.getElementById('connection-label');
+  const setConnection = (online) => {
+    connectionState.classList.toggle('offline', !online);
+    connectionLabel.textContent = online ? 'Live' : 'Offline';
+  };
+  events.addEventListener('open', () => setConnection(true));
+  events.addEventListener('error', () => setConnection(false));
+  events.addEventListener('changed', () => window.location.reload());
+</script>
 </body>
 </html>
 {{end}}

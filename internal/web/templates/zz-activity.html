@@ -55,10 +55,15 @@
   </svg>
 
   <span class="specview-activity-glyph brand" aria-hidden="true">{{template "activity-brand-mark" .}}</span>
-
   <span>{{if eq (len .Activity) 1}}{{range .Activity}}{{agentLabel .}}{{end}}{{else}}{{len .Activity}} agents{{end}}</span>
 </span>
 {{end}}
+{{end}}
+
+{{define "signal-inline"}}
+{{if .Orphaned}}<span title="In progress, no live agent, and unchanged for at least 15 minutes" style="margin-right:8px;color:#a0a099;">idle</span>{{end}}
+{{if .AgentCollision}}<span title="Multiple live agent sessions are attached to this specification" style="margin-right:8px;color:#b04b43;">agent collision</span>{{end}}
+{{if .CodeCollisions}}<span title="Overlapping active files: {{range .CodeCollisions}}{{.}} {{end}}" style="margin-right:8px;color:#b04b43;">overlap {{len .CodeCollisions}}</span>{{end}}
 {{end}}
 
 {{define "card"}}
@@ -66,9 +71,9 @@
   <span class="dense-id">{{specID .Path}}</span>
   <span class="card-copy">
     <span class="title">{{.Title}}</span>
-    <span class="meta"><span class="path">{{.Path}}</span><span class="age">{{template "activity-inline" .}}{{since .ModifiedAt}}</span></span>
+    <span class="meta"><span class="path">{{.Path}}</span><span class="age">{{template "activity-inline" .}}{{template "signal-inline" .}}{{since .ModifiedAt}}</span></span>
   </span>
-  <span class="dense-age">{{template "activity-inline" .}}{{since .ModifiedAt}}</span>
+  <span class="dense-age">{{template "activity-inline" .}}{{template "signal-inline" .}}{{since .ModifiedAt}}</span>
 </a>
 {{end}}
 
@@ -77,9 +82,9 @@
   <span class="dense-id">{{specID .Path}}</span>
   <span class="card-copy">
     <span class="title">{{.Title}}</span>
-    <span class="meta"><span class="path">{{.Path}}</span><span class="age">{{template "activity-inline" .}}{{since .ModifiedAt}}</span></span>
+    <span class="meta"><span class="path">{{.Path}}</span><span class="age">{{template "activity-inline" .}}{{template "signal-inline" .}}{{since .ModifiedAt}}</span></span>
   </span>
-  <span class="dense-age">{{template "activity-inline" .}}{{since .ModifiedAt}}</span>
+  <span class="dense-age">{{template "activity-inline" .}}{{template "signal-inline" .}}{{since .ModifiedAt}}</span>
   <span class="error">{{.Error}}</span>
 </a>
 {{end}}

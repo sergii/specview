@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -105,6 +106,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.index)
 	mux.HandleFunc("GET /spec", s.detail)
+	mux.HandleFunc("GET /api/graph", s.graph)
 	mux.HandleFunc("GET /events", s.events)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -157,6 +159,33 @@ type workspaceData struct {
 	Projects       []boardData
 	WorkspaceTotal int
 	Multi          bool
+}
+
+type graphData struct {
+	Nodes []graphNode `json:"nodes"`
+	Edges []graphEdge `json:"edges"`
+}
+
+type graphNode struct {
+	ID          string       `json:"id"`
+	ProjectKey  string       `json:"project_key"`
+	Project     string       `json:"project"`
+	SpecID      string       `json:"spec_id"`
+	Path        string       `json:"path"`
+	Title       string       `json:"title"`
+	Status      specs.Status `json:"status"`
+	Agents      []string     `json:"agents,omitempty"`
+	Orphaned    bool         `json:"orphaned,omitempty"`
+	Collision   bool         `json:"collision,omitempty"`
+	ModifiedUnix int64       `json:"modified_unix"`
+}
+
+type graphEdge struct {
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Type   string `json:"type"`
+	Target string `json:"target,omitempty"`
+	Missing bool  `json:"missing,omitempty"`
 }
 
 func projectName(source ProjectSource) string {
@@ -278,6 +307,115 @@ func annotateBoardSignals(data *boardData) {
 	}
 }
 
+func boardSpecs(data boardData) []boardSpec {
+	items := make([]boardSpec, 0, data.Total)
+	items = append(items, data.New...)
+	items = append(items, data.InProgress...)
+	items = append(items, data.Done...)
+	items = append(items, data.Invalid...)
+	return items
+}
+
+func (s *Server) graphData(now time.Time) graphData {
+	result := graphData{}
+	seenEdges := make(map[string]struct{})
+
+	for _, source := range s.projects {
+		board := buildBoardData(source, now)
+		views := boardSpecs(board)
+		viewByPath := make(map[string]boardSpec, len(views))
+		refs := make(map[string]string, len(views)*3)
+		for _, view := range views {
+			viewByPath[view.Path] = view
+			nodeID := graphNodeID(source.Key, view.Path)
+			refs[view.Path] = nodeID
+			refs[filepath.ToSlash(filepath.Join(source.Config.Specs.Path, view.Path))] = nodeID
+			refs[strings.ToUpper(specDisplayID(view.Path))] = nodeID
+
+			agents := make([]string, 0, len(view.Activity))
+			seenAgents := make(map[string]struct{})
+			for _, record := range view.Activity {
+				label := activity.AgentLabel(record)
+				if _, ok := seenAgents[label]; ok {
+					continue
+				}
+				seenAgents[label] = struct{}{}
+				agents = append(agents, label)
+			}
+			sort.Strings(agents)
+			result.Nodes = append(result.Nodes, graphNode{
+				ID:           nodeID,
+				ProjectKey:   source.Key,
+				Project:      compactProjectPath(source.Root),
+				SpecID:       specDisplayID(view.Path),
+				Path:         view.Path,
+				Title:        view.Title,
+				Status:       view.Status,
+				Agents:       agents,
+				Orphaned:     view.Orphaned,
+				Collision:    view.AgentCollision || len(view.CodeCollisions) > 0,
+				ModifiedUnix: view.ModifiedAt.Unix(),
+			})
+		}
+
+		for _, view := range views {
+			fromID := graphNodeID(source.Key, view.Path)
+			for _, target := range view.DependsOn {
+				toID, ok := resolveRelation(target, refs)
+				edge := graphEdge{From: toID, To: fromID, Type: "depends_on", Target: target, Missing: !ok}
+				if !ok {
+					edge.From = ""
+				}
+				appendGraphEdge(&result, seenEdges, edge)
+			}
+			for _, target := range view.Blocks {
+				toID, ok := resolveRelation(target, refs)
+				edge := graphEdge{From: fromID, To: toID, Type: "blocks", Target: target, Missing: !ok}
+				if !ok {
+					edge.To = ""
+				}
+				appendGraphEdge(&result, seenEdges, edge)
+			}
+		}
+	}
+
+	sort.Slice(result.Nodes, func(i, j int) bool {
+		if result.Nodes[i].Project != result.Nodes[j].Project {
+			return result.Nodes[i].Project < result.Nodes[j].Project
+		}
+		return result.Nodes[i].Path < result.Nodes[j].Path
+	})
+	return result
+}
+
+func graphNodeID(projectKey, path string) string {
+	return projectKey + "::" + filepath.ToSlash(path)
+}
+
+func resolveRelation(target string, refs map[string]string) (string, bool) {
+	trimmed := strings.TrimSpace(target)
+	candidates := []string{
+		trimmed,
+		filepath.ToSlash(filepath.Clean(trimmed)),
+		strings.ToUpper(trimmed),
+	}
+	for _, candidate := range candidates {
+		if id, ok := refs[candidate]; ok {
+			return id, true
+		}
+	}
+	return "", false
+}
+
+func appendGraphEdge(result *graphData, seen map[string]struct{}, edge graphEdge) {
+	key := strings.Join([]string{edge.From, edge.To, edge.Type, edge.Target}, "\x1f")
+	if _, ok := seen[key]; ok {
+		return
+	}
+	seen[key] = struct{}{}
+	result.Edges = append(result.Edges, edge)
+}
+
 func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	if len(s.projects) == 0 {
 		http.Error(w, "no projects configured", http.StatusInternalServerError)
@@ -300,6 +438,14 @@ func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
 		http.Error(w, "render dashboard", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) graph(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := json.NewEncoder(w).Encode(s.graphData(time.Now())); err != nil {
+		http.Error(w, "render graph", http.StatusInternalServerError)
 	}
 }
 

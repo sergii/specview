@@ -31,6 +31,8 @@ type Spec struct {
 	Path       string
 	Title      string
 	Status     Status
+	DependsOn  []string
+	Blocks      []string
 	ModifiedAt time.Time
 	Body       string
 	Error      string
@@ -116,6 +118,13 @@ func scan(root, pattern string) ([]Spec, error) {
 	return items, nil
 }
 
+type metadata struct {
+	Status    Status
+	HasStatus bool
+	DependsOn []string
+	Blocks    []string
+}
+
 func parseFile(fullPath, relPath string) (Spec, error) {
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
@@ -126,17 +135,18 @@ func parseFile(fullPath, relPath string) (Spec, error) {
 		return Spec{}, err
 	}
 
-	metadata, body, metadataErr := splitFrontMatter(data)
+	frontMatter, body, metadataErr := splitFrontMatter(data)
 	status := StatusNew
 	validationError := ""
+	parsed := metadata{}
 	if metadataErr != nil {
 		validationError = metadataErr.Error()
-	} else if len(metadata) > 0 {
-		parsedStatus, found, err := parseStatus(metadata)
+	} else if len(frontMatter) > 0 {
+		parsed, err = parseMetadata(frontMatter)
 		if err != nil {
 			validationError = err.Error()
-		} else if found {
-			status = parsedStatus
+		} else if parsed.HasStatus {
+			status = parsed.Status
 			if _, ok := validStatuses[status]; !ok {
 				validationError = fmt.Sprintf("unknown status %q; expected new, in_progress, or done", status)
 			}
@@ -152,45 +162,127 @@ func parseFile(fullPath, relPath string) (Spec, error) {
 		Path:       relPath,
 		Title:      title,
 		Status:     status,
+		DependsOn:  parsed.DependsOn,
+		Blocks:      parsed.Blocks,
 		ModifiedAt: info.ModTime(),
 		Body:       string(body),
 		Error:      validationError,
 	}, nil
 }
 
-func parseStatus(metadata []byte) (Status, bool, error) {
-	lines := strings.Split(string(metadata), "\n")
+func parseMetadata(frontMatter []byte) (metadata, error) {
+	result := metadata{}
+	lines := strings.Split(string(frontMatter), "\n")
 	section := ""
+	listKey := ""
+
 	for i, raw := range lines {
 		trimmed := strings.TrimSpace(raw)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
+
 		indent := len(raw) - len(strings.TrimLeft(raw, " \t"))
 		if indent == 0 && strings.HasSuffix(trimmed, ":") {
 			section = strings.TrimSuffix(trimmed, ":")
+			listKey = ""
 			continue
 		}
 		if indent == 0 {
 			section = ""
+			listKey = ""
 			continue
 		}
 		if section != "specview" {
 			continue
 		}
+
+		if strings.HasPrefix(trimmed, "- ") && listKey != "" {
+			value := cleanRelationValue(strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
+			if value == "" {
+				return metadata{}, fmt.Errorf("empty %s relation on line %d", listKey, i+1)
+			}
+			appendRelation(&result, listKey, value)
+			continue
+		}
+
 		parts := strings.SplitN(trimmed, ":", 2)
 		if len(parts) != 2 {
-			return "", false, fmt.Errorf("invalid specview metadata on line %d", i+1)
+			return metadata{}, fmt.Errorf("invalid specview metadata on line %d", i+1)
 		}
-		if strings.TrimSpace(parts[0]) == "status" {
-			value := strings.Trim(strings.TrimSpace(parts[1]), "\"'")
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		listKey = ""
+
+		switch key {
+		case "status":
+			value = strings.Trim(value, "\"'")
 			if value == "" {
-				return "", false, errors.New("specview.status cannot be empty")
+				return metadata{}, errors.New("specview.status cannot be empty")
 			}
-			return Status(value), true, nil
+			result.Status = Status(value)
+			result.HasStatus = true
+		case "depends_on", "blocks":
+			if value == "" {
+				listKey = key
+				continue
+			}
+			for _, relation := range parseRelationList(value) {
+				if relation == "" {
+					continue
+				}
+				appendRelation(&result, key, relation)
+			}
 		}
 	}
-	return StatusNew, false, nil
+
+	result.DependsOn = uniqueRelations(result.DependsOn)
+	result.Blocks = uniqueRelations(result.Blocks)
+	return result, nil
+}
+
+func appendRelation(result *metadata, key, value string) {
+	switch key {
+	case "depends_on":
+		result.DependsOn = append(result.DependsOn, value)
+	case "blocks":
+		result.Blocks = append(result.Blocks, value)
+	}
+}
+
+func parseRelationList(value string) []string {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
+		value = strings.TrimSpace(value[1 : len(value)-1])
+	}
+	if value == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if cleaned := cleanRelationValue(part); cleaned != "" {
+			out = append(out, cleaned)
+		}
+	}
+	return out
+}
+
+func cleanRelationValue(value string) string {
+	return strings.Trim(strings.TrimSpace(value), "\"'")
+}
+
+func uniqueRelations(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 func splitFrontMatter(data []byte) (metadata, body []byte, err error) {

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sergii/specview/internal/activity"
 	"github.com/sergii/specview/internal/config"
 	"github.com/sergii/specview/internal/specs"
 )
@@ -49,21 +50,28 @@ func (h *Hub) Broadcast() {
 }
 
 type Server struct {
-	root  string
-	cfg   config.Config
-	store *specs.Store
-	hub   *Hub
-	tmpl  *template.Template
+	root     string
+	cfg      config.Config
+	store    *specs.Store
+	activity *activity.Store
+	hub      *Hub
+	tmpl     *template.Template
 }
 
 func NewServer(root string, cfg config.Config, store *specs.Store, hub *Hub) *Server {
 	funcs := template.FuncMap{
-		"since":  func(t time.Time) string { return since(t) },
-		"specID": specDisplayID,
+		"since":      func(t time.Time) string { return since(t) },
+		"specID":     specDisplayID,
+		"agentLabel": activity.AgentLabel,
+		"expiresAt": func(record activity.Record) string {
+			return activity.ExpiresAt(record).UTC().Format(time.RFC3339Nano)
+		},
 	}
 	tmpl := template.Must(template.New("index.html").Funcs(funcs).ParseFS(templateFS, "templates/*.html"))
 	return &Server{root: root, cfg: cfg, store: store, hub: hub, tmpl: tmpl}
 }
+
+func (s *Server) SetActivityStore(store *activity.Store) { s.activity = store }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux := http.NewServeMux()
@@ -98,9 +106,14 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	}
 }
 
+type boardSpec struct {
+	specs.Spec
+	Activity []activity.Record
+}
+
 type boardData struct {
 	ProjectName, ProjectPath, SpecsPath string
-	New, InProgress, Done, Invalid      []specs.Spec
+	New, InProgress, Done, Invalid      []boardSpec
 	Total                               int
 }
 
@@ -111,8 +124,19 @@ func (s *Server) projectName() string {
 	return filepath.Base(s.root)
 }
 
+func (s *Server) present(item specs.Spec, now time.Time) boardSpec {
+	view := boardSpec{Spec: item}
+	if s.activity == nil {
+		return view
+	}
+	projectRelativePath := filepath.ToSlash(filepath.Join(s.cfg.Specs.Path, item.Path))
+	view.Activity = s.activity.ActiveFor(projectRelativePath, now)
+	return view
+}
+
 func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	items := s.store.All()
+	now := time.Now()
 	data := boardData{
 		ProjectName: s.projectName(),
 		ProjectPath: filepath.ToSlash(filepath.Clean(s.root)),
@@ -120,17 +144,18 @@ func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 		Total:       len(items),
 	}
 	for _, item := range items {
+		view := s.present(item, now)
 		if item.Error != "" {
-			data.Invalid = append(data.Invalid, item)
+			data.Invalid = append(data.Invalid, view)
 			continue
 		}
 		switch item.Status {
 		case specs.StatusNew:
-			data.New = append(data.New, item)
+			data.New = append(data.New, view)
 		case specs.StatusInProgress:
-			data.InProgress = append(data.InProgress, item)
+			data.InProgress = append(data.InProgress, view)
 		case specs.StatusDone:
-			data.Done = append(data.Done, item)
+			data.Done = append(data.Done, view)
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

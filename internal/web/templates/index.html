@@ -83,6 +83,7 @@
     .graph-link:hover { color: var(--text); }
     .top-status { justify-self: end; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
     .top-project { color: var(--muted); font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: nowrap; }
+    .top-count { color: var(--quiet); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .live { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
     .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--done); }
     .live.offline { color: var(--muted); }
@@ -200,8 +201,7 @@
     }
     @media (max-width: 520px) {
       .view-label, .activity-label { display: none; }
-      .top-status > span:first-child { display: none; }
-      .project-breadcrumb-label { display: none; }
+      .top-project { display: none; }
       .workspace-row { grid-template-columns: minmax(0, 1fr) auto; }
       .workspace-row .workspace-metric:not(:last-child) { display: none; }
       .column-head { min-height: 44px; }
@@ -232,7 +232,7 @@
       </div>
       <a class="graph-link" href="/graph">Graph</a>
     </div>
-    <div class="top-status">{{if .Multi}}<span>{{len .Projects}} projects</span>{{else}}<code class="top-project" title="{{.ProjectPath}}">{{.ProjectDisplayPath}}</code>{{end}}<span class="live offline" id="connection-state"><span class="live-dot"></span><span id="connection-label">Connecting</span></span></div>
+    <div class="top-status">{{if .Multi}}<span>{{len .Projects}} projects</span><span class="top-count">· {{.WorkspaceTotal}} specs</span>{{else}}<code class="top-project" title="{{.ProjectPath}}">{{.ProjectDisplayPath}}</code><span class="top-count">· {{.WorkspaceTotal}} specs</span>{{end}}<span class="live offline" id="connection-state"><span class="live-dot"></span><span id="connection-label">Connecting</span></span></div>
   </header>
   <main>
     {{if .Multi}}

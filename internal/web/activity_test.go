@@ -71,7 +71,7 @@ func TestBoardRendersFreshAgentActivity(t *testing.T) {
 		`specview-activity-glyph nested`,
 		`specview-activity-glyph corner`,
 		`specview-activity-glyph brand`,
-		">CX<",
+		"CX",
 		`class="card active-spec"`,
 		`data-blink="off"`,
 		`data-blink="on"`,

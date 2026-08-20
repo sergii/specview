@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -29,14 +31,13 @@ func main() {
 }
 
 func run(args []string) error {
-	command := "serve"
-	if len(args) > 0 {
-		command = args[0]
+	if len(args) == 0 {
+		return serve(nil)
 	}
 
-	switch command {
+	switch args[0] {
 	case "serve":
-		return serve()
+		return serve(args[1:])
 	case "init":
 		return initProject()
 	case "version", "--version", "-v":
@@ -46,7 +47,7 @@ func run(args []string) error {
 		printHelp()
 		return nil
 	default:
-		return fmt.Errorf("unknown command %q\n\nRun 'specview help' for usage", command)
+		return fmt.Errorf("unknown command %q\n\nRun 'specview help' for usage", args[0])
 	}
 }
 
@@ -75,77 +76,155 @@ func initProject() error {
 	return nil
 }
 
-func serve() error {
-	configRoot, err := os.Getwd()
-	if err != nil {
-		return err
+func serve(inputs []string) error {
+	var configRoots []string
+	var err error
+	if len(inputs) == 0 {
+		root, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			return cwdErr
+		}
+		configRoots = []string{root}
+	} else {
+		configRoots, err = discoverConfigRoots(inputs)
+		if err != nil {
+			return err
+		}
+		if len(configRoots) == 0 {
+			return errors.New("no .specview.yaml projects found in the supplied paths")
+		}
 	}
-	return serveRoot(configRoot)
+	return serveConfigRoots(configRoots)
 }
 
-func serveRoot(configRoot string) error {
+type projectRuntime struct {
+	source          webui.ProjectSource
+	specWatcher     *watch.Watcher
+	activityWatcher *watch.Watcher
+}
+
+func (p *projectRuntime) Close() {
+	if p.activityWatcher != nil {
+		_ = p.activityWatcher.Close()
+	}
+	if p.specWatcher != nil {
+		_ = p.specWatcher.Close()
+	}
+}
+
+func serveConfigRoots(configRoots []string) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	hub := webui.NewHub()
+	runtimes := make([]*projectRuntime, 0, len(configRoots))
+	for _, configRoot := range configRoots {
+		runtime, err := openProject(configRoot, hub, ctx)
+		if err != nil {
+			for _, opened := range runtimes {
+				opened.Close()
+			}
+			return fmt.Errorf("open %s: %w", configRoot, err)
+		}
+		runtimes = append(runtimes, runtime)
+	}
+	defer func() {
+		for _, runtime := range runtimes {
+			runtime.Close()
+		}
+	}()
+
+	sources := make([]webui.ProjectSource, 0, len(runtimes))
+	for _, runtime := range runtimes {
+		sources = append(sources, runtime.source)
+	}
+	serverCfg := sources[0].Config.Server
+	server := webui.NewWorkspaceServer(sources, serverCfg, hub)
+	addr := fmt.Sprintf("%s:%d", serverCfg.Host, serverCfg.Port)
+
+	if len(sources) == 1 {
+		source := sources[0]
+		projectName := source.Config.Project.Name
+		if projectName == "" {
+			projectName = filepath.Base(source.Root)
+		}
+		observedPath := source.Config.Specs.Path
+		if source.Config.Project.Root != "." {
+			observedPath = filepath.Join(source.Config.Project.Root, source.Config.Specs.Path)
+		}
+		fmt.Printf("Specview watching %s · %s\n", projectName, observedPath)
+	} else {
+		fmt.Printf("Specview workspace · %d projects\n", len(sources))
+		for _, source := range sources {
+			fmt.Printf("  %s\n", filepath.ToSlash(source.Root))
+		}
+	}
+	fmt.Printf("http://%s\n", addr)
+
+	return server.ListenAndServe(ctx)
+}
+
+func openProject(configRoot string, hub *webui.Hub, ctx context.Context) (*projectRuntime, error) {
 	cfg, err := config.Load(configRoot)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return errors.New(".specview.yaml not found; run 'specview init' first")
+			return nil, errors.New(".specview.yaml not found; run 'specview init' first")
 		}
-		return err
+		return nil, err
 	}
 
 	projectRoot := cfg.ResolveProjectRoot(configRoot)
 	info, err := os.Stat(projectRoot)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("project.root %q does not exist", cfg.Project.Root)
+			return nil, fmt.Errorf("project.root %q does not exist", cfg.Project.Root)
 		}
-		return fmt.Errorf("stat project.root: %w", err)
+		return nil, fmt.Errorf("stat project.root: %w", err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("project.root %q is not a directory", cfg.Project.Root)
+		return nil, fmt.Errorf("project.root %q is not a directory", cfg.Project.Root)
 	}
 
 	specRoot := filepath.Join(projectRoot, cfg.Specs.Path)
 	if err := os.MkdirAll(specRoot, 0o755); err != nil {
-		return fmt.Errorf("create specs directory: %w", err)
+		return nil, fmt.Errorf("create specs directory: %w", err)
 	}
-
 	store := specs.NewStore(specRoot, cfg.Specs.Pattern)
 	if err := store.Refresh(); err != nil {
-		return err
+		return nil, err
 	}
 
-	hub := webui.NewHub()
-	watcher, err := watch.New(specRoot, func() {
+	specWatcher, err := watch.New(specRoot, func() {
 		if err := store.Refresh(); err != nil {
-			slog.Error("refresh specifications", "error", err)
+			slog.Error("refresh specifications", "project", projectRoot, "error", err)
 			return
 		}
 		hub.Broadcast()
 	})
 	if err != nil {
-		return fmt.Errorf("start watcher: %w", err)
+		return nil, fmt.Errorf("start watcher: %w", err)
 	}
-	defer watcher.Close()
 
 	activityRoot := filepath.Join(projectRoot, activity.RelativeDir)
 	activityStore := activity.NewStore(activityRoot)
 	if err := activityStore.Refresh(); err != nil {
-		return err
+		_ = specWatcher.Close()
+		return nil, err
 	}
 	for _, parseErr := range activityStore.Errors() {
-		slog.Warn("invalid agent activity", "path", parseErr.Path, "error", parseErr.Message)
+		slog.Warn("invalid agent activity", "project", projectRoot, "path", parseErr.Path, "error", parseErr.Message)
 	}
 
-	var activitySignatureMu sync.Mutex
-	activitySignature := activityStore.ActiveSignature(time.Now())
-	broadcastActivityIfChanged := func(now time.Time) {
+	var signatureMu sync.Mutex
+	signature := activityStore.ActiveSignature(time.Now())
+	broadcastIfChanged := func(now time.Time) {
 		current := activityStore.ActiveSignature(now)
-		activitySignatureMu.Lock()
-		changed := current != activitySignature
+		signatureMu.Lock()
+		changed := current != signature
 		if changed {
-			activitySignature = current
+			signature = current
 		}
-		activitySignatureMu.Unlock()
+		signatureMu.Unlock()
 		if changed {
 			hub.Broadcast()
 		}
@@ -153,21 +232,18 @@ func serveRoot(configRoot string) error {
 
 	activityWatcher, err := watch.New(activityRoot, func() {
 		if err := activityStore.Refresh(); err != nil {
-			slog.Error("refresh agent activity", "error", err)
+			slog.Error("refresh agent activity", "project", projectRoot, "error", err)
 			return
 		}
 		for _, parseErr := range activityStore.Errors() {
-			slog.Warn("invalid agent activity", "path", parseErr.Path, "error", parseErr.Message)
+			slog.Warn("invalid agent activity", "project", projectRoot, "path", parseErr.Path, "error", parseErr.Message)
 		}
-		broadcastActivityIfChanged(time.Now())
+		broadcastIfChanged(time.Now())
 	})
 	if err != nil {
-		return fmt.Errorf("start activity watcher: %w", err)
+		_ = specWatcher.Close()
+		return nil, fmt.Errorf("start activity watcher: %w", err)
 	}
-	defer activityWatcher.Close()
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	go func() {
 		ticker := time.NewTicker(time.Second)
@@ -177,37 +253,107 @@ func serveRoot(configRoot string) error {
 			case <-ctx.Done():
 				return
 			case now := <-ticker.C:
-				broadcastActivityIfChanged(now)
+				broadcastIfChanged(now)
 			}
 		}
 	}()
 
-	server := webui.NewServer(projectRoot, cfg, store, hub)
-	server.SetActivityStore(activityStore)
-	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	return &projectRuntime{
+		source:          webui.NewProjectSource(projectRoot, cfg, store, activityStore),
+		specWatcher:     specWatcher,
+		activityWatcher: activityWatcher,
+	}, nil
+}
 
-	projectName := cfg.Project.Name
-	if projectName == "" {
-		projectName = filepath.Base(projectRoot)
-	}
-	observedPath := cfg.Specs.Path
-	if cfg.Project.Root != "." {
-		observedPath = filepath.Join(cfg.Project.Root, cfg.Specs.Path)
-	}
-	fmt.Printf("Specview watching %s · %s\n", projectName, observedPath)
-	fmt.Printf("http://%s\n", addr)
+func discoverConfigRoots(inputs []string) ([]string, error) {
+	seen := make(map[string]struct{})
+	for _, input := range inputs {
+		path, err := expandPath(input)
+		if err != nil {
+			return nil, err
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil, fmt.Errorf("stat %s: %w", input, err)
+		}
 
-	return server.ListenAndServe(ctx)
+		if !info.IsDir() {
+			if filepath.Base(path) != config.FileName {
+				return nil, fmt.Errorf("%s is not a directory or %s", input, config.FileName)
+			}
+			seen[filepath.Dir(path)] = struct{}{}
+			continue
+		}
+
+		if hasConfig(path) {
+			seen[path] = struct{}{}
+			continue
+		}
+
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", input, err)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+				continue
+			}
+			child := filepath.Join(path, entry.Name())
+			if hasConfig(child) {
+				seen[child] = struct{}{}
+			}
+		}
+	}
+
+	roots := make([]string, 0, len(seen))
+	for root := range seen {
+		abs, err := filepath.Abs(root)
+		if err != nil {
+			return nil, err
+		}
+		roots = append(roots, filepath.Clean(abs))
+	}
+	sort.Strings(roots)
+	return roots, nil
+}
+
+func hasConfig(root string) bool {
+	info, err := os.Stat(filepath.Join(root, config.FileName))
+	return err == nil && !info.IsDir()
+}
+
+func expandPath(input string) (string, error) {
+	if input == "~" || strings.HasPrefix(input, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		if input == "~" {
+			input = home
+		} else {
+			input = filepath.Join(home, strings.TrimPrefix(input, "~/"))
+		}
+	}
+	abs, err := filepath.Abs(input)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(abs), nil
 }
 
 func printHelp() {
 	fmt.Printf(`Specview - live, read-only observation for Markdown specifications.
 
 Usage:
-  specview              Start the dashboard using .specview.yaml in the current directory
-  specview serve        Start the dashboard using .specview.yaml in the current directory
-  specview init         Create .specview.yaml and specs/
-  specview version      Print the version
-  specview help         Show this help
+  specview                         Start the current project dashboard
+  specview serve                   Start the current project dashboard
+  specview serve PATH [PATH ...]   Discover projects and start a workspace dashboard
+  specview init                    Create .specview.yaml and specs/
+  specview version                 Print the version
+  specview help                    Show this help
+
+Workspace discovery treats a directory containing .specview.yaml as one project.
+If a supplied directory has no .specview.yaml, Specview discovers configured
+projects in its immediate child directories.
 `)
 }

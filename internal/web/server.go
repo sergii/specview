@@ -57,6 +57,7 @@ func NewServer(root string, cfg config.Config, store *specs.Store, hub *Hub) *Se
 	tmpl := template.Must(template.New("index.html").Funcs(funcs).ParseFS(templateFS, "templates/*.html"))
 	return &Server{root: root, cfg: cfg, store: store, hub: hub, tmpl: tmpl}
 }
+
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.index)
@@ -92,7 +93,6 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 type boardData struct {
 	ProjectName, SpecsPath         string
-	Demo                           bool
 	New, InProgress, Done, Invalid []specs.Spec
 	Total                          int
 }
@@ -103,9 +103,10 @@ func (s *Server) projectName() string {
 	}
 	return filepath.Base(s.root)
 }
+
 func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	items := s.store.All()
-	data := boardData{ProjectName: s.projectName(), SpecsPath: s.cfg.Specs.Path, Demo: s.cfg.Project.Demo, Total: len(items)}
+	data := boardData{ProjectName: s.projectName(), SpecsPath: s.cfg.Specs.Path, Total: len(items)}
 	for _, item := range items {
 		if item.Error != "" {
 			data.Invalid = append(data.Invalid, item)
@@ -125,6 +126,7 @@ func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "render dashboard", http.StatusInternalServerError)
 	}
 }
+
 func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	item, ok := s.store.Find(path)
@@ -135,12 +137,12 @@ func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "detail.html", struct {
 		ProjectName string
-		Demo        bool
 		Spec        specs.Spec
-	}{s.projectName(), s.cfg.Project.Demo, item}); err != nil {
+	}{s.projectName(), item}); err != nil {
 		http.Error(w, "render specification", http.StatusInternalServerError)
 	}
 }
+
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -173,6 +175,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -181,6 +184,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
 func since(t time.Time) string {
 	d := time.Since(t)
 	if d < 0 {

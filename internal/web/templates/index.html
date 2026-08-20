@@ -8,8 +8,10 @@
   <script>
     try {
       document.documentElement.dataset.view = localStorage.getItem('specview:view') || 'classic';
+      document.documentElement.dataset.activity = localStorage.getItem('specview:activity') || 'nested';
     } catch (_) {
       document.documentElement.dataset.view = 'classic';
+      document.documentElement.dataset.activity = 'nested';
     }
   </script>
   <style>
@@ -59,10 +61,11 @@
       letter-spacing: -0.012em;
       text-decoration: none;
     }
-    .center-nav { display: flex; align-items: center; gap: 14px; }
-    .view-label { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
-    .view-switch { display: inline-flex; border: 1px solid var(--line); }
-    .view-button {
+    .center-nav { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .view-label, .activity-label { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
+    .activity-cluster { display: inline-flex; align-items: center; gap: 6px; }
+    .view-switch, .activity-switch { display: inline-flex; border: 1px solid var(--line); }
+    .view-button, .activity-button {
       min-height: 28px;
       padding: 0 10px;
       border: 0;
@@ -72,11 +75,14 @@
       cursor: pointer;
       font-size: 11px;
     }
-    .view-button:last-child { border-right: 0; }
-    .view-button:hover { color: var(--text); background: #fafafa; }
+    .view-button:last-child, .activity-button:last-child { border-right: 0; }
+    .view-button:hover, .activity-button:hover { color: var(--text); background: #fafafa; }
     html[data-view="classic"] .view-button[data-view="classic"],
     html[data-view="dense"] .view-button[data-view="dense"],
-    html[data-view="flow"] .view-button[data-view="flow"] {
+    html[data-view="flow"] .view-button[data-view="flow"],
+    html[data-activity="nested"] .activity-button[data-activity="nested"],
+    html[data-activity="corner"] .activity-button[data-activity="corner"],
+    html[data-activity="brand"] .activity-button[data-activity="brand"] {
       color: var(--text);
       background: #f2f2ef;
     }
@@ -317,7 +323,7 @@
         padding-bottom: 10px;
       }
       .brand { grid-area: brand; }
-      .center-nav { grid-area: center; justify-self: start; }
+      .center-nav { grid-area: center; justify-self: start; justify-content: flex-start; }
       .top-status { grid-area: status; }
       main { padding-top: 24px; }
       .project-header { margin-bottom: 20px; }
@@ -336,7 +342,7 @@
     }
 
     @media (max-width: 520px) {
-      .view-label { display: none; }
+      .view-label, .activity-label { display: none; }
       .top-status > span:first-child { display: none; }
       .project-breadcrumb-label { display: none; }
       .column-head { min-height: 44px; }
@@ -362,6 +368,14 @@
         <button class="view-button" type="button" data-view="classic" aria-pressed="true">Classic</button>
         <button class="view-button" type="button" data-view="dense" aria-pressed="false">Dense</button>
         <button class="view-button" type="button" data-view="flow" aria-pressed="false">Flow</button>
+      </div>
+      <div class="activity-cluster">
+        <span class="activity-label">Activity</span>
+        <div class="activity-switch" role="group" aria-label="Activity indicator">
+          <button class="activity-button" type="button" data-activity="nested" aria-pressed="true">Nested</button>
+          <button class="activity-button" type="button" data-activity="corner" aria-pressed="false">Corner</button>
+          <button class="activity-button" type="button" data-activity="brand" aria-pressed="false">Brand</button>
+        </div>
       </div>
     </div>
     <div class="top-status"><span>{{.Total}} specs</span><span class="live offline" id="connection-state"><span class="live-dot"></span><span id="connection-label">Connecting</span></span></div>
@@ -422,6 +436,18 @@
   };
   setView(document.documentElement.dataset.view, false);
   viewButtons.forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
+
+  const activityButtons = document.querySelectorAll('.activity-button');
+  const setActivity = (activity, persist = true) => {
+    const next = ['nested', 'corner', 'brand'].includes(activity) ? activity : 'nested';
+    document.documentElement.dataset.activity = next;
+    activityButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.activity === next)));
+    if (persist) {
+      try { localStorage.setItem('specview:activity', next); } catch (_) {}
+    }
+  };
+  setActivity(document.documentElement.dataset.activity, false);
+  activityButtons.forEach((button) => button.addEventListener('click', () => setActivity(button.dataset.activity)));
 
   document.addEventListener('click', (event) => {
     const link = event.target.closest('a.card');

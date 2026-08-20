@@ -32,7 +32,7 @@ type Spec struct {
 	Title      string
 	Status     Status
 	DependsOn  []string
-	Blocks      []string
+	Blocks     []string
 	ModifiedAt time.Time
 	Body       string
 	Error      string
@@ -119,8 +119,8 @@ func scan(root, pattern string) ([]Spec, error) {
 }
 
 type metadata struct {
-	Status    Status
-	HasStatus bool
+	Status     Status
+	HasStatus  bool
 	DependsOn []string
 	Blocks    []string
 }
@@ -163,7 +163,7 @@ func parseFile(fullPath, relPath string) (Spec, error) {
 		Title:      title,
 		Status:     status,
 		DependsOn:  parsed.DependsOn,
-		Blocks:      parsed.Blocks,
+		Blocks:     parsed.Blocks,
 		ModifiedAt: info.ModTime(),
 		Body:       string(body),
 		Error:      validationError,

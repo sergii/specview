@@ -118,6 +118,8 @@ AUTH-03  Authentication flow
 - Classic spends more space on individual specification cards.
 - Dense materially increases information density while keeping structural lines.
 - Flow spends the least visual chrome and relies primarily on typography and whitespace.
+- Dense and Flow align specification titles with the workflow title track so row titles begin directly beneath labels such as `In progress` rather than drifting to the right behind an oversized ID column.
+- workflow counts stay visually attached to the workflow label, for example `In progress 5`, instead of being pushed to the far right edge of the column header.
 
 ## Responsive behavior
 
@@ -151,7 +153,7 @@ Page gutters, project breadcrumb spacing, and workflow spacing scale fluidly wit
 - `ColumnIndex`: two-digit structural index.
 - `StatusSquare`: restrained workflow state marker.
 - `ColumnTitle`: human-readable workflow state.
-- `Count`: compact item count.
+- `Count`: compact item count visually grouped with the workflow title.
 - `SpecID`: stable short specification reference.
 - `CardTitle`: specification title.
 - `Path`: monospaced specification path.
@@ -192,6 +194,8 @@ Page gutters, project breadcrumb spacing, and workflow spacing scale fluidly wit
 - Live remains a circular connection signal.
 - the board shows the complete resolved project filesystem path instead of a large project-name hero.
 - the redundant Source / specs block is not shown.
+- Dense and Flow specification titles align with the workflow-title track.
+- workflow counts render adjacent to their workflow titles rather than at the far right edge.
 - all three columns fit without clipping on ordinary desktop and laptop viewport widths.
 - tablet widths preserve kanban and may use horizontal overflow.
 - phone widths use a vertical grouped list rather than horizontal kanban navigation.

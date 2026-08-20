@@ -10,21 +10,21 @@ The filesystem is the source of truth. Specview watches specification files and 
 
 Specview and its demo are separate repositories.
 
-Canonical target layout:
+Current canonical layout:
 
 ```text
-github.com/specview/specview
-github.com/specview/specview-demo
+github.com/sergii/specview
+github.com/sergii/specview-demo
 ```
 
 Responsibilities:
 
-- `specview/specview` contains the Go binary, dashboard, configuration contract, installer, CI, and release workflows.
-- `specview/specview-demo` is a normal Git repository used to demonstrate Specview with realistic specifications and implementation code.
+- `sergii/specview` contains the Go binary, dashboard, configuration contract, installer, CI, release workflows, and the real specs used to build Specview.
+- `sergii/specview-demo` is a normal Git repository used to demonstrate Specview with realistic specifications and implementation code.
 - the Specview binary must not embed or vendor the demo specifications.
 - the demo repository has independent Git history and may evolve independently from Specview releases.
 
-During the initial bootstrap, the implementation repository may temporarily live under another owner before being transferred to the Specview organization.
+A future transfer to a dedicated Specview organization remains possible, but it is not required for the POC and must not influence the runtime architecture.
 
 ## Vertical slice
 
@@ -151,7 +151,7 @@ The UI should feel like an activity/observation surface, not a task manager.
 The companion repository is:
 
 ```text
-https://github.com/specview/specview-demo
+https://github.com/sergii/specview-demo
 ```
 
 It is a real project, not a fixture embedded in the Specview binary.
@@ -167,7 +167,8 @@ specview-demo/
 │   ├── 01-project-setup.md
 │   ├── ...
 │   └── 10-release.md
-└── implementation files
+├── implementation files
+└── tests/
 ```
 
 Initial dataset:
@@ -199,7 +200,7 @@ server:
 Primary demo flow:
 
 ```bash
-git clone https://github.com/specview/specview-demo.git
+git clone https://github.com/sergii/specview-demo.git
 cd specview-demo
 specview
 ```
@@ -207,6 +208,20 @@ specview
 Users must be able to edit the demo specs, observe live transitions, commit changes, reset the repository, branch it, or use an AI coding agent inside it exactly like any other Git project.
 
 The main Specview repository should reference this companion repository in its README and documentation but must not copy its dataset into release binaries.
+
+## Dogfooding
+
+The Specview source repository is itself configured as a Specview project:
+
+```text
+sergii/specview/
+├── .specview.yaml
+├── specs/
+├── cmd/
+└── internal/
+```
+
+This provides a real-world example while `specview-demo` remains a controlled playground. The dogfooding specs are normal product specifications, not fixtures copied into the binary.
 
 ## CLI
 
@@ -221,6 +236,10 @@ specview help
 ```
 
 There is intentionally no special `specview demo` or `specview init --demo` command in v0.0.1. Demo usage is ordinary Git usage.
+
+## Git status observation
+
+Showing repository Git state is a natural next observation capability, but it is outside the v0.0.1 vertical slice. It is tracked as a separate Specview specification so it can be implemented without coupling the initial filesystem observer to Git.
 
 ## Distribution
 
@@ -257,7 +276,7 @@ v0.0.1 does not include:
 - task management
 - specification generation
 - LLM integration
-- Git integration inside Specview
+- Git status integration
 - GitHub API integration inside Specview
 - ontology or semantic validation
 - embedded demo dataset
@@ -272,4 +291,5 @@ The POC is complete when:
 3. the external `specview-demo` repository can be cloned normally;
 4. running `specview` inside the demo repository shows Demo Project with 10 specifications;
 5. editing one specification status moves its card automatically without manual browser refresh;
-6. the Specview release binary contains no demo specification dataset.
+6. the Specview release binary contains no demo specification dataset;
+7. the Specview source repository can be observed using its own `.specview.yaml` and `specs/`.

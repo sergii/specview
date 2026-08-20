@@ -1,0 +1,12 @@
+version: 1
+
+project:
+  name: "Specview"
+
+specs:
+  path: specs
+  pattern: "*.md"
+
+server:
+  host: 127.0.0.1
+  port: 7331

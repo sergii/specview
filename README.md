@@ -23,21 +23,21 @@ The demo is intentionally a separate Git repository. Demo files, implementation 
 
 ## Try the demo
 
-Canonical companion repository:
+The companion repository is:
 
 ```text
-https://github.com/specview/specview-demo
+https://github.com/sergii/specview-demo
 ```
 
-Once the Specview GitHub organization is available:
+After installing Specview:
 
 ```bash
-git clone https://github.com/specview/specview-demo.git
+git clone https://github.com/sergii/specview-demo.git
 cd specview-demo
 specview
 ```
 
-The demo repository is a real project with its own `.git`, `.specview.yaml`, `specs/`, implementation, and history. Its config sets:
+The demo repository is a real project with its own `.git`, `.specview.yaml`, `specs/`, implementation, tests, and history. Its config sets:
 
 ```yaml
 project:
@@ -46,6 +46,20 @@ project:
 ```
 
 Specview only understands the generic `project.demo` flag so the UI can display a small `DEMO` marker. It does not know or ship the demo dataset itself.
+
+## Dogfooding
+
+Specview itself is also a Specview project. This repository contains `.specview.yaml` and real specifications under `specs/`.
+
+Once the binary is available, cloning this repository and running `specview` shows the current development state of Specview itself:
+
+```bash
+git clone https://github.com/sergii/specview.git
+cd specview
+specview
+```
+
+The companion demo stays deterministic and beginner-friendly, while this repository remains the real-world dogfooding example.
 
 ## Install
 
@@ -190,6 +204,7 @@ Included:
 - SHA-256 checksums
 - `install.sh`
 - external companion demo repository reference
+- dogfooding specs in this repository
 
 Explicitly not included:
 
@@ -200,7 +215,7 @@ Explicitly not included:
 - write API
 - task management
 - spec generation
-- Git integration
+- Git status integration in v0.0.1
 - GitHub integration
 - AI/LLM calls
 

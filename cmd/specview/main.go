@@ -73,15 +73,15 @@ func initProject() error {
 }
 
 func serve() error {
-	root, err := os.Getwd()
+	configRoot, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	return serveRoot(root)
+	return serveRoot(configRoot)
 }
 
-func serveRoot(root string) error {
-	cfg, err := config.Load(root)
+func serveRoot(configRoot string) error {
+	cfg, err := config.Load(configRoot)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return errors.New(".specview.yaml not found; run 'specview init' first")
@@ -89,7 +89,19 @@ func serveRoot(root string) error {
 		return err
 	}
 
-	specRoot := filepath.Join(root, cfg.Specs.Path)
+	projectRoot := cfg.ResolveProjectRoot(configRoot)
+	info, err := os.Stat(projectRoot)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("project.root %q does not exist", cfg.Project.Root)
+		}
+		return fmt.Errorf("stat project.root: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("project.root %q is not a directory", cfg.Project.Root)
+	}
+
+	specRoot := filepath.Join(projectRoot, cfg.Specs.Path)
 	if err := os.MkdirAll(specRoot, 0o755); err != nil {
 		return fmt.Errorf("create specs directory: %w", err)
 	}
@@ -115,14 +127,18 @@ func serveRoot(root string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	server := webui.NewServer(root, cfg, store, hub)
+	server := webui.NewServer(projectRoot, cfg, store, hub)
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 
 	projectName := cfg.Project.Name
 	if projectName == "" {
-		projectName = filepath.Base(root)
+		projectName = filepath.Base(projectRoot)
 	}
-	fmt.Printf("Specview watching %s · %s\n", projectName, cfg.Specs.Path)
+	observedPath := cfg.Specs.Path
+	if cfg.Project.Root != "." {
+		observedPath = filepath.Join(cfg.Project.Root, cfg.Specs.Path)
+	}
+	fmt.Printf("Specview watching %s · %s\n", projectName, observedPath)
 	fmt.Printf("http://%s\n", addr)
 
 	return server.ListenAndServe(ctx)
@@ -132,8 +148,8 @@ func printHelp() {
 	fmt.Printf(`Specview - live, read-only observation for Markdown specifications.
 
 Usage:
-  specview              Start the dashboard in the current repository
-  specview serve        Start the dashboard in the current repository
+  specview              Start the dashboard using .specview.yaml in the current directory
+  specview serve        Start the dashboard using .specview.yaml in the current directory
   specview init         Create .specview.yaml and specs/
   specview version      Print the version
   specview help         Show this help

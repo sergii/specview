@@ -16,6 +16,7 @@ var defaultConfig = []byte(`version: 1
 
 project:
   name: ""
+  root: "."
 
 specs:
   path: specs
@@ -35,6 +36,7 @@ type Config struct {
 
 type Project struct {
 	Name string
+	Root string
 	Demo bool
 }
 
@@ -100,6 +102,8 @@ func Load(root string) (Config, error) {
 			switch key {
 			case "name":
 				cfg.Project.Name = value
+			case "root":
+				cfg.Project.Root = value
 			case "demo":
 				v, err := strconv.ParseBool(value)
 				if err != nil {
@@ -138,6 +142,9 @@ func Load(root string) (Config, error) {
 	if err := scanner.Err(); err != nil {
 		return Config{}, err
 	}
+	if cfg.Project.Root == "" {
+		cfg.Project.Root = "."
+	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, fmt.Errorf("invalid %s: %w", FileName, err)
 	}
@@ -167,11 +174,14 @@ func (c Config) Validate() error {
 	if c.Version != 1 {
 		return fmt.Errorf("unsupported version %d", c.Version)
 	}
+	if c.Project.Root == "" {
+		return errors.New("project.root is required")
+	}
 	if c.Specs.Path == "" {
 		return errors.New("specs.path is required")
 	}
 	if filepath.IsAbs(c.Specs.Path) {
-		return errors.New("specs.path must be relative to the repository")
+		return errors.New("specs.path must be relative to project.root")
 	}
 	if c.Specs.Pattern == "" {
 		return errors.New("specs.pattern is required")
@@ -186,6 +196,13 @@ func (c Config) Validate() error {
 		return errors.New("server.port must be between 1 and 65535")
 	}
 	return nil
+}
+
+func (c Config) ResolveProjectRoot(configRoot string) string {
+	if filepath.IsAbs(c.Project.Root) {
+		return filepath.Clean(c.Project.Root)
+	}
+	return filepath.Clean(filepath.Join(configRoot, c.Project.Root))
 }
 
 func Init(root string) (createdConfig bool, createdSpecs bool, err error) {

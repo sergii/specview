@@ -106,6 +106,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.index)
 	mux.HandleFunc("GET /spec", s.detail)
+	mux.HandleFunc("GET /graph", s.graphPage)
 	mux.HandleFunc("GET /api/graph", s.graph)
 	mux.HandleFunc("GET /events", s.events)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -167,25 +168,25 @@ type graphData struct {
 }
 
 type graphNode struct {
-	ID          string       `json:"id"`
-	ProjectKey  string       `json:"project_key"`
-	Project     string       `json:"project"`
-	SpecID      string       `json:"spec_id"`
-	Path        string       `json:"path"`
-	Title       string       `json:"title"`
-	Status      specs.Status `json:"status"`
-	Agents      []string     `json:"agents,omitempty"`
-	Orphaned    bool         `json:"orphaned,omitempty"`
-	Collision   bool         `json:"collision,omitempty"`
-	ModifiedUnix int64       `json:"modified_unix"`
+	ID           string       `json:"id"`
+	ProjectKey   string       `json:"project_key"`
+	Project      string       `json:"project"`
+	SpecID       string       `json:"spec_id"`
+	Path         string       `json:"path"`
+	Title        string       `json:"title"`
+	Status       specs.Status `json:"status"`
+	Agents       []string     `json:"agents,omitempty"`
+	Orphaned     bool         `json:"orphaned,omitempty"`
+	Collision    bool         `json:"collision,omitempty"`
+	ModifiedUnix int64        `json:"modified_unix"`
 }
 
 type graphEdge struct {
-	From   string `json:"from"`
-	To     string `json:"to"`
-	Type   string `json:"type"`
-	Target string `json:"target,omitempty"`
-	Missing bool  `json:"missing,omitempty"`
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Type    string `json:"type"`
+	Target  string `json:"target,omitempty"`
+	Missing bool   `json:"missing,omitempty"`
 }
 
 func projectName(source ProjectSource) string {
@@ -256,6 +257,7 @@ func annotateBoardSignals(data *boardData) {
 	groups := []*[]boardSpec{&data.New, &data.InProgress, &data.Done, &data.Invalid}
 	fileOwners := make(map[string]map[string]struct{})
 	activeSessions := make(map[string]struct{})
+	collisionSpecs := make(map[string]struct{})
 
 	for _, group := range groups {
 		for i := range *group {
@@ -264,7 +266,7 @@ func annotateBoardSignals(data *boardData) {
 				data.OrphanedCount++
 			}
 			if item.AgentCollision {
-				data.CollisionCount++
+				collisionSpecs[item.Path] = struct{}{}
 			}
 			for _, record := range item.Activity {
 				activeSessions[record.SessionID] = struct{}{}
@@ -301,10 +303,11 @@ func annotateBoardSignals(data *boardData) {
 			sort.Strings(collisions)
 			item.CodeCollisions = collisions
 			if len(collisions) > 0 {
-				data.CollisionCount++
+				collisionSpecs[item.Path] = struct{}{}
 			}
 		}
 	}
+	data.CollisionCount = len(collisionSpecs)
 }
 
 func boardSpecs(data boardData) []boardSpec {
@@ -323,10 +326,8 @@ func (s *Server) graphData(now time.Time) graphData {
 	for _, source := range s.projects {
 		board := buildBoardData(source, now)
 		views := boardSpecs(board)
-		viewByPath := make(map[string]boardSpec, len(views))
 		refs := make(map[string]string, len(views)*3)
 		for _, view := range views {
-			viewByPath[view.Path] = view
 			nodeID := graphNodeID(source.Key, view.Path)
 			refs[view.Path] = nodeID
 			refs[filepath.ToSlash(filepath.Join(source.Config.Specs.Path, view.Path))] = nodeID
@@ -438,6 +439,17 @@ func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
 		http.Error(w, "render dashboard", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) graphPage(w http.ResponseWriter, r *http.Request) {
+	mode := "2d"
+	if r.URL.Query().Get("mode") == "3d" {
+		mode = "3d"
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmpl.ExecuteTemplate(w, "graph.html", struct{ Mode string }{Mode: mode}); err != nil {
+		http.Error(w, "render graph", http.StatusInternalServerError)
 	}
 }
 

@@ -15,6 +15,9 @@
       --muted: #6f6f69;
       --quiet: #a0a099;
       --line: #d8d8d2;
+      --new: #85857e;
+      --progress: #c39423;
+      --done: #2f8a57;
       --error: #b04b43;
       --accent: #496b7a;
       --accent-soft: #edf2f3;
@@ -56,7 +59,11 @@
       color: var(--muted);
       font-size: 12px;
     }
-    .metadata .status { color: var(--text); }
+    .metadata .status { display: inline-flex; align-items: center; gap: 8px; color: var(--text); }
+    .status-square { width: 6px; height: 6px; flex: 0 0 auto; }
+    .status-square.new { background: var(--new); }
+    .status-square.progress { background: var(--progress); }
+    .status-square.done { background: var(--done); }
     .metadata .path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--quiet); }
     .rule { margin: 34px 0 28px; border-top: 1px solid var(--line); }
     .error {
@@ -146,7 +153,7 @@
   </header>
   <main>
     <h1>{{.Spec.Title}}</h1>
-    <div class="metadata"><span class="status">{{if eq .Spec.Status "in_progress"}}In Progress{{else if eq .Spec.Status "new"}}New{{else if eq .Spec.Status "done"}}Done{{else}}{{.Spec.Status}}{{end}}</span><span class="path">{{.Spec.Path}}</span><span>Modified {{since .Spec.ModifiedAt}}</span></div>
+    <div class="metadata"><span class="status"><span class="status-square {{if eq .Spec.Status "in_progress"}}progress{{else if eq .Spec.Status "new"}}new{{else if eq .Spec.Status "done"}}done{{end}}"></span>{{if eq .Spec.Status "in_progress"}}In Progress{{else if eq .Spec.Status "new"}}New{{else if eq .Spec.Status "done"}}Done{{else}}{{.Spec.Status}}{{end}}</span><span class="path">{{.Spec.Path}}</span><span>Modified {{since .Spec.ModifiedAt}}</span></div>
     <div class="rule"></div>
     {{if .Spec.Error}}<div class="error">{{.Spec.Error}}</div>{{end}}
     <article>{{markdownBody .Spec.Body .Spec.Title}}</article>

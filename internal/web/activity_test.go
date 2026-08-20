@@ -66,10 +66,15 @@ func TestBoardRendersFreshAgentActivity(t *testing.T) {
 		t.Fatalf("board status = %d, want %d", response.Code, http.StatusOK)
 	}
 	body := response.Body.String()
-	if !strings.Contains(body, "Codex") {
-		t.Fatal("board does not render agent label")
-	}
-	if !strings.Contains(body, "specview-activity-frame") {
-		t.Fatal("board does not render square activity spinner")
+	for _, want := range []string{
+		"Codex",
+		`specview-activity-glyph nested`,
+		`specview-activity-glyph corner`,
+		`specview-activity-glyph brand`,
+		">CX<",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("board does not render activity marker %q", want)
+		}
 	}
 }

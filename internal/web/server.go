@@ -84,9 +84,10 @@ func NewServer(root string, cfg config.Config, store *specs.Store, hub *Hub) *Se
 
 func NewWorkspaceServer(projects []ProjectSource, serverCfg config.Server, hub *Hub) *Server {
 	funcs := template.FuncMap{
-		"since":      func(t time.Time) string { return since(t) },
-		"specID":     specDisplayID,
-		"agentLabel": activity.AgentLabel,
+		"since":        func(t time.Time) string { return since(t) },
+		"specID":       specDisplayID,
+		"markdownBody": renderMarkdownBody,
+		"agentLabel":   activity.AgentLabel,
 		"expiresAt": func(record activity.Record) string {
 			return activity.ExpiresAt(record).UTC().Format(time.RFC3339Nano)
 		},

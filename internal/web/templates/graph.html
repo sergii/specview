@@ -45,8 +45,9 @@
     body[data-mode="3d"] .stage { cursor: grab; }
     body[data-mode="3d"] .stage.dragging { cursor: grabbing; }
     canvas { display: block; width: 100%; height: 100%; min-height: 560px; }
-    .tooltip { position: absolute; z-index: 2; max-width: 320px; padding: 8px 10px; border: 1px solid var(--line); background: rgba(255,255,255,.97); color: var(--muted); font-size: 10px; line-height: 1.45; pointer-events: none; display: none; }
-    .tooltip strong { display: block; margin-bottom: 2px; color: var(--text); font-size: 11px; font-weight: 500; }
+    .tooltip { position: absolute; z-index: 2; max-width: 360px; padding: 9px 11px; border: 1px solid var(--line); background: rgba(255,255,255,.97); color: var(--muted); font-size: 10px; line-height: 1.5; pointer-events: none; display: none; }
+    .tooltip strong { display: block; margin-bottom: 3px; color: var(--text); font-size: 11px; font-weight: 500; }
+    .tooltip .relation { color: var(--text); }
     .stats { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 12px; color: var(--quiet); font-size: 10px; }
     @media (max-width: 760px) {
       .topbar { grid-template-columns: 1fr auto; }
@@ -157,6 +158,49 @@
 
   function displayLabel(node) {
     return labelMode === 'title' ? `${node.spec_id}  ${node.title}` : node.spec_id;
+  }
+
+  function humanizeStatus(status) {
+    if (status === 'in_progress') return 'In Progress';
+    if (status === 'new') return 'New';
+    if (status === 'done') return 'Done';
+    return String(status || '').replaceAll('_', ' ');
+  }
+
+  function relativeAge(unix) {
+    const seconds = Math.max(0, Math.floor(Date.now() / 1000) - Number(unix || 0));
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
+  }
+
+  function relationLabels(node, type) {
+    const nodes = byId();
+    const values = [];
+    for (const edge of data.edges) {
+      const match = type === 'depends_on' ? edge.type === type && edge.to === node.id : edge.type === type && edge.from === node.id;
+      if (!match) continue;
+      const otherID = type === 'depends_on' ? edge.from : edge.to;
+      const other = nodes.get(otherID);
+      values.push(other ? other.spec_id : edge.target || 'unresolved');
+    }
+    return [...new Set(values)];
+  }
+
+  function tooltipHTML(node) {
+    const dependsOn = relationLabels(node, 'depends_on');
+    const blocks = relationLabels(node, 'blocks');
+    const rows = [
+      `<strong>${escapeHTML(node.spec_id)} · ${escapeHTML(node.title)}</strong>`,
+      `${escapeHTML(node.project)}<br>${escapeHTML(humanizeStatus(node.status))} · ${escapeHTML(relativeAge(node.modified_unix))}`,
+    ];
+    if (node.agents?.length) rows.push(`Agent: <span class="relation">${escapeHTML(node.agents.join(', '))}</span>`);
+    if (dependsOn.length) rows.push(`Depends on: <span class="relation">${escapeHTML(dependsOn.join(', '))}</span>`);
+    if (blocks.length) rows.push(`Blocks: <span class="relation">${escapeHTML(blocks.join(', '))}</span>`);
+    if (node.orphaned) rows.push('idle / orphaned');
+    if (node.collision) rows.push('collision detected');
+    return rows.join('<br>');
   }
 
   function drawArrow(a, b, color) {
@@ -338,8 +382,8 @@
       return;
     }
     const node = hit.node;
-    tooltip.innerHTML = `<strong>${node.spec_id} · ${escapeHTML(node.title)}</strong>${escapeHTML(node.project)}<br>${escapeHTML(node.status)}${node.agents?.length ? `<br>${escapeHTML(node.agents.join(', '))}` : ''}${node.orphaned ? '<br>idle / orphaned' : ''}${node.collision ? '<br>collision detected' : ''}`;
-    tooltip.style.left = `${Math.min(event.clientX - stage.getBoundingClientRect().left + 14, stage.clientWidth - 330)}px`;
+    tooltip.innerHTML = tooltipHTML(node);
+    tooltip.style.left = `${Math.min(event.clientX - stage.getBoundingClientRect().left + 14, stage.clientWidth - 370)}px`;
     tooltip.style.top = `${event.clientY - stage.getBoundingClientRect().top + 14}px`;
     tooltip.style.display = 'block';
   });

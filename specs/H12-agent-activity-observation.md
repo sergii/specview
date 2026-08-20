@@ -112,6 +112,51 @@ Current presentation:
 
 Do not animate inactive or stale specifications.
 
+## Reference publisher
+
+The repository contains a standalone development publisher at:
+
+```text
+examples/activity-publisher
+```
+
+It is not part of the Specview binary. It exists to exercise the observer contract and to serve as a reference for future Codex, Claude Code, OpenCode, IDE, or shell adapters.
+
+From the project root, with Specview already running, publish activity for H12 with:
+
+```bash
+go run ./examples/activity-publisher \
+  --spec specs/H12-agent-activity-observation.md \
+  --agent-id codex \
+  --agent-label Codex
+```
+
+Expected lifecycle:
+
+```text
+publisher starts
+  -> activity JSON appears atomically
+  -> activity watcher refreshes the projection
+  -> SSE reloads the board
+  -> H12 shows square activity glyph + Codex
+  -> publisher updates heartbeat every 5 seconds
+```
+
+On `Ctrl+C`, the reference publisher removes its activity record and the board returns to the inactive presentation.
+
+To test TTL recovery rather than clean shutdown, terminate the publisher without allowing cleanup. The activity indicator must disappear automatically after approximately 30 seconds even though the stale JSON file remains on disk.
+
+Run a second publisher with another label against the same spec to exercise the multi-session presentation:
+
+```bash
+go run ./examples/activity-publisher \
+  --spec specs/H12-agent-activity-observation.md \
+  --agent-id claude-code \
+  --agent-label "Claude Code"
+```
+
+While both heartbeats are fresh, the compact UI may render `2 agents`.
+
 ## Privacy and paths
 
 Presence records are local runtime state and should normally be ignored by Git.
@@ -122,14 +167,15 @@ Only publish the minimum information required to correlate a session with a spec
 
 ## Publisher adapters still needed
 
-The observer side is now implemented, but producers remain future work.
+The observer side and a generic reference publisher are now implemented, but provider-specific producers remain future work.
 
 Useful adapters include:
 
 - Codex wrapper / hook.
 - Claude Code hook.
 - OpenCode integration.
-- generic shell helper for any agent that can periodically rewrite one heartbeat JSON file.
+- IDE integration.
+- generic shell wrapper around arbitrary agent commands.
 
 Adapters should generate opaque session IDs, publish explicit agent identity, update heartbeat atomically, and remove their record on clean exit when possible. Correct cleanup is an optimization; TTL expiry remains the reliability mechanism.
 
@@ -145,4 +191,5 @@ Adapters should generate opaque session IDs, publish explicit agent identity, up
 - activity filesystem changes participate in SSE live refresh.
 - invalid runtime records do not break the specification dashboard.
 - Flow, Dense, and Classic render the same activity projection without changing its semantics.
-- publisher adapters can be added without changing the observer contract.
+- the standalone reference publisher exercises the full presence lifecycle without becoming part of the Specview binary.
+- provider adapters can be added without changing the observer contract.

@@ -14,6 +14,9 @@ const FileName = ".specview.yaml"
 
 var defaultConfig = []byte(`version: 1
 
+project:
+  name: ""
+
 specs:
   path: specs
   pattern: "*.md"
@@ -25,8 +28,14 @@ server:
 
 type Config struct {
 	Version int
+	Project Project
 	Specs   Specs
 	Server  Server
+}
+
+type Project struct {
+	Name string
+	Demo bool
 }
 
 type Specs struct {
@@ -87,6 +96,19 @@ func Load(root string) (Config, error) {
 		}
 
 		switch section {
+		case "project":
+			switch key {
+			case "name":
+				cfg.Project.Name = value
+			case "demo":
+				v, err := strconv.ParseBool(value)
+				if err != nil {
+					return Config{}, fmt.Errorf("parse %s line %d: invalid project.demo", FileName, lineNumber)
+				}
+				cfg.Project.Demo = v
+			default:
+				return Config{}, fmt.Errorf("parse %s line %d: unknown project key %q", FileName, lineNumber, key)
+			}
 		case "specs":
 			switch key {
 			case "path":

@@ -6,11 +6,34 @@ Website: **specview.sh**
 
 > The domain is the canonical product home. During the proof of concept, binaries are distributed through GitHub Releases.
 
-## Proof of concept
+See [`SPEC.md`](SPEC.md) for the canonical v0.0.1 POC specification.
 
-Specview watches a `specs/` directory in the repository where it is started and presents a live local dashboard. The filesystem is the source of truth. Specview does not edit specifications or manage their state.
+## Try the demo
 
-### Install
+After installing Specview, the fastest first-run experience is:
+
+```bash
+specview demo
+```
+
+This starts an isolated **Demo Project** with 10 bundled specifications and does not change the current repository. The dashboard marks the project with a small `DEMO` badge.
+
+The demo contains:
+
+- 4 `new` specs
+- 3 `in_progress` specs
+- 3 `done` specs
+
+To copy the same fixture into a fresh repository instead:
+
+```bash
+specview init --demo
+specview
+```
+
+Then edit any file under `specs/`, for example change `status: new` to `status: in_progress`. The card moves automatically without manually refreshing the browser.
+
+## Install
 
 After the first GitHub Release is published:
 
@@ -20,19 +43,13 @@ curl -fsSL https://raw.githubusercontent.com/sergii/specview/main/install.sh | s
 
 The installer detects macOS/Linux and amd64/arm64, downloads the matching release archive, verifies its SHA-256 checksum, and installs `specview` to `~/.local/bin` by default.
 
-Override the installation directory when needed:
-
-```bash
-SPECVIEW_INSTALL_DIR=/usr/local/bin sh -c "$(curl -fsSL https://raw.githubusercontent.com/sergii/specview/main/install.sh)"
-```
-
 The future canonical installer will be:
 
 ```bash
 curl -fsSL https://specview.sh/install | sh
 ```
 
-### Initialize a repository
+## Initialize a repository
 
 ```bash
 cd your-repository
@@ -51,6 +68,9 @@ Default configuration:
 ```yaml
 version: 1
 
+project:
+  name: ""
+
 specs:
   path: specs
   pattern: "*.md"
@@ -60,9 +80,11 @@ server:
   port: 7331
 ```
 
-The leading dot is intentional: `.specview.yaml` is tooling metadata, not project documentation.
+`project.name` is optional. When empty, Specview uses the repository directory name. Demo projects additionally set `project.demo: true` so the UI can identify fixture data without changing the observation model.
 
-### Specification status contract
+The leading dot in `.specview.yaml` is intentional: it is tooling metadata, not project documentation.
+
+## Specification status contract
 
 Specifications are regular Markdown files. Status is namespaced under `specview` in YAML front matter:
 
@@ -87,13 +109,13 @@ done
 
 A specification without front matter defaults to `new`. An unknown status remains visible in the dashboard under **Metadata errors** instead of being silently ignored.
 
-### Observe
+## Observe
 
 ```bash
 specview
 ```
 
-or explicitly:
+or:
 
 ```bash
 specview serve
@@ -107,7 +129,7 @@ http://127.0.0.1:7331
 
 Specview watches `specs/**/*.md`. Create, edit, rename, or delete a specification and the browser updates automatically through Server-Sent Events.
 
-For a remote devbox, keep Specview bound to loopback and use a tunnel, for example:
+For a remote devbox:
 
 ```bash
 ssh -L 7331:127.0.0.1:7331 your-devbox
@@ -115,12 +137,30 @@ ssh -L 7331:127.0.0.1:7331 your-devbox
 
 Then open `http://127.0.0.1:7331` locally.
 
+## Dashboard philosophy
+
+The POC UI is deliberately minimal:
+
+- one header
+- project name and specs path
+- three columns: New, In progress, Done
+- simple specification cards
+- metadata errors when present
+- one detail view
+- no sidebar
+- no filters
+- no drag and drop
+- no task-management controls
+
+The dashboard is a read-only projection of filesystem state, not another project-management system.
+
 ## Scope of v0.0.1
 
 Included:
 
 - one Go binary
 - `.specview.yaml`
+- optional project name
 - `specs/` by default
 - `new`, `in_progress`, `done`
 - recursive Markdown discovery
@@ -128,6 +168,10 @@ Included:
 - Markdown source preview
 - live browser refresh over SSE
 - metadata-error visibility
+- `specview demo`
+- `specview init --demo`
+- 10 bundled demo specifications
+- minimal `DEMO` indication in the UI
 - loopback HTTP server by default
 - GitHub Actions CI
 - macOS/Linux release archives for amd64/arm64
@@ -153,12 +197,6 @@ CI and release builds use Go 1.26.x; the POC source intentionally stays compatib
 go test ./...
 go vet ./...
 go build ./cmd/specview
-```
-
-Build all release archives locally:
-
-```bash
-./scripts/build-release.sh v0.0.1
 ```
 
 ## Releases

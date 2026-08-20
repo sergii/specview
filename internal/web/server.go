@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,23 +24,14 @@ type Hub struct {
 	clients map[chan struct{}]struct{}
 }
 
-func NewHub() *Hub {
-	return &Hub{clients: make(map[chan struct{}]struct{})}
-}
-
+func NewHub() *Hub { return &Hub{clients: make(map[chan struct{}]struct{})} }
 func (h *Hub) Subscribe() (<-chan struct{}, func()) {
 	ch := make(chan struct{}, 1)
 	h.mu.Lock()
 	h.clients[ch] = struct{}{}
 	h.mu.Unlock()
-	return ch, func() {
-		h.mu.Lock()
-		delete(h.clients, ch)
-		close(ch)
-		h.mu.Unlock()
-	}
+	return ch, func() { h.mu.Lock(); delete(h.clients, ch); close(ch); h.mu.Unlock() }
 }
-
 func (h *Hub) Broadcast() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -60,13 +52,10 @@ type Server struct {
 }
 
 func NewServer(root string, cfg config.Config, store *specs.Store, hub *Hub) *Server {
-	funcs := template.FuncMap{
-		"since": func(t time.Time) string { return since(t) },
-	}
+	funcs := template.FuncMap{"since": func(t time.Time) string { return since(t) }}
 	tmpl := template.Must(template.New("index.html").Funcs(funcs).ParseFS(templateFS, "templates/*.html"))
 	return &Server{root: root, cfg: cfg, store: store, hub: hub, tmpl: tmpl}
 }
-
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.index)
@@ -76,17 +65,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("ok\n"))
 	})
-
-	server := &http.Server{
-		Addr:              fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.Port),
-		Handler:           securityHeaders(mux),
-		ReadHeaderTimeout: 5 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
-
+	server := &http.Server{Addr: fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.Port), Handler: securityHeaders(mux), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	errCh := make(chan error, 1)
 	go func() { errCh <- server.ListenAndServe() }()
-
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -101,22 +82,21 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 type boardData struct {
-	RepoName   string
-	SpecsPath  string
-	New        []specs.Spec
-	InProgress []specs.Spec
-	Done       []specs.Spec
-	Invalid    []specs.Spec
-	Total      int
+	ProjectName, SpecsPath         string
+	Demo                           bool
+	New, InProgress, Done, Invalid []specs.Spec
+	Total                          int
 }
 
+func (s *Server) projectName() string {
+	if name := strings.TrimSpace(s.cfg.Project.Name); name != "" {
+		return name
+	}
+	return filepath.Base(s.root)
+}
 func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	items := s.store.All()
-	data := boardData{
-		RepoName:  filepath.Base(s.root),
-		SpecsPath: s.cfg.Specs.Path,
-		Total:     len(items),
-	}
+	data := boardData{ProjectName: s.projectName(), SpecsPath: s.cfg.Specs.Path, Demo: s.cfg.Project.Demo, Total: len(items)}
 	for _, item := range items {
 		if item.Error != "" {
 			data.Invalid = append(data.Invalid, item)
@@ -131,13 +111,11 @@ func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 			data.Done = append(data.Done, item)
 		}
 	}
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
 		http.Error(w, "render dashboard", http.StatusInternalServerError)
 	}
 }
-
 func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	item, ok := s.store.Find(path)
@@ -147,13 +125,13 @@ func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "detail.html", struct {
-		RepoName string
-		Spec     specs.Spec
-	}{filepath.Base(s.root), item}); err != nil {
+		ProjectName string
+		Demo        bool
+		Spec        specs.Spec
+	}{s.projectName(), s.cfg.Project.Demo, item}); err != nil {
 		http.Error(w, "render specification", http.StatusInternalServerError)
 	}
 }
-
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -164,13 +142,10 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
-
 	ch, unsubscribe := s.hub.Subscribe()
 	defer unsubscribe()
-
 	_, _ = fmt.Fprint(w, ": connected\n\n")
 	flusher.Flush()
-
 	keepAlive := time.NewTicker(20 * time.Second)
 	defer keepAlive.Stop()
 	for {
@@ -189,7 +164,6 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
-
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -198,7 +172,6 @@ func securityHeaders(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-
 func since(t time.Time) string {
 	d := time.Since(t)
 	if d < 0 {

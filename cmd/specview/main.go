@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/sergii/specview/demo"
 	"github.com/sergii/specview/internal/config"
 	"github.com/sergii/specview/internal/specs"
 	"github.com/sergii/specview/internal/watch"
@@ -35,7 +36,9 @@ func run(args []string) error {
 	case "serve":
 		return serve()
 	case "init":
-		return initProject()
+		return initProject(args[1:])
+	case "demo":
+		return serveDemo()
 	case "version", "--version", "-v":
 		fmt.Printf("Specview %s\n", version)
 		return nil
@@ -47,10 +50,24 @@ func run(args []string) error {
 	}
 }
 
-func initProject() error {
+func initProject(args []string) error {
 	root, err := os.Getwd()
 	if err != nil {
 		return err
+	}
+
+	if len(args) == 1 && args[0] == "--demo" {
+		created, err := demo.Create(root)
+		if err != nil {
+			return err
+		}
+		fmt.Println("✓ Created .specview.yaml for Demo Project")
+		fmt.Printf("✓ Created %d demo specifications in specs/\n", created)
+		fmt.Println("\nRun 'specview' to start observing demo specifications.")
+		return nil
+	}
+	if len(args) > 0 {
+		return fmt.Errorf("unknown init option %q; supported option: --demo", args[0])
 	}
 
 	createdConfig, createdSpecs, err := config.Init(root)
@@ -72,12 +89,30 @@ func initProject() error {
 	return nil
 }
 
+func serveDemo() error {
+	root, err := os.MkdirTemp("", "specview-demo-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(root)
+
+	created, err := demo.Create(root)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Specview Demo Project · %d demo specs\n", created)
+	return serveRoot(root)
+}
+
 func serve() error {
 	root, err := os.Getwd()
 	if err != nil {
 		return err
 	}
+	return serveRoot(root)
+}
 
+func serveRoot(root string) error {
 	cfg, err := config.Load(root)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -115,7 +150,11 @@ func serve() error {
 	server := webui.NewServer(root, cfg, store, hub)
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 
-	fmt.Printf("Specview watching %s\n", cfg.Specs.Path)
+	projectName := cfg.Project.Name
+	if projectName == "" {
+		projectName = filepath.Base(root)
+	}
+	fmt.Printf("Specview watching %s · %s\n", projectName, cfg.Specs.Path)
 	fmt.Printf("http://%s\n", addr)
 
 	return server.ListenAndServe(ctx)
@@ -125,10 +164,12 @@ func printHelp() {
 	fmt.Printf(`Specview - live, read-only observation for Markdown specifications.
 
 Usage:
-  specview              Start the dashboard in the current repository
-  specview serve        Start the dashboard in the current repository
-  specview init         Create .specview.yaml and specs/
-  specview version      Print the version
-  specview help         Show this help
+  specview                 Start the dashboard in the current repository
+  specview serve           Start the dashboard in the current repository
+  specview init            Create .specview.yaml and specs/
+  specview init --demo     Initialize the current repository with 10 demo specs
+  specview demo            Run an isolated Demo Project without changing the current repository
+  specview version         Print the version
+  specview help            Show this help
 `)
 }

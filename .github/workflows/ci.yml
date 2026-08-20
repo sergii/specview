@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Verify modules
+        run: go mod tidy && git diff --exit-code -- go.mod
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race ./...
+      - name: Build
+        run: go build ./cmd/specview
+
+  build-artifacts:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Build release archives
+        run: ./scripts/build-release.sh "dev-${GITHUB_SHA::7}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: specview-build-${{ github.sha }}
+          path: dist/*
+          if-no-files-found: error
+      - name: Installation command
+        run: |
+          {
+            echo '## Install Specview'
+            echo
+            echo 'After publishing a GitHub Release:'
+            echo
+            echo '```bash'
+            echo 'curl -fsSL https://raw.githubusercontent.com/sergii/specview/main/install.sh | sh'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

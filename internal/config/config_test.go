@@ -25,7 +25,7 @@ func TestInitAndLoad(t *testing.T) {
 	if cfg.Server.Host != "127.0.0.1" || cfg.Server.Port != 7331 {
 		t.Fatalf("unexpected server config: %#v", cfg.Server)
 	}
-	if cfg.Project.Name != "" || cfg.Project.Root != "." || cfg.Project.Demo {
+	if cfg.Project.Name != "" || cfg.Project.Root != "." {
 		t.Fatalf("unexpected project config: %#v", cfg.Project)
 	}
 	if got := cfg.ResolveProjectRoot(root); got != filepath.Clean(root) {
@@ -38,7 +38,7 @@ func TestInitAndLoad(t *testing.T) {
 
 func TestLoadProjectMetadata(t *testing.T) {
 	root := t.TempDir()
-	data := "version: 1\nproject:\n  name: \"Demo Project\"\n  root: ./demo\n  demo: true\nspecs:\n  path: specs\n  pattern: '*.md'\nserver:\n  host: 127.0.0.1\n  port: 7331\n"
+	data := "version: 1\nproject:\n  name: \"Observed Project\"\n  root: ./demo\nspecs:\n  path: specs\n  pattern: '*.md'\nserver:\n  host: 127.0.0.1\n  port: 7331\n"
 	if err := os.WriteFile(filepath.Join(root, FileName), []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestLoadProjectMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Project.Name != "Demo Project" || cfg.Project.Root != "./demo" || !cfg.Project.Demo {
+	if cfg.Project.Name != "Observed Project" || cfg.Project.Root != "./demo" {
 		t.Fatalf("unexpected project config: %#v", cfg.Project)
 	}
 	want := filepath.Join(root, "demo")
@@ -55,7 +55,7 @@ func TestLoadProjectMetadata(t *testing.T) {
 	}
 }
 
-func TestLoadLegacyConfigDefaultsProjectRoot(t *testing.T) {
+func TestLoadConfigWithoutProjectRootDefaultsToCurrentDirectory(t *testing.T) {
 	root := t.TempDir()
 	data := "version: 1\nproject:\n  name: \"Legacy\"\nspecs:\n  path: specs\n  pattern: '*.md'\nserver:\n  host: 127.0.0.1\n  port: 7331\n"
 	if err := os.WriteFile(filepath.Join(root, FileName), []byte(data), 0o644); err != nil {
@@ -66,7 +66,7 @@ func TestLoadLegacyConfigDefaultsProjectRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.Project.Root != "." {
-		t.Fatalf("legacy config project.root = %q, want .", cfg.Project.Root)
+		t.Fatalf("config project.root = %q, want .", cfg.Project.Root)
 	}
 }
 
@@ -76,6 +76,17 @@ func TestResolveAbsoluteProjectRoot(t *testing.T) {
 	cfg := Config{Project: Project{Root: projectRoot}}
 	if got := cfg.ResolveProjectRoot(configRoot); got != filepath.Clean(projectRoot) {
 		t.Fatalf("ResolveProjectRoot() = %q, want %q", got, projectRoot)
+	}
+}
+
+func TestUnknownProjectDemoKeyIsRejected(t *testing.T) {
+	root := t.TempDir()
+	data := "version: 1\nproject:\n  name: \"Demo\"\n  demo: true\nspecs:\n  path: specs\n  pattern: '*.md'\nserver:\n  host: 127.0.0.1\n  port: 7331\n"
+	if err := os.WriteFile(filepath.Join(root, FileName), []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(root); err == nil {
+		t.Fatal("expected project.demo to be rejected")
 	}
 }
 

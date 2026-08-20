@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"net"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -65,7 +66,15 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	server := &http.Server{Addr: fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.Port), Handler: securityHeaders(mux), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
+	server := &http.Server{
+		Addr:    fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.Port),
+		Handler: securityHeaders(mux),
+		BaseContext: func(net.Listener) context.Context {
+			return ctx
+		},
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	errCh := make(chan error, 1)
 	go func() { errCh <- server.ListenAndServe() }()
 	select {

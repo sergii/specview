@@ -9,9 +9,11 @@
     try {
       document.documentElement.dataset.view = localStorage.getItem('specview:view') || 'classic';
       document.documentElement.dataset.activity = localStorage.getItem('specview:activity') || 'nested';
+      document.documentElement.dataset.blink = localStorage.getItem('specview:blink') || 'off';
     } catch (_) {
       document.documentElement.dataset.view = 'classic';
       document.documentElement.dataset.activity = 'nested';
+      document.documentElement.dataset.blink = 'off';
     }
   </script>
   <style>
@@ -60,10 +62,10 @@
       text-decoration: none;
     }
     .center-nav { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
-    .view-label, .activity-label { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
-    .activity-cluster { display: inline-flex; align-items: center; gap: 6px; }
-    .view-switch, .activity-switch { display: inline-flex; border: 1px solid var(--line); }
-    .view-button, .activity-button {
+    .view-label, .activity-label, .blink-label { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
+    .activity-cluster, .blink-cluster { display: inline-flex; align-items: center; gap: 6px; }
+    .view-switch, .activity-switch, .blink-switch { display: inline-flex; border: 1px solid var(--line); }
+    .view-button, .activity-button, .blink-button {
       min-height: 28px;
       padding: 0 10px;
       border: 0;
@@ -73,8 +75,8 @@
       cursor: pointer;
       font-size: 11px;
     }
-    .view-button:last-child, .activity-button:last-child { border-right: 0; }
-    .view-button:hover, .activity-button:hover { color: var(--text); background: #fafafa; }
+    .view-button:last-child, .activity-button:last-child, .blink-button:last-child { border-right: 0; }
+    .view-button:hover, .activity-button:hover, .blink-button:hover { color: var(--text); background: #fafafa; }
     html[data-view="classic"] .view-button[data-view="classic"],
     html[data-view="classic2"] .view-button[data-view="classic2"],
     html[data-view="dense"] .view-button[data-view="dense"],
@@ -82,7 +84,9 @@
     html[data-view="flow"] .view-button[data-view="flow"],
     html[data-activity="nested"] .activity-button[data-activity="nested"],
     html[data-activity="corner"] .activity-button[data-activity="corner"],
-    html[data-activity="brand"] .activity-button[data-activity="brand"] { color: var(--text); background: #f2f2ef; }
+    html[data-activity="brand"] .activity-button[data-activity="brand"],
+    html[data-blink="off"] .blink-button[data-blink="off"],
+    html[data-blink="on"] .blink-button[data-blink="on"] { color: var(--text); background: #f2f2ef; }
     .graph-link { color: var(--muted); font-size: 11px; text-decoration: none; }
     .graph-link:hover { color: var(--text); }
     .top-status { justify-self: end; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
@@ -146,6 +150,11 @@
     .cards { display: grid; gap: 6px; padding: 6px; }
     .card { display: block; min-width: 0; padding: 12px 12px 10px; border: 1px solid var(--line); background: var(--card); color: inherit; text-decoration: none; cursor: pointer; transition: border-color .12s ease, background .12s ease; }
     .card:hover { border-color: var(--line-strong); background: #fcfcfb; }
+    @keyframes specview-active-blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: .42; }
+    }
+    html[data-blink="on"] .card.active-spec { animation: specview-active-blink 1.4s steps(1, end) infinite; }
     .title { overflow-wrap: anywhere; font-size: 13px; font-weight: 560; line-height: 1.38; letter-spacing: -0.012em; }
     .meta { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 9px; color: var(--quiet); font-size: 10px; line-height: 1.35; }
     .path { overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
@@ -242,6 +251,9 @@
     html[data-view="flow"] .invalid { border: 0; background: transparent; }
     html[data-view="flow"] .invalid .column-head { border: 0; }
 
+    @media (prefers-reduced-motion: reduce) {
+      html[data-blink="on"] .card.active-spec { animation: none; opacity: 1; }
+    }
     @media (max-width: 979px) and (min-width: 800px) {
       .board { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(300px, 44vw); width: max-content; min-width: 100%; }
     }
@@ -260,7 +272,7 @@
       .column { width: 100%; }
     }
     @media (max-width: 520px) {
-      .view-label, .activity-label { display: none; }
+      .view-label, .activity-label, .blink-label { display: none; }
       .top-project { display: none; }
       .workspace-row { grid-template-columns: minmax(0, 1fr) auto; }
       .workspace-row .workspace-metric:not(:last-child) { display: none; }
@@ -291,6 +303,13 @@
           <button class="activity-button" type="button" data-activity="nested" aria-pressed="true">Nested</button>
           <button class="activity-button" type="button" data-activity="corner" aria-pressed="false">Corner</button>
           <button class="activity-button" type="button" data-activity="brand" aria-pressed="false">Brand</button>
+        </div>
+      </div>
+      <div class="blink-cluster">
+        <span class="blink-label">Blink</span>
+        <div class="blink-switch" role="group" aria-label="Blink live specifications">
+          <button class="blink-button" type="button" data-blink="off" aria-pressed="true">Off</button>
+          <button class="blink-button" type="button" data-blink="on" aria-pressed="false">On</button>
         </div>
       </div>
       <a class="graph-link" href="/graph">Graph</a>
@@ -350,6 +369,16 @@
   };
   setActivity(document.documentElement.dataset.activity, false);
   activityButtons.forEach((button) => button.addEventListener('click', () => setActivity(button.dataset.activity)));
+
+  const blinkButtons = document.querySelectorAll('.blink-button');
+  const setBlink = (blink, persist = true) => {
+    const next = blink === 'on' ? 'on' : 'off';
+    document.documentElement.dataset.blink = next;
+    blinkButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.blink === next)));
+    if (persist) { try { localStorage.setItem('specview:blink', next); } catch (_) {} }
+  };
+  setBlink(document.documentElement.dataset.blink, false);
+  blinkButtons.forEach((button) => button.addEventListener('click', () => setBlink(button.dataset.blink)));
 
   document.addEventListener('click', (event) => {
     const link = event.target.closest('a.card');

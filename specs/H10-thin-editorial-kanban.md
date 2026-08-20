@@ -5,72 +5,85 @@ specview:
 
 # Thin editorial kanban design
 
-Redesign the Specview board as a modern, thin, quiet kanban surface while preserving its read-only observation model.
+Bring the Specview board much closer to the TEPLOTEC visual language while staying a read-only specification kanban.
 
-## Design direction
+## Direction
 
-Use the interaction geometry of a modern kanban board and the visual discipline of the TEPLOTEC reference at `https://brisk-riddle-3s3n.here.now/`.
-
-The intended character is **thin industrial editorial kanban**:
-
-- thin neutral-gray borders.
-- light neutral surfaces.
-- no heavy shadows or elevated cards.
-- compact cards with generous internal breathing room.
-- typography carries hierarchy more than decoration.
-- numbered structures such as `01`, `02`, `03`.
-- restrained status color used as small dots, not large badges.
-- large project identity paired with quiet technical metadata.
-- one thin application shell around the whole board.
+- white / near-white background.
+- as much free and air space as practical.
+- thin gray structural lines.
+- very light surfaces.
+- strong oversized editorial headings.
+- quiet technical metadata.
+- thin, restrained specification cards.
+- kanban preserved as the primary interaction model.
 
 ## Foundations
 
-- light theme for the POC dashboard.
-- warm neutral page and surface colors.
-- 1px structural borders.
-- small radii for columns and cards; slightly larger radius for the outer shell.
-- system sans typography with monospaced filesystem paths.
-- no external font or runtime asset dependency.
+### Background and surface
 
-## Atoms
+- near-white page background.
+- near-white inner surfaces.
+- avoid dark mode as the default presentation for this design.
+- avoid heavy card fills, gradients, glass, or strong elevation.
 
-- `Brand`: Specview wordmark.
-- `Eyebrow`: small uppercase contextual label.
-- `DisplayHeading`: project or specification title.
-- `ColumnIndex`: two-digit structural index.
-- `StatusDot`: restrained state color marker.
-- `ColumnTitle`: human-readable workflow state.
-- `Count`: compact item count.
-- `CardTitle`: specification title.
-- `Path`: monospaced specification path.
-- `Age`: relative modification age.
-- `Hairline`: 1px neutral divider or border.
-- `LiveIndicator`: small green dot plus Live label.
+### Borders
 
-## Molecules
+- use thin 1px gray rules.
+- one outer application shell.
+- one border around each kanban column.
+- one border around each specification card.
+- use subtle separators rather than shadows.
 
-- `TopBar = Brand + ViewLabel + LiveIndicator`.
-- `ProjectHeader = Eyebrow + DisplayHeading + SourcePath`.
-- `ColumnHeader = ColumnIndex + StatusDot + ColumnTitle + Count`.
-- `SpecCard = CardTitle + Path + Age`.
-- `MetadataErrorCard = SpecCard + ErrorMessage`.
-- `DetailMetadata = Status + Path + Age`.
+### Typography
 
-## Organisms
+- oversized display heading for the project title and specification title.
+- small uppercase eyebrow labels with generous tracking.
+- calm secondary metadata.
+- monospaced paths and source identifiers.
 
-- `ApplicationShell`: one bordered surface around the complete interface.
-- `KanbanBoard`: horizontally arranged workflow columns.
-- `StatusColumn`: thin bordered container with sticky conceptual header and card stack.
-- `SpecificationDetail`: editorial detail view using the same shell, typography and border language.
+### Spacing
 
-## Acceptance
+- generous top and side padding.
+- large quiet hero area above the kanban.
+- enough empty space that the page still feels airy with only a few cards.
+- more whitespace than a typical SaaS dashboard.
 
-- board remains read-only.
-- workflow remains New, In progress, Done.
-- cards remain clickable to specification detail.
-- live SSE refresh remains unchanged.
-- board supports horizontal overflow on narrow screens.
-- no add-card, add-column, drag-and-drop or task-management controls.
-- no heavy shadows, gradients, glassmorphism or thick panels.
-- metadata errors remain visible.
-- dashboard and detail page share one visual system.
+## Kanban mapping
+
+### Board header
+
+- top bar with `Specview`, a centered context label, and a compact live indicator.
+- a large project hero below it.
+- project hero includes an eyebrow, a large project name, and a quiet source block.
+
+### Columns
+
+- three default columns remain: New, In progress, Done.
+- column headers use numbered structure: `01`, `02`, `03`.
+- each column keeps a small colored status dot and a quiet count.
+
+### Cards
+
+- cards stay thin and compact.
+- title first.
+- monospaced path below.
+- relative age aligned to the right.
+- no add-card or drag-and-drop affordances in v0.0.1.
+
+### Detail page
+
+- match the same white, airy editorial system.
+- large specification title.
+- thin rule separating heading metadata from specification body.
+- body content presented with minimal chrome and clear reading rhythm.
+
+## Acceptance criteria
+
+- the board still reads as a kanban board.
+- the page is much closer to the provided TEPLOTEC screenshots than to a default shadcn demo board.
+- the board uses a white / near-white background.
+- empty space is intentionally preserved.
+- all structural lines are thin and gray.
+- cards remain clearly scannable and clickable.
+- detail view visually belongs to the same design system.

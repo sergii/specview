@@ -317,6 +317,7 @@
 
     {{range .Projects}}{{template "project-board" .}}{{end}}
   </main>
+  <footer style="position:fixed;left:12px;bottom:8px;z-index:3;color:#a0a099;font:9px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;pointer-events:none;">rev {{.Revision}}</footer>
 </div>
 <script>
   const events = new EventSource('/events');

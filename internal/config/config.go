@@ -37,7 +37,6 @@ type Config struct {
 type Project struct {
 	Name string
 	Root string
-	Demo bool
 }
 
 type Specs struct {
@@ -104,12 +103,6 @@ func Load(root string) (Config, error) {
 				cfg.Project.Name = value
 			case "root":
 				cfg.Project.Root = value
-			case "demo":
-				v, err := strconv.ParseBool(value)
-				if err != nil {
-					return Config{}, fmt.Errorf("parse %s line %d: invalid project.demo", FileName, lineNumber)
-				}
-				cfg.Project.Demo = v
 			default:
 				return Config{}, fmt.Errorf("parse %s line %d: unknown project key %q", FileName, lineNumber, key)
 			}

@@ -5,10 +5,12 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"html/template"
 	"net"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +21,8 @@ import (
 
 //go:embed templates/*
 var templateFS embed.FS
+
+var explicitSpecIDPattern = regexp.MustCompile(`(?i)^([a-z]{1,8}(?:[-_]?\d{1,5}))(?:[-_]|$)`)
 
 type Hub struct {
 	mu      sync.Mutex
@@ -53,7 +57,10 @@ type Server struct {
 }
 
 func NewServer(root string, cfg config.Config, store *specs.Store, hub *Hub) *Server {
-	funcs := template.FuncMap{"since": func(t time.Time) string { return since(t) }}
+	funcs := template.FuncMap{
+		"since":  func(t time.Time) string { return since(t) },
+		"specID": specDisplayID,
+	}
 	tmpl := template.Must(template.New("index.html").Funcs(funcs).ParseFS(templateFS, "templates/*.html"))
 	return &Server{root: root, cfg: cfg, store: store, hub: hub, tmpl: tmpl}
 }
@@ -183,6 +190,24 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func specDisplayID(path string) string {
+	base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	if match := explicitSpecIDPattern.FindStringSubmatch(base); len(match) == 2 {
+		return strings.ToUpper(strings.ReplaceAll(match[1], "_", "-"))
+	}
+
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(filepath.ToSlash(path)))
+	value := hash.Sum32()
+	const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	id := [5]byte{}
+	for i := len(id) - 1; i >= 0; i-- {
+		id[i] = alphabet[value%36]
+		value /= 36
+	}
+	return string(id[:])
 }
 
 func since(t time.Time) string {

@@ -27,6 +27,7 @@ type Record struct {
 	SessionID   string    `json:"session_id"`
 	Agent       Agent     `json:"agent"`
 	Spec        string    `json:"spec"`
+	Files       []string  `json:"files,omitempty"`
 	State       string    `json:"state"`
 	StartedAt   time.Time `json:"started_at"`
 	HeartbeatAt time.Time `json:"heartbeat_at"`
@@ -71,9 +72,10 @@ func (s *Store) Refresh() error {
 			parseErrors = append(parseErrors, ParseError{Path: path, Message: err.Error()})
 			return nil
 		}
-		record.Spec = filepath.ToSlash(filepath.Clean(record.Spec))
+		record.Spec = normalizeProjectPath(record.Spec)
 		record.Agent.ID = strings.TrimSpace(record.Agent.ID)
 		record.Agent.Label = strings.TrimSpace(record.Agent.Label)
+		record.Files = normalizeFiles(record.Files)
 		records = append(records, record)
 		return nil
 	})
@@ -99,7 +101,7 @@ func (s *Store) Refresh() error {
 }
 
 func (s *Store) ActiveFor(spec string, now time.Time) []Record {
-	spec = filepath.ToSlash(filepath.Clean(spec))
+	spec = normalizeProjectPath(spec)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -128,6 +130,7 @@ func (s *Store) ActiveSignature(now time.Time) string {
 			record.Agent.ID,
 			record.Agent.Label,
 			record.State,
+			strings.Join(record.Files, "\x1e"),
 		}, "\x1f"))
 	}
 	sort.Strings(parts)
@@ -160,6 +163,28 @@ func fresh(record Record, now time.Time) bool {
 	}
 	age := now.Sub(record.HeartbeatAt)
 	return age >= -5*time.Second && age <= DefaultTTL
+}
+
+func normalizeProjectPath(value string) string {
+	return filepath.ToSlash(filepath.Clean(strings.TrimSpace(value)))
+}
+
+func normalizeFiles(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = normalizeProjectPath(value)
+		if value == "." || value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func validate(record Record) error {

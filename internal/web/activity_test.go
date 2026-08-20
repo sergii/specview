@@ -76,6 +76,11 @@ func TestBoardRendersFreshAgentActivity(t *testing.T) {
 		`data-blink="off"`,
 		`data-blink="on"`,
 		`specview-active-blink`,
+		`specview-snake-trail`,
+		`specview:loader`,
+		`data-loader="off"`,
+		`data-loader="on"`,
+		`Snake loader on live specifications`,
 		`>rev `,
 	} {
 		if !strings.Contains(body, want) {

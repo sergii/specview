@@ -44,6 +44,22 @@ Example:
 }
 ```
 
+## Logical check vs provider
+
+`check` is the stable project-level verification capability that Acceptance policy may require.
+
+`provider` is the concrete tool that produced the evidence.
+
+```text
+check=unit-tests provider=rspec
+check=lint       provider=rubocop
+check=security   provider=brakeman
+```
+
+Policy should normally depend on `check`, not `provider`. A project can replace RSpec with another test provider without rewriting workflow semantics.
+
+`kind` is a broad grouping dimension such as `test`, `lint`, `static_analysis`, `security`, or `hardware`.
+
 ## Revision identity
 
 `revision` is mandatory and opaque to the Evidence package.
@@ -71,7 +87,7 @@ error    verifier failed to produce a trustworthy verdict
 skipped  verifier intentionally did not run
 ```
 
-Only `passed` for the matching current revision is intrinsically acceptance-eligible. Whether that check is required belongs to policy.
+A `passed` result can be factual for a revision, but whether that logical check is required or sufficient belongs to policy.
 
 ## Atomic publication
 

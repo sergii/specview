@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Specview - {{.Hostname}}</title>
   <style>
-    :root { color-scheme: light; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --page:#fff; --text:#151515; --muted:#6f6f69; --quiet:#a0a099; --line:#d8d8d2; --line-strong:#c8c8c2; --active:#2f8a57; --gutter:clamp(16px,2.4vw,32px); }
-    * { box-sizing: border-box; }
+    :root { color-scheme: light; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,"Segoe UI",sans-serif; --page:#fff; --text:#151515; --muted:#6f6f69; --quiet:#a0a099; --line:#d8d8d2; --line-strong:#c8c8c2; --active:#2f8a57; --gutter:clamp(16px,2.4vw,32px); }
+    * { box-sizing:border-box; }
     body { margin:0; background:var(--page); color:var(--text); -webkit-font-smoothing:antialiased; }
     .shell { min-height:100vh; border:1px solid var(--line); }
     .topbar { min-height:54px; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:16px; padding:0 var(--gutter); border-bottom:1px solid var(--line); }
@@ -15,11 +15,12 @@
     .host { color:var(--muted); font:11px/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
     .live { justify-self:end; display:flex; align-items:center; gap:6px; color:var(--muted); font-size:11px; }
     .live-dot { width:6px; height:6px; border-radius:50%; background:var(--active); }
+    .live.reconnecting .live-dot { background:var(--quiet); }
     main { width:min(1180px,100%); margin:0 auto; padding:34px var(--gutter) 64px; }
     .search { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; min-height:42px; margin-bottom:22px; border-bottom:1px solid var(--line); }
     .search input { width:100%; border:0; outline:0; padding:0 0 8px; background:transparent; color:var(--text); font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
     .search input::placeholder { color:var(--quiet); }
-    .search a { align-self:start; padding-top:1px; color:var(--quiet); font-size:10px; text-decoration:none; }
+    .search button { align-self:start; border:0; padding:1px 0 0; background:transparent; color:var(--quiet); font:10px/1.4 inherit; cursor:pointer; }
     .search-error { padding:0 0 18px; color:var(--muted); font-size:10px; }
     .section { margin-top:36px; } .section:first-of-type { margin-top:0; }
     .section-head { display:flex; align-items:baseline; justify-content:space-between; min-height:36px; padding:8px 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:10px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; }
@@ -33,25 +34,101 @@
     .pattern { color:var(--muted); font-size:10px; white-space:nowrap; } .pattern.missing { color:var(--quiet); }
     .age { color:var(--quiet); font-size:10px; font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; }
     .empty { padding:24px 0; border-bottom:1px solid var(--line); color:var(--quiet); font-size:11px; }
+    #host-results[aria-busy="true"] { opacity:.72; }
     @media(max-width:820px){.topbar{grid-template-columns:1fr auto}.host{display:none}.repo-row{grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;padding:10px 0}.repo-path{grid-column:1/-1;order:3}.pattern{grid-column:1;order:4}.age{grid-column:2;order:4}.agent{justify-self:end}}
   </style>
 </head>
 <body>
 <div class="shell">
-  <header class="topbar"><a class="brand" href="/">Specview</a><div class="host">HOST / {{.Hostname}}</div><div class="live"><span class="live-dot"></span><span>Live</span></div></header>
+  <header class="topbar"><a class="brand" href="/">Specview</a><div class="host">HOST / {{.Hostname}}</div><div class="live" id="live-status"><span class="live-dot"></span><span id="live-label">Live</span></div></header>
   <main>
-    <form class="search" method="get" action="/"><input type="search" name="q" value="{{.Query}}" placeholder="Search repositories, paths, agents" autocomplete="off" aria-label="Search repositories">{{if .Query}}<a href="/">Clear</a>{{end}}</form>
-    {{if .SearchError}}<div class="search-error">{{.SearchError}}</div>{{end}}
-    {{if .Filtered}}
-      <section class="section"><div class="section-head"><span>Results</span><span class="count">{{len .Results}}</span></div>{{range .Results}}{{template "repo-row" .}}{{else}}<div class="empty">No repositories match “{{.Query}}”.</div>{{end}}</section>
-    {{else}}
-      <section class="section"><div class="section-head"><span>Today</span><span class="count">{{len .Today}}</span></div>{{range .Today}}{{template "repo-row" .}}{{else}}<div class="empty">You haven't run anything yet.</div>{{end}}</section>
-      {{if .Yesterday}}<section class="section"><div class="section-head"><span>Yesterday</span><span class="count">{{len .Yesterday}}</span></div>{{range .Yesterday}}{{template "repo-row" .}}{{end}}</section>{{end}}
-      {{if .Earlier}}<section class="section"><div class="section-head"><span>Earlier</span><span class="count">{{len .Earlier}}</span></div>{{range .Earlier}}{{template "repo-row" .}}{{end}}</section>{{end}}
-    {{end}}
+    <form class="search" id="host-search-form" method="get" action="/"><input id="host-search" type="search" name="q" value="{{.Query}}" placeholder="Search repositories, paths, agents" autocomplete="off" aria-label="Search repositories"><button id="host-search-clear" type="button" {{if not .Query}}hidden{{end}}>Clear</button></form>
+    <div id="host-results" aria-live="polite">{{template "host-results" .}}</div>
   </main>
 </div>
-<script>const events=new EventSource('/events');events.addEventListener('changed',()=>window.location.reload());</script>
+<script>
+(() => {
+  const form = document.getElementById('host-search-form');
+  const input = document.getElementById('host-search');
+  const clear = document.getElementById('host-search-clear');
+  const results = document.getElementById('host-results');
+  const live = document.getElementById('live-status');
+  const liveLabel = document.getElementById('live-label');
+  let debounceTimer = 0;
+  let requestController = null;
+  let requestSequence = 0;
+
+  const updateLocation = query => {
+    const url = new URL(window.location.href);
+    if (query) url.searchParams.set('q', query); else url.searchParams.delete('q');
+    history.replaceState(null, '', url.pathname + url.search);
+  };
+
+  const refresh = async ({updateURL = false} = {}) => {
+    const query = input.value.trim();
+    clear.hidden = query === '';
+    if (updateURL) updateLocation(query);
+
+    if (requestController) requestController.abort();
+    requestController = new AbortController();
+    const sequence = ++requestSequence;
+    const url = new URL('/fragments/host', window.location.origin);
+    if (query) url.searchParams.set('q', query);
+    results.setAttribute('aria-busy', 'true');
+
+    try {
+      const response = await fetch(url, {cache:'no-store', signal:requestController.signal, headers:{'X-Specview-Fragment':'host'}});
+      if (!response.ok) throw new Error(`fragment request failed: ${response.status}`);
+      const html = await response.text();
+      if (sequence !== requestSequence) return;
+      results.innerHTML = html;
+    } catch (error) {
+      if (error.name !== 'AbortError') console.error('Specview live host refresh failed', error);
+    } finally {
+      if (sequence === requestSequence) results.removeAttribute('aria-busy');
+    }
+  };
+
+  const scheduleSearch = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(() => refresh({updateURL:true}), 120);
+  };
+
+  input.addEventListener('input', scheduleSearch);
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    clearTimeout(debounceTimer);
+    refresh({updateURL:true});
+  });
+  clear.addEventListener('click', () => {
+    input.value = '';
+    input.focus();
+    clearTimeout(debounceTimer);
+    refresh({updateURL:true});
+  });
+  window.addEventListener('popstate', () => {
+    input.value = new URL(window.location.href).searchParams.get('q') || '';
+    refresh();
+  });
+
+  const events = new EventSource('/events');
+  events.addEventListener('changed', () => refresh());
+  events.onopen = () => { live.classList.remove('reconnecting'); liveLabel.textContent = 'Live'; };
+  events.onerror = () => { live.classList.add('reconnecting'); liveLabel.textContent = 'Reconnecting'; };
+})();
+</script>
 </body></html>
 {{end}}
+
+{{define "host-results"}}
+  {{if .SearchError}}<div class="search-error">{{.SearchError}}</div>{{end}}
+  {{if .Filtered}}
+    <section class="section"><div class="section-head"><span>Results</span><span class="count">{{len .Results}}</span></div>{{range .Results}}{{template "repo-row" .}}{{else}}<div class="empty">No repositories match “{{.Query}}”.</div>{{end}}</section>
+  {{else}}
+    <section class="section"><div class="section-head"><span>Today</span><span class="count">{{len .Today}}</span></div>{{range .Today}}{{template "repo-row" .}}{{else}}<div class="empty">You haven't run anything yet.</div>{{end}}</section>
+    {{if .Yesterday}}<section class="section"><div class="section-head"><span>Yesterday</span><span class="count">{{len .Yesterday}}</span></div>{{range .Yesterday}}{{template "repo-row" .}}{{end}}</section>{{end}}
+    {{if .Earlier}}<section class="section"><div class="section-head"><span>Earlier</span><span class="count">{{len .Earlier}}</span></div>{{range .Earlier}}{{template "repo-row" .}}{{end}}</section>{{end}}
+  {{end}}
+{{end}}
+
 {{define "repo-row"}}<a class="repo-row" href="/project?id={{urlquery .ID}}"><div class="repo-name">{{.Name}}</div><div class="repo-path">{{.Root}}</div>{{if .Active}}<div class="agent active"><span class="agent-mark"></span><span>{{.ActiveAgentLabel}}</span></div>{{else}}<div class="agent"><span class="agent-mark"></span><span>Idle</span></div>{{end}}<div class="pattern {{if not .Convention.Recognized}}missing{{end}}">{{.SpecificationLabel}}</div><div class="age">{{since .LastSeenAt}}</div></a>{{end}}

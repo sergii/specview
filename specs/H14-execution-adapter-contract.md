@@ -94,18 +94,31 @@ Worktree mapping remains read-only and Git-authoritative.
 
 ## Acceptance criteria
 
-- [ ] `ExecutionAdapter` is a first-class interface.
-- [ ] `ExecutionSession` separates logical execution identity from OS process IDs.
-- [ ] `ExecutionRegistry` aggregates one or more adapters.
-- [ ] Host runtime uses the registry rather than constructing a Codex scanner directly.
-- [ ] Repository execution view consumes normalized sessions and contains no direct Codex discovery call.
-- [ ] `specview doctor` reaches Codex diagnostics through the adapter contract.
-- [ ] Codex helper processes sharing repository + cwd normalize into one logical session.
-- [ ] Multiple adapters can coexist without changing the catalog or web domain model.
-- [ ] Failure in one adapter does not discard sessions from a healthy adapter.
-- [ ] H13 repository/worktree UI semantics remain unchanged.
-- [ ] No execution adapter writes repository files.
+- [x] `ExecutionAdapter` is a first-class interface.
+- [x] `ExecutionSession` separates logical execution identity from OS process IDs.
+- [x] `ExecutionRegistry` aggregates one or more adapters.
+- [x] Host runtime uses the registry rather than constructing a Codex scanner directly.
+- [x] Repository execution view consumes normalized sessions and contains no direct Codex discovery call.
+- [x] `specview doctor` reaches Codex diagnostics through the adapter contract.
+- [x] Codex helper processes sharing repository + cwd normalize into one logical session.
+- [x] Multiple adapters can coexist without changing the catalog or web domain model.
+- [x] Failure in one adapter does not discard sessions from a healthy adapter.
+- [x] H13 repository/worktree UI semantics remain unchanged by design.
+- [x] No execution adapter writes repository files.
 - [ ] gofmt, module verification, go vet, race tests, build, and release cross-build pass.
+
+## Implementation verification
+
+Unit coverage now includes:
+
+- multi-adapter aggregation;
+- adapter failure isolation;
+- all-adapters-failed error semantics;
+- process-to-logical-session grouping;
+- generic future-agent projection into a repository worktree;
+- Linux diagnostics preserving cwd/repository context required by the normalized session contract.
+
+The final automated gate remains open until CI executes the workflow steps successfully.
 
 ## Out of scope
 

@@ -6,13 +6,22 @@ Specview should normalize existing repo-native spec-driven-development conventio
 
 There is currently no single formal SDD filesystem standard. The useful common denominator is semantic, not positional: projects persist intent, design/planning artifacts, executable tasks, and project-wide rules in version-controlled files.
 
-Specview does have one native convention of its own: top-level `specs/` observed by `SpecviewAdapter`. This is the zero-config/default path and adapter, not a claim that `specs/` is an industry-wide standard.
+Specview has a native convention, but its tool identity and its project artifacts are separate:
+
+```text
+repo/
+├── .specview.yaml
+├── .specview/        # reserved runtime namespace
+└── specs/            # durable project specs
+```
+
+A top-level `specs/` directory is not an industry-wide standard and is not a sufficient Specview signature by itself.
 
 ## Compared conventions
 
 | Convention | Primary paths | Main unit | Persistent project context | Characteristic model |
 | --- | --- | --- | --- | --- |
-| Specview native | `specs/` | project-defined spec | `.specview.yaml` | lightweight repo-native specs |
+| Specview native | configured root, default `specs/` | project-defined spec | `.specview.yaml` | lightweight repo-native specs |
 | GitHub Spec Kit | `specs/<feature>/` | feature | `.specify/memory/constitution.md` | spec -> plan -> tasks -> implement |
 | OpenSpec | `openspec/specs/`, `openspec/changes/<change>/` | current capability + change | `openspec/config.yaml` and current specs | current truth + change delta |
 | Kiro | `.kiro/specs/<feature>/` | feature | `.kiro/steering/`, optionally `AGENTS.md` | requirements -> design -> tasks |
@@ -22,7 +31,7 @@ Specview does have one native convention of its own: top-level `specs/` observed
 
 The native adapter is `SpecviewAdapter`.
 
-Default structure:
+Default artifact structure:
 
 ```text
 specs/
@@ -39,7 +48,9 @@ specview:
 ---
 ```
 
-`SpecviewAdapter` owns the semantics of the native `specs/` convention. An arbitrary Markdown directory such as `documents/`, `requirements/`, or `docs/decisions/` is not automatically a Specview-native layout merely because it contains Markdown.
+`SpecviewAdapter` owns the semantics only when selected by configuration or another unambiguous native signal. An arbitrary `specs/` directory is not automatically Specview-native merely because it contains Markdown.
+
+`.specview/` is reserved for Specview-owned runtime material such as a rebuildable SQLite projection, indexes, sockets, or transient state. Durable intent remains in normal repository files such as `specs/`.
 
 ## GitHub Spec Kit
 
@@ -70,7 +81,7 @@ Semantic mapping:
 - `data-model.md` and `contracts/` -> design/contract artifacts;
 - `tasks.md` -> execution decomposition.
 
-Although Spec Kit also uses a top-level `specs/` directory, its feature-directory semantics are different from the flat/lightweight Specview-native convention. Auto-detection must prefer the more specific framework signature when `.specify/` is present.
+Although Spec Kit also uses a top-level `specs/` directory, its feature-directory semantics are different from the flat/lightweight Specview-native convention. Auto-detection must use `.specify/`, not the shared `specs/` folder name.
 
 ## OpenSpec
 
@@ -191,17 +202,19 @@ These are semantic roles, not required filenames.
 
 ## Discovery strategy
 
-Specview should support zero-config detection where conventions are unambiguous. Detection order should prefer specific framework signatures before the native fallback:
+Adapter selection must distinguish explicit configuration from heuristic discovery:
 
 ```text
-.specify/          -> GitHub Spec Kit adapter
-openspec/          -> OpenSpec adapter
-.kiro/specs/       -> Kiro adapter
-_bmad-output/      -> BMAD adapter
-specs/             -> SpecviewAdapter fallback
+.specview.yaml + explicit adapter   -> configured adapter
+.specview.yaml without adapter      -> SpecviewAdapter compatibility default
+.specify/                           -> GitHub Spec Kit adapter
+openspec/                           -> OpenSpec adapter
+.kiro/specs/                        -> Kiro adapter
+_bmad-output/                       -> BMAD adapter
+specs/ only                         -> ambiguous
 ```
 
-Explicit configuration must override discovery.
+Explicit configuration always wins.
 
 Native example:
 
@@ -258,7 +271,7 @@ The UI consumes the normalized projection and should not contain framework-speci
 
 ## Initial adapter priority
 
-1. SpecviewAdapter - preserves the current POC and zero-config `specs/` workflow.
+1. SpecviewAdapter - preserves the current POC after explicit `.specview.yaml` configuration.
 2. GitHub Spec Kit - feature-centric and increasingly common in agentic development.
 3. OpenSpec - valuable current-truth vs change-in-flight model.
 4. Kiro - explicit requirements/design/tasks model.

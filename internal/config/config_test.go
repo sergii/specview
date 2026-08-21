@@ -36,6 +36,32 @@ func TestInitAndLoad(t *testing.T) {
 	}
 }
 
+func TestInitDetectsGitHubSpecKit(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".specify", "memory"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "specs", "001-feature"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	createdConfig, _, err := Init(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !createdConfig {
+		t.Fatal("expected config to be created")
+	}
+
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Specs.Adapter != "github-spec-kit" {
+		t.Fatalf("specs.adapter = %q, want github-spec-kit", cfg.Specs.Adapter)
+	}
+}
+
 func TestLoadProjectMetadata(t *testing.T) {
 	root := t.TempDir()
 	data := "version: 1\nproject:\n  name: \"Observed Project\"\n  root: ./demo\nspecs:\n  adapter: specview\n  path: specs\n  pattern: '*.md'\nserver:\n  host: 127.0.0.1\n  port: 7331\n"

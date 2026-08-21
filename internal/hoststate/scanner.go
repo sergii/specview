@@ -1,6 +1,7 @@
 package hoststate
 
 import (
+	"fmt"
 	"log/slog"
 	"os/exec"
 	"path/filepath"
@@ -74,8 +75,7 @@ func looksLikeCodex(command string) bool {
 func canonicalRepositoryRoot(cwd string) (string, error) {
 	slog.Debug("resolving canonical Git repository", "cwd", cwd)
 
-	cmd := exec.Command("git", "-C", cwd, "worktree", "list", "--porcelain")
-	output, err := cmd.Output()
+	output, err := runGit(cwd, "worktree", "list", "--porcelain")
 	if err == nil {
 		for _, line := range strings.Split(string(output), "\n") {
 			if strings.HasPrefix(line, "worktree ") {
@@ -91,8 +91,7 @@ func canonicalRepositoryRoot(cwd string) (string, error) {
 		slog.Debug("git worktree lookup failed; falling back to rev-parse", "cwd", cwd, "error", err)
 	}
 
-	cmd = exec.Command("git", "-C", cwd, "rev-parse", "--show-toplevel")
-	output, err = cmd.Output()
+	output, err = runGit(cwd, "rev-parse", "--show-toplevel")
 	if err != nil {
 		slog.Debug("Git repository resolution failed", "cwd", cwd, "error", err)
 		return "", err
@@ -100,6 +99,21 @@ func canonicalRepositoryRoot(cwd string) (string, error) {
 	root := filepath.Clean(strings.TrimSpace(string(output)))
 	slog.Debug("canonical Git repository resolved from rev-parse", "cwd", cwd, "repository", root)
 	return root, nil
+}
+
+func runGit(cwd string, args ...string) ([]byte, error) {
+	commandArgs := append([]string{"-C", cwd}, args...)
+	cmd := exec.Command("git", commandArgs...)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return output, nil
+	}
+
+	detail := strings.TrimSpace(string(output))
+	if detail == "" {
+		return nil, fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+	}
+	return nil, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, detail)
 }
 
 func parsePID(value string) (int, bool) {

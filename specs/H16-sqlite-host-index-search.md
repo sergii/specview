@@ -108,6 +108,30 @@ Search returns repository IDs only. The current in-memory catalog remains respon
 
 This separation prevents stale index rows from becoming UI authority.
 
+## Live browser projection
+
+The browser must not reload the full page when host state changes.
+
+Specview keeps the existing Server-Sent Events connection as the server-to-browser notification channel:
+
+```text
+host/runtime change
+      ↓
+SSE `changed`
+      ↓
+fetch HTML fragment
+      ↓
+atomic live-region replacement
+```
+
+The host page refreshes only the repository results region. The search form/input are never replaced, so typed text, focus, caret position, and page scroll remain stable while SSE events arrive.
+
+Search requests use a short debounce and `AbortController` so fast typing cancels obsolete requests instead of rendering responses out of order. The query is mirrored into the current URL with `history.replaceState` without navigation.
+
+The repository page uses the same pattern and refreshes only its live repository projection. The top-bar execution label is synchronized from fragment metadata.
+
+No frontend framework is required for this slice. Browser-native `EventSource`, `fetch`, `AbortController`, History API, and DOM replacement are sufficient.
+
 ## Failure semantics
 
 SQLite is derived and optional for core observation.
@@ -123,6 +147,8 @@ After a synchronization failure the index marks itself stale instead of silently
 
 Index failure must never stop Codex discovery or make an observed repository disappear from the unfiltered host page.
 
+A failed fragment fetch leaves the last successfully rendered DOM in place. It must not trigger a fallback full-page reload.
+
 ## Acceptance criteria
 
 - [x] SQLite host index is a separate package from portable host domain state.
@@ -135,10 +161,13 @@ Index failure must never stop Codex discovery or make an observed repository dis
 - [x] Search matches repository name, path, convention, and agent.
 - [x] Search returns repository identity while live catalog state remains UI authority.
 - [x] Host page exposes a restrained search UI without changing repository/project hierarchy.
+- [x] Host and repository pages use SSE-triggered fragment refresh instead of full-page reload.
+- [x] Search input/focus are outside the replaced live region.
+- [x] Search uses debounce plus request cancellation for out-of-order protection.
 - [x] SQLite failure/staleness degrades search independently from host observation.
 - [x] SQLite implementation is CGO-free and not OS-specific.
 - [ ] `gofmt`, module verification, `go vet`, race tests, build, and release cross-build pass.
-- [ ] Real macOS host confirms `index.sqlite` creation and live repository search.
+- [ ] Real macOS host confirms `index.sqlite` creation, live repository search, and reload-free SSE updates while typing.
 
 ## Out of scope
 
@@ -147,6 +176,8 @@ Index failure must never stop Codex discovery or make an observed repository dis
 - indexing specification titles/content;
 - indexing Evidence records;
 - indexing GitHub PR text;
+- React, Vue, or another client-side application framework;
+- WebSocket transport while browser updates remain server-to-client notifications;
 - multi-host federation;
 - retention/compaction policy for long-term history;
 - Acceptance policy.

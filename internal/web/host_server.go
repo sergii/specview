@@ -384,6 +384,18 @@ func (s *HostServer) events(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return
 	}
+
+	scope := strings.TrimSpace(r.URL.Query().Get("scope"))
+	if scope == "" {
+		scope = "host"
+	}
+	projectID := strings.TrimSpace(r.URL.Query().Get("id"))
+	fingerprint, err := s.materialFingerprint(r.Context(), scope, projectID)
+	if err != nil {
+		http.Error(w, "initialize live projection", http.StatusBadRequest)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -394,8 +406,21 @@ func (s *HostServer) events(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprint(w, ": connected\n\n")
 	flusher.Flush()
 
+	probe := time.NewTicker(time.Second)
+	defer probe.Stop()
 	keepAlive := time.NewTicker(20 * time.Second)
 	defer keepAlive.Stop()
+
+	emitIfChanged := func() {
+		next, err := s.materialFingerprint(r.Context(), scope, projectID)
+		if err != nil || next == fingerprint {
+			return
+		}
+		fingerprint = next
+		_, _ = fmt.Fprint(w, "event: changed\ndata: refresh\n\n")
+		flusher.Flush()
+	}
+
 	for {
 		select {
 		case <-r.Context().Done():
@@ -404,8 +429,9 @@ func (s *HostServer) events(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			_, _ = fmt.Fprint(w, "event: changed\ndata: refresh\n\n")
-			flusher.Flush()
+			emitIfChanged()
+		case <-probe.C:
+			emitIfChanged()
 		case <-keepAlive.C:
 			_, _ = fmt.Fprint(w, ": keepalive\n\n")
 			flusher.Flush()

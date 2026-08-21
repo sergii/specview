@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // ExecutionSession is the normalized logical execution unit produced by an
@@ -21,6 +22,7 @@ type ExecutionSession struct {
 	RepositoryRoot string
 	WorktreeRoot   string
 	ProcessIDs     []int
+	StartedAt      time.Time
 }
 
 func (s ExecutionSession) ProcessLabel() string {

@@ -1,0 +1,10 @@
+openapi: 3.1.0
+info:
+  title: Candidate Feedback API
+  version: 1.0.0
+paths:
+  /interviews/{id}/feedback:
+    post:
+      responses:
+        '201':
+          description: Feedback created

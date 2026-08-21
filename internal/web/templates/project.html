@@ -51,7 +51,10 @@
     }
   };
 
-  const events = new EventSource('/events');
+  const eventsURL = new URL('/events', window.location.origin);
+  eventsURL.searchParams.set('scope', 'project');
+  eventsURL.searchParams.set('id', projectID);
+  const events = new EventSource(eventsURL.toString());
   events.addEventListener('changed', refresh);
   events.onopen = () => topStatus.classList.remove('reconnecting');
   events.onerror = () => topStatus.classList.add('reconnecting');

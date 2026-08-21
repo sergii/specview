@@ -47,6 +47,20 @@ const (
 	ArtifactChecklist   ArtifactKind = "checklist"
 )
 
+type ArtifactPlane string
+
+const (
+	PlaneKnowledge ArtifactPlane = "knowledge"
+	PlaneWork      ArtifactPlane = "work"
+)
+
+type ArtifactRole string
+
+const (
+	RolePrimary    ArtifactRole = "primary"
+	RoleSupporting ArtifactRole = "supporting"
+)
+
 type Relation struct {
 	Type   string
 	Target string
@@ -55,6 +69,9 @@ type Relation struct {
 type Artifact struct {
 	ID         string
 	Kind       ArtifactKind
+	Plane      ArtifactPlane
+	Role       ArtifactRole
+	WorkItemID string
 	Path       string
 	Title      string
 	Status     Status
@@ -62,6 +79,15 @@ type Artifact struct {
 	Body       string
 	Error      string
 	Relations  []Relation
+}
+
+// IsBoardItem reports whether an artifact represents a unit of active work.
+// The legacy fallback keeps pre-normalization spec adapters compatible.
+func (a Artifact) IsBoardItem() bool {
+	if a.Plane == "" && a.Role == "" {
+		return a.Kind == ArtifactSpec
+	}
+	return a.Plane == PlaneWork && a.Role == RolePrimary
 }
 
 // Spec is a compatibility alias for the current spec-oriented UI.
@@ -105,6 +131,11 @@ func NewAdapter(name, root, pattern string) (Adapter, error) {
 			return nil, fmt.Errorf("%s expects specs.path to resolve to a top-level specs directory", GitHubSpecKitAdapterName)
 		}
 		return NewGitHubSpecKitAdapter(filepath.Dir(cleanRoot), cleanRoot), nil
+	case OpenSpecAdapterName:
+		if filepath.Base(cleanRoot) != "openspec" {
+			return nil, fmt.Errorf("%s expects specs.path to resolve to the openspec directory", OpenSpecAdapterName)
+		}
+		return NewOpenSpecAdapter(cleanRoot), nil
 	default:
 		return nil, fmt.Errorf("unsupported specs adapter %q", name)
 	}
@@ -234,6 +265,9 @@ func parseFile(fullPath, relPath string) (Artifact, error) {
 	return Artifact{
 		ID:         id,
 		Kind:       ArtifactSpec,
+		Plane:      PlaneWork,
+		Role:       RolePrimary,
+		WorkItemID: id,
 		Path:       relPath,
 		Title:      title,
 		Status:     status,

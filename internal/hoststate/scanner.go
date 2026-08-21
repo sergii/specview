@@ -22,17 +22,37 @@ func looksLikeCodex(command string) bool {
 	if len(fields) == 0 {
 		return false
 	}
-	executable := strings.Trim(fields[0], "\"'")
-	base := filepath.Base(executable)
-	if base == "codex" || strings.HasPrefix(base, "codex-") {
+
+	cleanField := func(field string) string {
+		return strings.Trim(field, "\"'")
+	}
+	isCodexExecutable := func(field string) bool {
+		clean := cleanField(field)
+		base := filepath.Base(clean)
+		return base == "codex" || strings.HasPrefix(base, "codex-")
+	}
+
+	if isCodexExecutable(fields[0]) {
 		return true
 	}
+
 	for _, field := range fields[1:] {
-		clean := strings.Trim(field, "\"'")
+		clean := cleanField(field)
 		if strings.Contains(clean, "/@openai/codex/") {
 			return true
 		}
 	}
+
+	wrapper := filepath.Base(cleanField(fields[0]))
+	switch wrapper {
+	case "node", "nodejs", "bun", "deno", "sh", "bash", "zsh", "dash", "npm", "npx", "pnpm", "yarn":
+		for _, field := range fields[1:] {
+			if isCodexExecutable(field) {
+				return true
+			}
+		}
+	}
+
 	return false
 }
 

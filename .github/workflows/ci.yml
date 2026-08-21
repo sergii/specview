@@ -17,6 +17,8 @@ jobs:
         with:
           go-version: '1.26.5'
           cache: false
+      - name: Check developer scripts
+        run: bash -n bin/dev bin/install bin/doctor
       - name: Check formatting
         run: test -z "$(gofmt -l .)"
       - name: Verify modules

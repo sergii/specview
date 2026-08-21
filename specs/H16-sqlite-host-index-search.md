@@ -145,16 +145,18 @@ Each SSE connection has an explicit projection scope:
 
 The server keeps a stable material fingerprint for that scope. Runtime pulses and a one-second server-side probe recompute the fingerprint, but `event: changed` is emitted only when the digest changes.
 
-The host fingerprint intentionally excludes `LastSeenAt`, so seeing the same process again two seconds later does not cause an SSE event. It includes repository identity, specification convention/error state, and execution-session start/stop identity.
+The host fingerprint intentionally excludes `LastSeenAt`, so seeing the same process again two seconds later does not cause an SSE event. It includes repository identity, specification convention/error state, and execution-session lifecycle state already held by the Host Catalog.
 
-The repository fingerprint includes the state actually projected by the repository page:
+The repository fingerprint is deliberately cheap enough to probe frequently. It uses catalog execution lifecycle plus the read-only repository state that can change while a process is idle:
 
-- logical execution session identity, location, start time, and process count;
+- host-catalog execution session lifecycle and active-agent state;
 - Git worktrees, branch/HEAD, dirty count, upstream, ahead/behind, and last commit;
 - provider PR/check context;
 - specification convention and parsed work artifacts.
 
-Raw process PID replacement is not treated as a UI change when the logical execution shape and displayed process count stay the same.
+The one-second material probe does not invoke an execution adapter and therefore does not repeat macOS `ps`/`lsof` process discovery. Exact normalized execution context is read from the Execution Adapter only when a material change causes the repository fragment to be rendered.
+
+A process lifecycle change may conservatively cause one refresh even when the eventual logical UI shape is equivalent. The important invariant for this slice is that unchanged `LastSeenAt` heartbeats never create repeated fragment requests.
 
 The periodic server-side probe is intentional. It lets an idle repository page notice Git/spec/provider changes without browser polling and without requiring a full recursive filesystem watcher. Browser clients only listen to SSE.
 
@@ -196,6 +198,7 @@ A failed fragment fetch leaves the last successfully rendered DOM in place. It m
 - [x] Heartbeat-only `last_seen` updates do not change the host material fingerprint.
 - [x] Execution stop/start changes the host material fingerprint.
 - [x] Git dirty-state changes the repository material fingerprint.
+- [x] Periodic material probes do not invoke execution-process discovery.
 - [x] SQLite failure/staleness degrades search independently from host observation.
 - [x] SQLite implementation is CGO-free and not OS-specific.
 - [ ] `gofmt`, module verification, `go vet`, race tests, build, and release cross-build pass.

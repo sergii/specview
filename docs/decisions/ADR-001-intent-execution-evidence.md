@@ -82,6 +82,8 @@ Examples:
 
 Evidence is project-specific. A landing page and an industrial IoT system may use the same Specview core with very different acceptance policies.
 
+Evidence is revision-scoped. A result only proves the exact revision it verified; see `ADR-002-revision-scoped-evidence.md`.
+
 ## Durable knowledge vs active work
 
 Intent artifacts do not all represent work that should appear on an execution board.
@@ -168,7 +170,7 @@ Initial adapter classes:
 - artifact adapters: SpecviewAdapter, GitHub Spec Kit, OpenSpec, Kiro, BMAD, and future custom company adapters;
 - SCM adapters: Git, GitHub, later GitLab and others;
 - execution adapters: filesystem, generic processes, Codex, Claude Code, OpenCode, Docker, systemd, and others;
-- verification adapters: test, lint, security, architecture, performance, hardware, and other evidence producers;
+- evidence adapters: test, lint, static analysis, security, architecture, performance, hardware, review, CI, and other evidence producers;
 - review adapters: human, AI reviewer, GitHub review, and other approval mechanisms.
 
 A future custom Markdown adapter may observe arbitrary company-specific directories, but it is semantically distinct from `SpecviewAdapter`.

@@ -31,6 +31,7 @@ type Index struct {
 
 	mu          sync.Mutex
 	fingerprint string
+	syncErr     error
 }
 
 func DefaultPath(catalogPath string) string {
@@ -155,10 +156,20 @@ func (i *Index) Sync(ctx context.Context, repositories []hoststate.Repository) e
 
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	if fingerprint == i.fingerprint {
+	if fingerprint == i.fingerprint && i.syncErr == nil {
 		return nil
 	}
 
+	if err := i.syncSnapshot(ctx, repositories); err != nil {
+		i.syncErr = err
+		return err
+	}
+	i.fingerprint = fingerprint
+	i.syncErr = nil
+	return nil
+}
+
+func (i *Index) syncSnapshot(ctx context.Context, repositories []hoststate.Repository) error {
 	tx, err := i.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -227,11 +238,7 @@ func (i *Index) Sync(ctx context.Context, repositories []hoststate.Repository) e
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	i.fingerprint = fingerprint
-	return nil
+	return tx.Commit()
 }
 
 func (i *Index) SearchRepositoryIDs(ctx context.Context, query string, limit int) ([]string, error) {
@@ -239,6 +246,14 @@ func (i *Index) SearchRepositoryIDs(ctx context.Context, query string, limit int
 	if query == "" {
 		return nil, nil
 	}
+
+	i.mu.Lock()
+	syncErr := i.syncErr
+	i.mu.Unlock()
+	if syncErr != nil {
+		return nil, fmt.Errorf("SQLite host index is stale: %w", syncErr)
+	}
+
 	if limit <= 0 {
 		limit = 100
 	}

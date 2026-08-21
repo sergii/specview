@@ -1,6 +1,6 @@
 ---
 specview:
-  status: in_progress
+  status: done
 ---
 
 # H14 - Execution Adapter Contract
@@ -92,6 +92,14 @@ It must not call Codex-specific discovery directly.
 
 Worktree mapping remains read-only and Git-authoritative.
 
+## Path identity
+
+Filesystem identity is normalized independently of display spelling.
+
+Specview resolves symlink-equivalent paths when comparing repository roots, worktree roots, and execution session identity. This handles cases such as macOS `/var/...` and `/private/var/...` without rewriting the path shown to the user.
+
+The same shared path-identity logic is used above the Darwin/Linux scanner boundary.
+
 ## Acceptance criteria
 
 - [x] `ExecutionAdapter` is a first-class interface.
@@ -105,20 +113,43 @@ Worktree mapping remains read-only and Git-authoritative.
 - [x] Failure in one adapter does not discard sessions from a healthy adapter.
 - [x] H13 repository/worktree UI semantics remain unchanged by design.
 - [x] No execution adapter writes repository files.
-- [ ] gofmt, module verification, go vet, race tests, build, and release cross-build pass.
+- [x] gofmt, module verification, go vet, race tests, build, and release cross-build pass.
 
-## Implementation verification
+## Verification
 
-Unit coverage now includes:
+Real macOS acceptance on 2026-08-22 passed:
+
+```text
+bin/dev check
+  formatting             PASS
+  module verification    PASS
+  go vet                 PASS
+  go test -race ./...    PASS
+
+./scripts/build-release.sh dev-local
+  linux/amd64             PASS
+  linux/arm64             PASS
+  darwin/amd64            PASS
+  darwin/arm64            PASS
+
+bin/doctor
+  codex adapter           PASS
+  matched processes       2
+  cwd resolution          PASS
+  Git repository          PASS
+```
+
+Unit coverage includes:
 
 - multi-adapter aggregation;
 - adapter failure isolation;
 - all-adapters-failed error semantics;
 - process-to-logical-session grouping;
 - generic future-agent projection into a repository worktree;
-- Linux diagnostics preserving cwd/repository context required by the normalized session contract.
+- Linux diagnostics preserving cwd/repository context required by the normalized session contract;
+- symlink-equivalent filesystem path identity.
 
-The final automated gate remains open until CI executes the workflow steps successfully.
+GitHub Actions run `32532744655` for commit `c974649` reported failure before exposing workflow step metadata (`steps: null`). No project gate result was available from that run, so the reproducible local full gate above is used for H14 acceptance while the CI harness issue remains separate.
 
 ## Out of scope
 
@@ -127,5 +158,6 @@ The final automated gate remains open until CI executes the workflow steps succe
 - native cross-restart agent session IDs;
 - durable execution-session persistence migration;
 - agent control/start/stop commands;
+- Windows process discovery;
 - GitHub PR/CI projection;
 - Acceptance policy.

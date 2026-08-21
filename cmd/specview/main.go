@@ -166,7 +166,7 @@ func serve() error {
 
 	const host = "127.0.0.1"
 	const port = 7331
-	server := webui.NewHostServer(catalog, hub, host, port)
+	server := webui.NewHostServer(catalog, hub, host, port, executions)
 	slog.Info("Specview host observer started",
 		"hostname", catalog.Hostname(),
 		"state", statePath,

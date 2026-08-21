@@ -116,17 +116,30 @@ func serveRoot(configRoot string) error {
 	}
 
 	hub := webui.NewHub()
-	watcher, err := watch.New(specRoot, func() {
+	refresh := func() {
 		if err := store.Refresh(); err != nil {
 			slog.Error("refresh specifications", "error", err)
 			return
 		}
 		hub.Broadcast()
-	})
-	if err != nil {
-		return fmt.Errorf("start watcher: %w", err)
 	}
-	defer watcher.Close()
+
+	var watchers []*watch.Watcher
+	for _, root := range adapter.WatchRoots() {
+		watcher, err := watch.New(root, refresh)
+		if err != nil {
+			for _, started := range watchers {
+				_ = started.Close()
+			}
+			return fmt.Errorf("start watcher for %s: %w", root, err)
+		}
+		watchers = append(watchers, watcher)
+	}
+	defer func() {
+		for _, watcher := range watchers {
+			_ = watcher.Close()
+		}
+	}()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

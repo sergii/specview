@@ -92,7 +92,7 @@ type fakeProvider struct {
 	calls int
 }
 
-func (f *fakeProvider) Name() string { return "Fake" }
+func (f *fakeProvider) Name() string                { return "Fake" }
 func (f *fakeProvider) Supports(remote string) bool { return remote != "" }
 func (f *fakeProvider) Inspect(context.Context, GitContext) ProviderContext {
 	f.calls++

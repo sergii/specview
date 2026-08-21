@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -30,18 +31,30 @@ func (h *Hub) Subscribe() (<-chan struct{}, func()) {
 	ch := make(chan struct{}, 1)
 	h.mu.Lock()
 	h.clients[ch] = struct{}{}
+	clients := len(h.clients)
 	h.mu.Unlock()
-	return ch, func() { h.mu.Lock(); delete(h.clients, ch); close(ch); h.mu.Unlock() }
+	slog.Debug("SSE client subscribed", "clients", clients)
+	return ch, func() {
+		h.mu.Lock()
+		delete(h.clients, ch)
+		close(ch)
+		clients := len(h.clients)
+		h.mu.Unlock()
+		slog.Debug("SSE client unsubscribed", "clients", clients)
+	}
 }
 func (h *Hub) Broadcast() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	delivered := 0
 	for ch := range h.clients {
 		select {
 		case ch <- struct{}{}:
+			delivered++
 		default:
 		}
 	}
+	slog.Debug("SSE change broadcast", "clients", len(h.clients), "delivered", delivered)
 }
 
 type Server struct {
@@ -76,10 +89,12 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+	slog.Info("project web server starting", "address", server.Addr, "root", s.root)
 	errCh := make(chan error, 1)
 	go func() { errCh <- server.ListenAndServe() }()
 	select {
 	case <-ctx.Done():
+		slog.Info("project web server shutting down", "address", server.Addr)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		return server.Shutdown(shutdownCtx)
@@ -129,6 +144,7 @@ func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
+		slog.Error("render project dashboard failed", "error", err, "project", data.ProjectName)
 		http.Error(w, "render dashboard", http.StatusInternalServerError)
 	}
 }
@@ -145,6 +161,7 @@ func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 		ProjectName string
 		Spec        specs.Spec
 	}{s.projectName(), item}); err != nil {
+		slog.Error("render specification failed", "error", err, "path", path)
 		http.Error(w, "render specification", http.StatusInternalServerError)
 	}
 }
@@ -184,6 +201,21 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		slog.Debug("http request started",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"query", r.URL.RawQuery,
+			"remote", r.RemoteAddr,
+		)
+		defer func() {
+			slog.Debug("http request completed",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"duration", time.Since(started),
+			)
+		}()
+
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'")

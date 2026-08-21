@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+log() {
+  printf '\033[1;36m==>\033[0m %s\n' "$*"
+}
+
+fail() {
+  printf '\033[1;31merror:\033[0m %s\n' "$*" >&2
+  exit 1
+}
+
+check() {
+  log "Checking formatting"
+  local unformatted
+  unformatted="$(gofmt -l .)"
+  if [[ -n "$unformatted" ]]; then
+    printf '%s\n' "$unformatted" >&2
+    fail "gofmt is required"
+  fi
+
+  log "Tidying and verifying modules"
+  go mod tidy
+  git diff --exit-code -- go.mod go.sum >/dev/null || fail "go.mod/go.sum changed after go mod tidy; commit the module changes first"
+  go mod verify
+
+  log "Running go vet"
+  go vet ./...
+
+  log "Running race tests"
+  go test -race ./...
+}
+
+build() {
+  mkdir -p bin
+  local version
+  version="dev-$(git rev-parse --short HEAD)"
+  log "Building Specview ${version}"
+  go build -trimpath -ldflags "-X main.version=${version}" -o ./bin/specview ./cmd/specview
+}
+
+install() {
+  local branch
+  branch="$(git branch --show-current)"
+  [[ -n "$branch" ]] || fail "bin/dev install requires a local branch, not detached HEAD"
+
+  log "Fetching origin"
+  git fetch --prune origin
+
+  log "Fast-forwarding ${branch}"
+  git pull --ff-only
+
+  check
+  build
+
+  log "Starting Specview"
+  exec env \
+    SPECVIEW_LOG_FORMAT="${SPECVIEW_LOG_FORMAT:-console}" \
+    SPECVIEW_LOG_LEVEL="${SPECVIEW_LOG_LEVEL:-debug}" \
+    ./bin/specview
+}
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  bin/dev install   Fetch, pull, verify, test, build, and run Specview
+  bin/dev check     Run formatting, module, vet, and race-test gates
+  bin/dev build     Build ./bin/specview from the current checkout
+USAGE
+}
+
+case "${1:-install}" in
+  install)
+    install
+    ;;
+  check)
+    check
+    ;;
+  build)
+    build
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

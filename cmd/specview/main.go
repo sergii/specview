@@ -2,17 +2,15 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/sergii/specview/internal/config"
-	"github.com/sergii/specview/internal/specs"
-	"github.com/sergii/specview/internal/watch"
+	"github.com/sergii/specview/internal/hoststate"
 	webui "github.com/sergii/specview/internal/web"
 )
 
@@ -68,107 +66,50 @@ func initProject() error {
 	} else {
 		fmt.Printf("• %s/ already exists\n", artifactPath)
 	}
-	fmt.Println("\nRun 'specview' to start observing specifications.")
+	fmt.Println("\nRun 'specview' to start observing this host.")
 	return nil
 }
 
 func serve() error {
-	configRoot, err := os.Getwd()
+	statePath, err := hoststate.DefaultStatePath()
 	if err != nil {
 		return err
 	}
-	return serveRoot(configRoot)
-}
-
-func serveRoot(configRoot string) error {
-	cfg, err := config.Load(configRoot)
+	catalog, err := hoststate.OpenCatalog(statePath)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return errors.New(".specview.yaml not found; run 'specview init' first")
-		}
-		return err
-	}
-
-	projectRoot := cfg.ResolveProjectRoot(configRoot)
-	info, err := os.Stat(projectRoot)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("project.root %q does not exist", cfg.Project.Root)
-		}
-		return fmt.Errorf("stat project.root: %w", err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("project.root %q is not a directory", cfg.Project.Root)
-	}
-
-	specRoot := filepath.Join(projectRoot, cfg.Specs.Path)
-	if err := os.MkdirAll(specRoot, 0o755); err != nil {
-		return fmt.Errorf("create artifact directory: %w", err)
-	}
-
-	adapter, err := specs.NewAdapter(cfg.Specs.Adapter, specRoot, cfg.Specs.Pattern)
-	if err != nil {
-		return err
-	}
-	store := specs.NewStoreWithAdapter(adapter)
-	if err := store.Refresh(); err != nil {
 		return err
 	}
 
 	hub := webui.NewHub()
-	refresh := func() {
-		if err := store.Refresh(); err != nil {
-			slog.Error("refresh specifications", "error", err)
-			return
-		}
-		hub.Broadcast()
+	runtime := hoststate.NewRuntime(catalog, hoststate.NewCodexScanner(), 2*time.Second, hub.Broadcast)
+	if _, err := runtime.Refresh(); err != nil {
+		slog.Warn("initial host activity scan failed", "error", err)
 	}
-
-	var watchers []*watch.Watcher
-	for _, root := range adapter.WatchRoots() {
-		watcher, err := watch.New(root, refresh)
-		if err != nil {
-			for _, started := range watchers {
-				_ = started.Close()
-			}
-			return fmt.Errorf("start watcher for %s: %w", root, err)
-		}
-		watchers = append(watchers, watcher)
-	}
-	defer func() {
-		for _, watcher := range watchers {
-			_ = watcher.Close()
-		}
-	}()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go runtime.Run(ctx)
 
-	server := webui.NewServer(projectRoot, cfg, store, hub)
-	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
-
-	projectName := cfg.Project.Name
-	if projectName == "" {
-		projectName = filepath.Base(projectRoot)
-	}
-	observedPath := cfg.Specs.Path
-	if cfg.Project.Root != "." {
-		observedPath = filepath.Join(cfg.Project.Root, cfg.Specs.Path)
-	}
-	fmt.Printf("Specview watching %s · %s · adapter=%s\n", projectName, observedPath, store.AdapterName())
-	fmt.Printf("http://%s\n", addr)
-
+	const host = "127.0.0.1"
+	const port = 7331
+	server := webui.NewHostServer(catalog, hub, host, port)
+	fmt.Printf("Specview observing host %s\n", catalog.Hostname())
+	fmt.Printf("State: %s\n", statePath)
+	fmt.Printf("http://%s:%d\n", host, port)
 	return server.ListenAndServe(ctx)
 }
 
 func printHelp() {
-	fmt.Printf(`Specview - live, read-only observation for repo-native specifications.
+	fmt.Printf(`Specview - local-first observation for repo-native, spec-driven software work.
 
 Usage:
-  specview              Start the dashboard using .specview.yaml in the current directory
-  specview serve        Start the dashboard using .specview.yaml in the current directory
-  specview init         Detect the repository convention and create .specview.yaml
+  specview              Start the host dashboard and observe active repositories
+  specview serve        Start the host dashboard and observe active repositories
+  specview init         Detect the current repository convention and create .specview.yaml
   specview version      Print the version
   specview help         Show this help
+
+The host dashboard does not require .specview.yaml. Project configuration remains
+an optional repository-level override.
 `)
 }

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,7 +95,7 @@ func TestProjectMaterialFingerprintChangesWithGitState(t *testing.T) {
 	repository := catalog.Repositories()[0]
 
 	server := NewHostServerWithSources(catalog, NewHub(), "127.0.0.1", 7331, emptyExecutionSource{}, nil)
-	before, err := server.projectMaterialFingerprint(t.Context(), repository.ID)
+	before, err := server.projectMaterialFingerprint(context.Background(), repository.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +103,7 @@ func TestProjectMaterialFingerprintChangesWithGitState(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# WMS\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	after, err := server.projectMaterialFingerprint(t.Context(), repository.ID)
+	after, err := server.projectMaterialFingerprint(context.Background(), repository.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

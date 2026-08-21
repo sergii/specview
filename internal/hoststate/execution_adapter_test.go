@@ -2,6 +2,7 @@ package hoststate
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -90,6 +91,9 @@ func TestExecutionRegistryReturnsErrorWhenAllAdaptersFail(t *testing.T) {
 
 func TestSessionsFromDiagnosticsGroupsProcessesByRepositoryAndCWD(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "repo")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	runTestGit(t, root, "init")
 
 	diagnostics := []ScanDiagnostic{

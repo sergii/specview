@@ -115,6 +115,10 @@ func (a stubAdapter) Scan() ([]Spec, error) {
 	return a.items, nil
 }
 
+func (a stubAdapter) WatchRoots() []string {
+	return nil
+}
+
 func TestStoreUsesAdapterBoundary(t *testing.T) {
 	store := NewStoreWithAdapter(stubAdapter{items: []Spec{{ID: "A1", Kind: ArtifactRFC, Title: "Decision input"}}})
 	if err := store.Refresh(); err != nil {

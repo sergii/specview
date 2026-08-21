@@ -2,7 +2,7 @@ package hoststate
 
 import "testing"
 
-func TestLooksLikeCodex(t *testing.T) {
+func TestLooksLikeCodexCommandForms(t *testing.T) {
 	tests := []struct {
 		name    string
 		command string

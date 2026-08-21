@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sergii/specview/internal/config"
+	"github.com/sergii/specview/internal/hostindex"
 	"github.com/sergii/specview/internal/hoststate"
 	"github.com/sergii/specview/internal/logging"
 	webui "github.com/sergii/specview/internal/web"
@@ -150,9 +151,34 @@ func serve() error {
 		return err
 	}
 
+	var index *hostindex.Index
+	indexPath := hostindex.DefaultPath(statePath)
+	if indexPath != "" {
+		index, err = hostindex.Open(indexPath)
+		if err != nil {
+			slog.Warn("SQLite host index unavailable", "path", indexPath, "error", err)
+			index = nil
+		} else {
+			defer index.Close()
+			if err := index.Sync(context.Background(), catalog.Repositories()); err != nil {
+				slog.Warn("initial SQLite host index sync failed", "path", indexPath, "error", err)
+			} else {
+				slog.Info("SQLite host index ready", "path", indexPath)
+			}
+		}
+	}
+
 	executions := hoststate.DefaultExecutionRegistry()
 	hub := webui.NewHub()
-	runtime := hoststate.NewRuntime(catalog, executions, 2*time.Second, hub.Broadcast)
+	onChange := func() {
+		if index != nil {
+			if err := index.Sync(context.Background(), catalog.Repositories()); err != nil {
+				slog.Warn("SQLite host index sync failed", "path", index.Path(), "error", err)
+			}
+		}
+		hub.Broadcast()
+	}
+	runtime := hoststate.NewRuntime(catalog, executions, 2*time.Second, onChange)
 	observations, err := runtime.Refresh()
 	if err != nil {
 		slog.Warn("initial host activity scan failed", "error", err)
@@ -166,10 +192,15 @@ func serve() error {
 
 	const host = "127.0.0.1"
 	const port = 7331
-	server := webui.NewHostServer(catalog, hub, host, port, executions)
+	var repositorySearch webui.RepositorySearcher
+	if index != nil {
+		repositorySearch = index
+	}
+	server := webui.NewHostServerWithSearch(catalog, hub, host, port, executions, repositorySearch)
 	slog.Info("Specview host observer started",
 		"hostname", catalog.Hostname(),
 		"state", statePath,
+		"index", indexPath,
 		"address", fmt.Sprintf("http://%s:%d", host, port),
 		"scan_interval", 2*time.Second,
 		"execution_registry", "default",

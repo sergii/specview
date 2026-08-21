@@ -29,6 +29,30 @@ agent / developer
 
 Specview-owned runtime material uses the ignored `.specview/` directory. Durable configuration remains in `.specview.yaml`.
 
+## Development
+
+For day-to-day development, use:
+
+```bash
+bin/dev install
+```
+
+or the shortcut:
+
+```bash
+bin/install
+```
+
+This fetches and fast-forwards the current branch, runs formatting/module/vet/race-test gates, rebuilds `./bin/specview`, and starts Specview with development logging enabled.
+
+For diagnostics:
+
+```bash
+bin/doctor
+```
+
+Logging and developer diagnostics are documented in `docs/observability/logging.md`.
+
 ## Try the ephemeral demo
 
 The canonical demo is an agent-executable recipe, not a persistent project.
@@ -258,30 +282,3 @@ Included:
 Explicitly not included in the v0.0.1 UI/runtime slice:
 
 - embedded demo files
-- automatic demo cloning
-- persistent demo state as a product requirement
-- SQLite projection
-- authentication
-- write API
-- task management
-- spec generation
-- Git status integration in v0.0.1
-- GitHub runtime integration
-- AI/LLM calls inside Specview
-- Acceptance policy or automatic workflow advancement
-
-The repository may contain forward-looking normalized domain contracts and adapters that are not yet surfaced in the v0.0.1 UI.
-
-## Development
-
-CI and release builds use Go 1.26.x; the POC source intentionally stays compatible with Go 1.23+ and has no runtime or module dependencies.
-
-```bash
-go test ./...
-go vet ./...
-go build ./cmd/specview
-```
-
-## Releases
-
-Normal releases can be created by pushing a `v*` tag. For the first POC, the **Release** workflow can also be started manually with a version such as `v0.0.1`; it creates the GitHub Release and attaches all four platform archives plus `SHA256SUMS`.

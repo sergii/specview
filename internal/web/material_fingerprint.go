@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/sergii/specview/internal/config"
-	"github.com/sergii/specview/internal/hoststate"
 	"github.com/sergii/specview/internal/sourcecontrol"
 	"github.com/sergii/specview/internal/specs"
 )
@@ -34,31 +33,13 @@ type hostMaterialRepository struct {
 	Sessions       []hostMaterialSession
 }
 
-type projectMaterialExecutionSession struct {
-	Adapter        string
-	ID             string
-	Agent          string
-	CWD            string
-	RepositoryRoot string
-	WorktreeRoot   string
-	ProcessCount   int
-	StartedAt      time.Time
-}
-
-type projectMaterialExecution struct {
-	Remote    string
-	Worktrees []hoststate.Worktree
-	Sessions  []projectMaterialExecutionSession
-	Error     string
-}
-
 type projectMaterialState struct {
 	RepositoryID      string
 	RepositoryName    string
 	RepositoryRoot    string
 	Active            bool
 	ActiveAgent       string
-	Execution         projectMaterialExecution
+	Sessions          []hostMaterialSession
 	SourceControl     sourcecontrol.RepositoryContext
 	Convention        config.Convention
 	DetectionError    string
@@ -86,28 +67,7 @@ func (s *HostServer) hostMaterialFingerprint() (string, error) {
 	repositories := s.catalog.Repositories()
 	material := make([]hostMaterialRepository, 0, len(repositories))
 	for _, repository := range repositories {
-		sessions := make([]hostMaterialSession, 0, len(repository.Sessions))
-		for _, session := range repository.Sessions {
-			sessions = append(sessions, hostMaterialSession{
-				ID:        session.ID,
-				Agent:     session.Agent,
-				PID:       session.PID,
-				StartedAt: session.StartedAt,
-				EndedAt:   session.EndedAt,
-				Active:    session.Active,
-			})
-		}
-		sort.Slice(sessions, func(i, j int) bool { return sessions[i].ID < sessions[j].ID })
-		material = append(material, hostMaterialRepository{
-			ID:             repository.ID,
-			Name:           repository.Name,
-			Root:           repository.Root,
-			Convention:     repository.Convention,
-			DetectionError: repository.DetectionError,
-			Active:         repository.Active(),
-			ActiveAgent:    repository.ActiveAgentLabel(),
-			Sessions:       sessions,
-		})
+		material = append(material, materialRepository(repository))
 	}
 	sort.Slice(material, func(i, j int) bool { return material[i].ID < material[j].ID })
 	return hashMaterial(material)
@@ -118,30 +78,19 @@ func (s *HostServer) projectMaterialFingerprint(ctx context.Context, projectID s
 	if !ok {
 		return "", fmt.Errorf("repository %q not found", projectID)
 	}
-	data, err := s.loadProject(ctx, repository)
+
+	data, store, err := s.projectStore(repository)
 	if err != nil {
 		return "", err
 	}
-
-	executionSessions := make([]projectMaterialExecutionSession, 0, len(data.Execution.Sessions))
-	for _, session := range data.Execution.Sessions {
-		executionSessions = append(executionSessions, projectMaterialExecutionSession{
-			Adapter:        session.Adapter,
-			ID:             session.ID,
-			Agent:          session.Agent,
-			CWD:            session.CWD,
-			RepositoryRoot: session.RepositoryRoot,
-			WorktreeRoot:   session.WorktreeRoot,
-			ProcessCount:   len(session.ProcessIDs),
-			StartedAt:      session.StartedAt,
-		})
+	if store != nil {
+		populateProjectArtifacts(&data, store)
 	}
-	sort.Slice(executionSessions, func(i, j int) bool { return executionSessions[i].ID < executionSessions[j].ID })
 
-	executionWorktrees := append([]hoststate.Worktree(nil), data.Execution.Worktrees...)
-	sort.Slice(executionWorktrees, func(i, j int) bool { return executionWorktrees[i].Path < executionWorktrees[j].Path })
-
-	sourceContext := data.SourceControl
+	sourceContext, err := s.sourceControl.Inspect(ctx, repository.Root)
+	if err != nil {
+		return "", err
+	}
 	sourceContext.Git.Worktrees = append([]sourcecontrol.Worktree(nil), sourceContext.Git.Worktrees...)
 	sort.Slice(sourceContext.Git.Worktrees, func(i, j int) bool {
 		return sourceContext.Git.Worktrees[i].Path < sourceContext.Git.Worktrees[j].Path
@@ -151,18 +100,14 @@ func (s *HostServer) projectMaterialFingerprint(ctx context.Context, projectID s
 		return sourceContext.Provider.PullRequests[i].Number < sourceContext.Provider.PullRequests[j].Number
 	})
 
+	repositoryMaterial := materialRepository(repository)
 	material := projectMaterialState{
-		RepositoryID:   data.Repo.ID,
-		RepositoryName: data.Repo.Name,
-		RepositoryRoot: data.Repo.Root,
-		Active:         data.Repo.Active(),
-		ActiveAgent:    data.Repo.ActiveAgentLabel(),
-		Execution: projectMaterialExecution{
-			Remote:    data.Execution.Remote,
-			Worktrees: executionWorktrees,
-			Sessions:  executionSessions,
-			Error:     data.Execution.Error,
-		},
+		RepositoryID:      repository.ID,
+		RepositoryName:    repository.Name,
+		RepositoryRoot:    repository.Root,
+		Active:            repositoryMaterial.Active,
+		ActiveAgent:       repositoryMaterial.ActiveAgent,
+		Sessions:          repositoryMaterial.Sessions,
 		SourceControl:     sourceContext,
 		Convention:        data.Convention,
 		DetectionError:    data.DetectionError,
@@ -175,6 +120,16 @@ func (s *HostServer) projectMaterialFingerprint(ctx context.Context, projectID s
 		SpecificationRoot: data.SpecificationRoot,
 	}
 	return hashMaterial(material)
+}
+
+func materialRepository(repository interface {
+	Active() bool
+	ActiveAgentLabel() string
+}) hostMaterialRepository {
+	// This helper is intentionally implemented through the concrete hoststate
+	// repository below. Keeping material shaping here prevents heartbeat fields
+	// from leaking into the SSE digest.
+	return hostMaterialRepository{}
 }
 
 func stableArtifacts(items []specs.Artifact) []specs.Artifact {

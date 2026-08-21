@@ -106,7 +106,11 @@ func serveRoot(configRoot string) error {
 		return fmt.Errorf("create specs directory: %w", err)
 	}
 
-	store := specs.NewStore(specRoot, cfg.Specs.Pattern)
+	adapter, err := specs.NewAdapter(cfg.Specs.Adapter, specRoot, cfg.Specs.Pattern)
+	if err != nil {
+		return err
+	}
+	store := specs.NewStoreWithAdapter(adapter)
 	if err := store.Refresh(); err != nil {
 		return err
 	}
@@ -138,7 +142,7 @@ func serveRoot(configRoot string) error {
 	if cfg.Project.Root != "." {
 		observedPath = filepath.Join(cfg.Project.Root, cfg.Specs.Path)
 	}
-	fmt.Printf("Specview watching %s · %s\n", projectName, observedPath)
+	fmt.Printf("Specview watching %s · %s · adapter=%s\n", projectName, observedPath, store.AdapterName())
 	fmt.Printf("http://%s\n", addr)
 
 	return server.ListenAndServe(ctx)

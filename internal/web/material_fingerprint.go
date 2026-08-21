@@ -53,21 +53,21 @@ type projectMaterialExecution struct {
 }
 
 type projectMaterialState struct {
-	RepositoryID   string
-	RepositoryName string
-	RepositoryRoot string
-	Active         bool
-	ActiveAgent    string
-	Execution      projectMaterialExecution
-	SourceControl  sourcecontrol.RepositoryContext
-	Convention     config.Convention
-	DetectionError string
-	Unsupported    bool
-	New            []specs.Artifact
-	InProgress     []specs.Artifact
-	Done           []specs.Artifact
-	Invalid        []specs.Artifact
-	Total          int
+	RepositoryID      string
+	RepositoryName    string
+	RepositoryRoot    string
+	Active            bool
+	ActiveAgent       string
+	Execution         projectMaterialExecution
+	SourceControl     sourcecontrol.RepositoryContext
+	Convention        config.Convention
+	DetectionError    string
+	Unsupported       bool
+	New               []specs.Artifact
+	InProgress        []specs.Artifact
+	Done              []specs.Artifact
+	Invalid           []specs.Artifact
+	Total             int
 	SpecificationRoot string
 }
 

@@ -41,7 +41,8 @@ func DefaultPath(catalogPath string) string {
 }
 
 func Open(path string) (*Index, error) {
-	if path != "" {
+	persistent := path != ""
+	if persistent {
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			return nil, err
 		}
@@ -63,6 +64,12 @@ func Open(path string) (*Index, error) {
 	if err := index.migrate(context.Background()); err != nil {
 		_ = db.Close()
 		return nil, err
+	}
+	if persistent {
+		if err := os.Chmod(path, 0o600); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("protect SQLite host index: %w", err)
+		}
 	}
 	return index, nil
 }

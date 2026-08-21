@@ -4,36 +4,16 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 )
 
 // RepositoryExecutionView is a read-only projection of the current execution
 // context for one repository. Git remains authoritative for repository and
-// worktree state; process discovery remains authoritative for active sessions.
+// worktree state; execution adapters remain authoritative for active sessions.
 type RepositoryExecutionView struct {
 	Remote    string
 	Worktrees []Worktree
-	Sessions  []ExecutionContext
+	Sessions  []ExecutionSession
 	Error     string
-}
-
-type ExecutionContext struct {
-	Agent        string
-	CWD          string
-	WorktreeRoot string
-	ProcessIDs   []int
-	StartedAt    time.Time
-}
-
-func (c ExecutionContext) ProcessLabel() string {
-	switch len(c.ProcessIDs) {
-	case 0:
-		return ""
-	case 1:
-		return "PID " + itoa(c.ProcessIDs[0])
-	default:
-		return itoa(len(c.ProcessIDs)) + " processes"
-	}
 }
 
 type Worktree struct {
@@ -83,14 +63,40 @@ func (w Worktree) AgentLabel() string {
 	return itoa(len(w.Agents)) + " agents"
 }
 
-func (r Repository) ExecutionView() RepositoryExecutionView {
+// ExecutionView accepts an optional source so the host server can pass the same
+// registry used by the runtime. The default preserves the convenient template
+// method for callers that do not need dependency injection.
+func (r Repository) ExecutionView(sources ...ExecutionSource) RepositoryExecutionView {
 	view, err := inspectGitRepository(r.Root)
 	if err != nil {
 		view.Error = err.Error()
 		return view
 	}
 
-	view.Sessions = currentCodexExecution(r)
+	var source ExecutionSource = DefaultExecutionRegistry()
+	if len(sources) > 0 && sources[0] != nil {
+		source = sources[0]
+	}
+
+	sessions, err := source.Sessions()
+	if err != nil {
+		view.Error = err.Error()
+		return view
+	}
+	for _, session := range sessions {
+		if filepath.Clean(session.RepositoryRoot) != filepath.Clean(r.Root) {
+			continue
+		}
+		session.StartedAt = r.startedAtForProcesses(session.Agent, session.ProcessIDs)
+		view.Sessions = append(view.Sessions, session)
+	}
+	sort.Slice(view.Sessions, func(i, j int) bool {
+		if view.Sessions[i].CWD == view.Sessions[j].CWD {
+			return view.Sessions[i].Adapter < view.Sessions[j].Adapter
+		}
+		return view.Sessions[i].CWD < view.Sessions[j].CWD
+	})
+
 	for i := range view.Worktrees {
 		seen := make(map[string]struct{})
 		for _, session := range view.Sessions {
@@ -106,6 +112,25 @@ func (r Repository) ExecutionView() RepositoryExecutionView {
 		sort.Strings(view.Worktrees[i].Agents)
 	}
 	return view
+}
+
+func (r Repository) startedAtForProcesses(agent string, processIDs []int) (startedAt time.Time) {
+	pidSet := make(map[int]struct{}, len(processIDs))
+	for _, pid := range processIDs {
+		pidSet[pid] = struct{}{}
+	}
+	for _, persisted := range r.Sessions {
+		if !persisted.Active || persisted.Agent != agent {
+			continue
+		}
+		if _, ok := pidSet[persisted.PID]; !ok {
+			continue
+		}
+		if startedAt.IsZero() || persisted.StartedAt.Before(startedAt) {
+			startedAt = persisted.StartedAt
+		}
+	}
+	return startedAt
 }
 
 func inspectGitRepository(root string) (RepositoryExecutionView, error) {
@@ -166,56 +191,6 @@ func parseWorktrees(output string) []Worktree {
 	}
 	flush()
 	return worktrees
-}
-
-func currentCodexExecution(repo Repository) []ExecutionContext {
-	diagnostics, err := DiagnoseCodex()
-	if err != nil {
-		return nil
-	}
-
-	byKey := make(map[string]*ExecutionContext)
-	for _, diagnostic := range diagnostics {
-		if diagnostic.Stage != "ok" || filepath.Clean(diagnostic.RepositoryRoot) != filepath.Clean(repo.Root) {
-			continue
-		}
-		worktreeRoot := diagnostic.CWD
-		if output, gitErr := runGit(diagnostic.CWD, "rev-parse", "--show-toplevel"); gitErr == nil {
-			worktreeRoot = filepath.Clean(strings.TrimSpace(string(output)))
-		}
-		key := "Codex\x00" + filepath.Clean(diagnostic.CWD)
-		context := byKey[key]
-		if context == nil {
-			context = &ExecutionContext{
-				Agent:        "Codex",
-				CWD:          filepath.Clean(diagnostic.CWD),
-				WorktreeRoot: worktreeRoot,
-			}
-			byKey[key] = context
-		}
-		context.ProcessIDs = append(context.ProcessIDs, diagnostic.PID)
-		for _, persisted := range repo.Sessions {
-			if !persisted.Active || persisted.Agent != "Codex" || persisted.PID != diagnostic.PID {
-				continue
-			}
-			if context.StartedAt.IsZero() || persisted.StartedAt.Before(context.StartedAt) {
-				context.StartedAt = persisted.StartedAt
-			}
-		}
-	}
-
-	contexts := make([]ExecutionContext, 0, len(byKey))
-	for _, context := range byKey {
-		sort.Ints(context.ProcessIDs)
-		contexts = append(contexts, *context)
-	}
-	sort.Slice(contexts, func(i, j int) bool {
-		if contexts[i].CWD == contexts[j].CWD {
-			return contexts[i].Agent < contexts[j].Agent
-		}
-		return contexts[i].CWD < contexts[j].CWD
-	})
-	return contexts
 }
 
 func countNonEmptyLines(value string) int {

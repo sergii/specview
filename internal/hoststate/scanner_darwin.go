@@ -9,11 +9,30 @@ import (
 )
 
 func (CodexScanner) Scan() ([]Observation, error) {
-	output, err := exec.Command("ps", "-axww", "-o", "pid=,command=").Output()
+	diagnostics, err := diagnoseCodex()
 	if err != nil {
 		return nil, err
 	}
 	var observations []Observation
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Stage != "ok" {
+			continue
+		}
+		observations = append(observations, Observation{
+			Agent:          "Codex",
+			PID:            diagnostic.PID,
+			RepositoryRoot: diagnostic.RepositoryRoot,
+		})
+	}
+	return observations, nil
+}
+
+func diagnoseCodex() ([]ScanDiagnostic, error) {
+	output, err := exec.Command("ps", "-axww", "-o", "pid=,command=").Output()
+	if err != nil {
+		return nil, err
+	}
+	var diagnostics []ScanDiagnostic
 	for _, line := range strings.Split(string(output), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -24,24 +43,40 @@ func (CodexScanner) Scan() ([]Observation, error) {
 			continue
 		}
 		pid, ok := parsePID(parts[0])
-		if !ok || !looksLikeCodex(parts[1]) {
+		if !ok {
 			continue
+		}
+		command := strings.TrimSpace(parts[1])
+		if !looksLikeCodex(command) {
+			continue
+		}
+		diagnostic := ScanDiagnostic{
+			PID:     pid,
+			Command: command,
+			Matched: true,
+			Stage:   "matched",
 		}
 		cwd, err := darwinProcessCWD(pid)
 		if err != nil {
+			diagnostic.Stage = "cwd"
+			diagnostic.Error = err.Error()
+			diagnostics = append(diagnostics, diagnostic)
 			continue
 		}
+		diagnostic.CWD = cwd
+		diagnostic.Stage = "cwd"
 		root, err := canonicalRepositoryRoot(cwd)
 		if err != nil {
+			diagnostic.Stage = "git"
+			diagnostic.Error = err.Error()
+			diagnostics = append(diagnostics, diagnostic)
 			continue
 		}
-		observations = append(observations, Observation{
-			Agent:          "Codex",
-			PID:            pid,
-			RepositoryRoot: root,
-		})
+		diagnostic.RepositoryRoot = root
+		diagnostic.Stage = "ok"
+		diagnostics = append(diagnostics, diagnostic)
 	}
-	return observations, nil
+	return diagnostics, nil
 }
 
 func darwinProcessCWD(pid int) (string, error) {

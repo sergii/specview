@@ -68,13 +68,13 @@ Supported semantic kinds include:
 
 ## Knowledge vs Work
 
-A repository may contain durable system knowledge that is not active work.
+A repository may contain durable system knowledge and history that are not active work.
 
 The normalized model therefore has two temporal planes:
 
 ```text
 PlaneKnowledge
-  current or historical project truth
+  current project truth, project policy, and historical artifacts
 
 PlaneWork
   artifacts participating in an active change
@@ -90,7 +90,7 @@ RoleSupporting
   belongs to the same work item without becoming another card
 ```
 
-The current dashboard is now derived from:
+The current dashboard is derived from:
 
 ```text
 plane = work
@@ -168,27 +168,34 @@ Recognizes the OpenSpec namespace:
 
 ```text
 openspec/
-├── specs/                 # current source of truth
-└── changes/               # changes in flight
-    ├── <change>/
+├── config.yaml              # project context and rules
+├── specs/                   # current source of truth
+└── changes/
+    ├── <change>/            # changes in flight
     │   ├── proposal.md
     │   ├── design.md
     │   ├── tasks.md
     │   └── specs/**/spec.md
-    └── archive/
+    └── archive/             # completed historical changes
 ```
 
 Projection:
 
 ```text
+openspec/config.yaml
+  -> kind=policy, plane=knowledge, role=supporting
+
 openspec/specs/**/spec.md
-  -> plane=knowledge
+  -> plane=knowledge, role=primary
 
 active change primary artifact
   -> plane=work, role=primary
 
-change design/tasks/delta specs
+active change design/tasks/delta specs
   -> plane=work, role=supporting
+
+archived change artifacts
+  -> plane=knowledge, role=supporting
 ```
 
 Delta specs relate to the current capability they modify:
@@ -198,9 +205,16 @@ change:delta:auth
   --changes--> current:auth
 ```
 
-The adapter preserves OpenSpec's fluid workflow. `proposal.md` is preferred as the primary artifact, but if artifacts are created in another order the first available change artifact can represent the work item without imposing an artificial waterfall.
+Archived artifacts retain their original change identity through:
 
-Archived changes are excluded from active work in this slice.
+```text
+archive:2026-08-01-old-change
+  --archived_from--> old-change
+```
+
+The adapter preserves OpenSpec's fluid workflow. `proposal.md` is preferred as the primary active artifact, but if artifacts are created in another order the first available change artifact can represent the work item without imposing an artificial waterfall.
+
+Archived changes remain searchable/indexable historical knowledge but never become active board items.
 
 A representative fixture lives under:
 
@@ -208,7 +222,7 @@ A representative fixture lives under:
 internal/specs/testdata/openspec/
 ```
 
-and validates current knowledge, an active change, delta relations, task-derived status, fluid artifact order, and archive exclusion.
+and validates project policy, current knowledge, an active change, delta relations, task-derived status, fluid artifact order, archive history, and archive exclusion from the board.
 
 ## Adapter detection
 
@@ -242,11 +256,13 @@ A future SQLite database may index normalized artifacts, relations, full-text se
 
 SQLite is not canonical intent storage. The projection must remain rebuildable from authoritative adapters.
 
+OpenSpec archive indexing is intentionally included now so a future SQLite/FTS rebuild can recover historical change rationale from repository files rather than from an opaque cache.
+
 ## UI
 
 No UI redesign is part of H10.
 
-The current dashboard remains a projection over the normalized model. Future list, board, graph, timeline, evidence, and workspace views can consume the same model without adapter-specific path logic.
+The current dashboard remains a projection over the normalized model. Future list, board, graph, timeline, evidence, history, and workspace views can consume the same model without adapter-specific path logic.
 
 ## Acceptance
 
@@ -257,9 +273,10 @@ The current dashboard remains a projection over the normalized model. Future lis
 - adapters define their own watch roots;
 - normalized artifacts represent semantic kind, knowledge/work plane, primary/supporting role, work-item identity, and relations;
 - GitHub Spec Kit supporting artifacts are indexed without becoming duplicate board cards;
+- OpenSpec project config is indexed as policy knowledge;
 - OpenSpec current specs are indexed as knowledge rather than active work;
 - OpenSpec active changes become one work item with supporting artifacts;
-- OpenSpec archive does not reappear as active work;
+- OpenSpec archived changes remain historical knowledge and never reappear as active work;
 - current UI contains no Spec Kit or OpenSpec path logic;
 - no Jira/Linear behavior is introduced;
 - no specification editing is introduced;
@@ -267,7 +284,7 @@ The current dashboard remains a projection over the normalized model. Future lis
 
 ## Verification
 
-The GitHub Actions code gate passed with:
+The GitHub Actions code gate must pass with:
 
 ```text
 gofmt            PASS

@@ -23,6 +23,9 @@ func TestHostMaterialFingerprintIgnoresHeartbeatLastSeen(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := filepath.Join(t.TempDir(), "wms")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	observation := hoststate.Observation{Agent: "Codex", PID: 101, RepositoryRoot: root}
 	now := time.Date(2026, 8, 22, 2, 0, 0, 0, time.Local)
 	if _, err := catalog.Observe([]hoststate.Observation{observation}, now); err != nil {
@@ -53,6 +56,9 @@ func TestHostMaterialFingerprintChangesWhenExecutionStops(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := filepath.Join(t.TempDir(), "wms")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	now := time.Date(2026, 8, 22, 2, 0, 0, 0, time.Local)
 	if _, err := catalog.Observe([]hoststate.Observation{{Agent: "Codex", PID: 101, RepositoryRoot: root}}, now); err != nil {
 		t.Fatal(err)

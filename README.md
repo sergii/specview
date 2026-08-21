@@ -10,14 +10,24 @@ See [`SPEC.md`](SPEC.md) for the canonical v0.0.1 POC specification.
 
 ## Architecture
 
-Specview observes a project filesystem. The filesystem is the source of truth. Specview does not edit specifications or manage their state.
+Specview observes a project filesystem. The filesystem is the source of truth for repo-native intent. Specview does not edit specifications or manage their state.
+
+The longer-term architecture separates three dimensions:
+
+```text
+INTENT | EXECUTION | EVIDENCE
+```
+
+Repository specification adapters normalize Intent. Runtime/SCM adapters will normalize Execution. Evidence adapters normalize verification results without making Specview the test runner or CI system.
 
 ```text
 agent / developer
-      -> edits specs/*.md
+      -> edits repo-native specifications
       -> Specview observes
       -> live dashboard updates
 ```
+
+Specview-owned runtime material uses the ignored `.specview/` directory. Durable configuration remains in `.specview.yaml`.
 
 ## Try the ephemeral demo
 
@@ -100,14 +110,16 @@ cd your-project
 specview init
 ```
 
-This creates:
+This creates native Specview configuration and an artifact root when no stronger supported SDD convention is detected.
+
+Typical native layout:
 
 ```text
 .specview.yaml
 specs/
 ```
 
-Default configuration:
+Default native configuration:
 
 ```yaml
 version: 1
@@ -117,6 +129,7 @@ project:
   root: "."
 
 specs:
+  adapter: specview
   path: specs
   pattern: "*.md"
 
@@ -133,7 +146,7 @@ The leading dot in `.specview.yaml` is intentional: it is tooling metadata, not 
 
 ## Specification status contract
 
-Specifications are regular Markdown files. Status is namespaced under `specview` in YAML front matter:
+Native Specview specifications are regular Markdown files. Status is namespaced under `specview` in YAML front matter:
 
 ```markdown
 ---
@@ -156,7 +169,26 @@ done
 
 A specification without front matter defaults to `new`. An unknown status remains visible in the dashboard under **Metadata errors** instead of being silently ignored.
 
+## Evidence contract
+
+The normalized Evidence layer is documented in:
+
+```text
+specs/H11-normalized-evidence-contract.md
+docs/evidence/native-evidence.md
+```
+
+The first passive bridge observes strict JSON evidence records under:
+
+```text
+.specview/evidence/
+```
+
+Evidence is revision-scoped and distinguishes a stable logical `check` from the concrete `provider` that produced it. Acceptance policy is intentionally a separate follow-up layer.
+
 ## Observe
+
+Start Specview from a configured project directory:
 
 ```bash
 specview
@@ -168,87 +200,4 @@ or:
 specview serve
 ```
 
-Open:
-
-```text
-http://127.0.0.1:7331
-```
-
-Specview watches the configured `specs` path. Create, edit, rename, or delete a specification and the browser updates automatically through Server-Sent Events.
-
-For a remote devbox:
-
-```bash
-ssh -L 7331:127.0.0.1:7331 your-devbox
-```
-
-Then open `http://127.0.0.1:7331` locally.
-
-## Dashboard philosophy
-
-The POC UI is deliberately minimal:
-
-- one header
-- project name and specs path
-- three columns: New, In progress, Done
-- simple specification cards
-- metadata errors when present
-- one detail view
-- no sidebar
-- no filters
-- no drag and drop
-- no task-management controls
-
-The dashboard is a read-only projection of filesystem state, not another project-management system.
-
-## Scope of v0.0.1
-
-Included:
-
-- one Go binary
-- `.specview.yaml`
-- optional project name
-- configurable `project.root`, default `.`
-- `specs/` by default
-- `new`, `in_progress`, `done`
-- recursive Markdown discovery
-- filesystem observation with a lightweight polling snapshot (250 ms)
-- Markdown source preview
-- live browser refresh over SSE
-- graceful SIGINT/SIGTERM shutdown with active SSE clients
-- metadata-error visibility
-- loopback HTTP server by default
-- GitHub Actions CI
-- macOS/Linux release archives for amd64/arm64
-- SHA-256 checksums
-- `install.sh`
-- agent-neutral ephemeral demo recipe
-- dogfooding specs in this repository
-
-Explicitly not included:
-
-- embedded demo files
-- automatic demo cloning
-- persistent demo state as a product requirement
-- database
-- authentication
-- write API
-- task management
-- spec generation
-- Git status integration in v0.0.1
-- GitHub integration
-- AI/LLM calls inside Specview
-
-## Development
-
-CI and release builds use Go 1.26.x; the POC source intentionally stays compatible with Go 1.23+ and has no runtime or module dependencies.
-
-```bash
-go test ./...
-go vet ./...
-go build ./cmd/specview
-```
-
-## Releases
-
-Normal releases can be created by pushing a `v*` tag. For the first POC, the **Release** workflow can also be started manually with a version such as `v0.0.1`; it creates the GitHub Release and attaches all four platform archives plus `SHA256SUMS`.
+The server binds to the configured local address and renders the current read-only dashboard.

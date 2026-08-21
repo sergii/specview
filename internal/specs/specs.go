@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+const SpecviewAdapterName = "specview"
+
 type Status string
 
 const (
@@ -27,28 +29,92 @@ var validStatuses = map[Status]struct{}{
 	StatusDone:       {},
 }
 
+type ArtifactKind string
+
+const (
+	ArtifactPolicy      ArtifactKind = "policy"
+	ArtifactProposal    ArtifactKind = "proposal"
+	ArtifactSpec        ArtifactKind = "spec"
+	ArtifactRequirement ArtifactKind = "requirement"
+	ArtifactExample     ArtifactKind = "example"
+	ArtifactRFC         ArtifactKind = "rfc"
+	ArtifactDecision    ArtifactKind = "decision"
+	ArtifactDesign      ArtifactKind = "design"
+	ArtifactPlan        ArtifactKind = "plan"
+	ArtifactTask        ArtifactKind = "task"
+	ArtifactContract    ArtifactKind = "contract"
+	ArtifactResearch    ArtifactKind = "research"
+	ArtifactChecklist   ArtifactKind = "checklist"
+)
+
+type Relation struct {
+	Type   string
+	Target string
+}
+
 type Spec struct {
+	ID         string
+	Kind       ArtifactKind
 	Path       string
 	Title      string
 	Status     Status
 	ModifiedAt time.Time
 	Body       string
 	Error      string
+	Relations  []Relation
+}
+
+type Adapter interface {
+	Name() string
+	Scan() ([]Spec, error)
+}
+
+type SpecviewAdapter struct {
+	root    string
+	pattern string
+}
+
+func NewSpecviewAdapter(root, pattern string) *SpecviewAdapter {
+	return &SpecviewAdapter{root: root, pattern: pattern}
+}
+
+func (a *SpecviewAdapter) Name() string {
+	return SpecviewAdapterName
+}
+
+func (a *SpecviewAdapter) Scan() ([]Spec, error) {
+	return scan(a.root, a.pattern)
+}
+
+func NewAdapter(name, root, pattern string) (Adapter, error) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "", SpecviewAdapterName:
+		return NewSpecviewAdapter(root, pattern), nil
+	default:
+		return nil, fmt.Errorf("unsupported specs adapter %q", name)
+	}
 }
 
 type Store struct {
-	root    string
-	pattern string
+	adapter Adapter
 	mu      sync.RWMutex
 	items   []Spec
 }
 
 func NewStore(root, pattern string) *Store {
-	return &Store{root: root, pattern: pattern}
+	return NewStoreWithAdapter(NewSpecviewAdapter(root, pattern))
+}
+
+func NewStoreWithAdapter(adapter Adapter) *Store {
+	return &Store{adapter: adapter}
+}
+
+func (s *Store) AdapterName() string {
+	return s.adapter.Name()
 }
 
 func (s *Store) Refresh() error {
-	items, err := scan(s.root, s.pattern)
+	items, err := s.adapter.Scan()
 	if err != nil {
 		return err
 	}
@@ -148,13 +214,18 @@ func parseFile(fullPath, relPath string) (Spec, error) {
 		title = strings.TrimSuffix(filepath.Base(relPath), filepath.Ext(relPath))
 	}
 
+	id := strings.TrimSuffix(filepath.Base(relPath), filepath.Ext(relPath))
+
 	return Spec{
+		ID:         id,
+		Kind:       ArtifactSpec,
 		Path:       relPath,
 		Title:      title,
 		Status:     status,
 		ModifiedAt: info.ModTime(),
 		Body:       string(body),
 		Error:      validationError,
+		Relations:  nil,
 	}, nil
 }
 

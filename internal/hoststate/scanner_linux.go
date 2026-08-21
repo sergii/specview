@@ -47,3 +47,20 @@ func (CodexScanner) Scan() ([]Observation, error) {
 	}
 	return observations, nil
 }
+
+func diagnoseCodex() ([]ScanDiagnostic, error) {
+	observations, err := (CodexScanner{}).Scan()
+	if err != nil {
+		return nil, err
+	}
+	diagnostics := make([]ScanDiagnostic, 0, len(observations))
+	for _, observation := range observations {
+		diagnostics = append(diagnostics, ScanDiagnostic{
+			PID:            observation.PID,
+			Matched:        true,
+			RepositoryRoot: observation.RepositoryRoot,
+			Stage:          "ok",
+		})
+	}
+	return diagnostics, nil
+}

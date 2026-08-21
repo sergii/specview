@@ -25,7 +25,7 @@ func TestRecordRequiresRevision(t *testing.T) {
 	}
 }
 
-func TestAcceptanceEligibleRequiresMatchingRevisionAndPass(t *testing.T) {
+func TestPassedForRevisionRequiresMatchingRevisionAndPass(t *testing.T) {
 	finished := time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC)
 	record := Record{
 		Version:    1,
@@ -42,14 +42,14 @@ func TestAcceptanceEligibleRequiresMatchingRevisionAndPass(t *testing.T) {
 	if err := record.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if !record.AcceptanceEligible("git:abc123") {
-		t.Fatal("matching passed evidence should be acceptance eligible")
+	if !record.PassedForRevision("git:abc123") {
+		t.Fatal("matching passed evidence should be reported as a current pass")
 	}
-	if record.AcceptanceEligible("git:def456") {
-		t.Fatal("stale evidence must not be acceptance eligible")
+	if record.PassedForRevision("git:def456") {
+		t.Fatal("stale evidence must not pass for another revision")
 	}
 	record.Result = ResultSkipped
-	if record.AcceptanceEligible("git:abc123") {
+	if record.PassedForRevision("git:abc123") {
 		t.Fatal("skipped evidence must not be equivalent to passed")
 	}
 }

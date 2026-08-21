@@ -34,6 +34,8 @@ func run(args []string) error {
 		return serve()
 	case "init":
 		return initProject()
+	case "doctor":
+		return doctor()
 	case "version", "--version", "-v":
 		fmt.Printf("Specview %s\n", version)
 		return nil
@@ -67,6 +69,38 @@ func initProject() error {
 		fmt.Printf("• %s/ already exists\n", artifactPath)
 	}
 	fmt.Println("\nRun 'specview' to start observing this host.")
+	return nil
+}
+
+func doctor() error {
+	diagnostics, err := hoststate.DiagnoseCodex()
+	if err != nil {
+		return fmt.Errorf("diagnose Codex discovery: %w", err)
+	}
+
+	fmt.Println("Specview doctor - Codex discovery")
+	if len(diagnostics) == 0 {
+		fmt.Println("Matched Codex processes: 0")
+		return nil
+	}
+	fmt.Printf("Matched Codex processes: %d\n", len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		fmt.Printf("\nPID %d\n", diagnostic.PID)
+		if diagnostic.Command != "" {
+			fmt.Printf("  command: %s\n", diagnostic.Command)
+		}
+		fmt.Printf("  matched: %t\n", diagnostic.Matched)
+		if diagnostic.CWD != "" {
+			fmt.Printf("  cwd: %s\n", diagnostic.CWD)
+		}
+		if diagnostic.RepositoryRoot != "" {
+			fmt.Printf("  repository: %s\n", diagnostic.RepositoryRoot)
+		}
+		fmt.Printf("  stage: %s\n", diagnostic.Stage)
+		if diagnostic.Error != "" {
+			fmt.Printf("  error: %s\n", diagnostic.Error)
+		}
+	}
 	return nil
 }
 
@@ -106,6 +140,7 @@ Usage:
   specview              Start the host dashboard and observe active repositories
   specview serve        Start the host dashboard and observe active repositories
   specview init         Detect the current repository convention and create .specview.yaml
+  specview doctor       Diagnose host Codex process -> cwd -> Git repository discovery
   specview version      Print the version
   specview help         Show this help
 

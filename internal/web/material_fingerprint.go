@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sergii/specview/internal/config"
+	"github.com/sergii/specview/internal/hoststate"
 	"github.com/sergii/specview/internal/sourcecontrol"
 	"github.com/sergii/specview/internal/specs"
 )
@@ -84,7 +85,24 @@ func (s *HostServer) projectMaterialFingerprint(ctx context.Context, projectID s
 		return "", err
 	}
 	if store != nil {
-		populateProjectArtifacts(&data, store)
+		for _, item := range store.All() {
+			if !item.IsBoardItem() {
+				continue
+			}
+			data.Total++
+			if item.Error != "" {
+				data.Invalid = append(data.Invalid, item)
+				continue
+			}
+			switch item.Status {
+			case specs.StatusNew:
+				data.New = append(data.New, item)
+			case specs.StatusInProgress:
+				data.InProgress = append(data.InProgress, item)
+			case specs.StatusDone:
+				data.Done = append(data.Done, item)
+			}
+		}
 	}
 
 	sourceContext, err := s.sourceControl.Inspect(ctx, repository.Root)
@@ -122,14 +140,29 @@ func (s *HostServer) projectMaterialFingerprint(ctx context.Context, projectID s
 	return hashMaterial(material)
 }
 
-func materialRepository(repository interface {
-	Active() bool
-	ActiveAgentLabel() string
-}) hostMaterialRepository {
-	// This helper is intentionally implemented through the concrete hoststate
-	// repository below. Keeping material shaping here prevents heartbeat fields
-	// from leaking into the SSE digest.
-	return hostMaterialRepository{}
+func materialRepository(repository hoststate.Repository) hostMaterialRepository {
+	sessions := make([]hostMaterialSession, 0, len(repository.Sessions))
+	for _, session := range repository.Sessions {
+		sessions = append(sessions, hostMaterialSession{
+			ID:        session.ID,
+			Agent:     session.Agent,
+			PID:       session.PID,
+			StartedAt: session.StartedAt,
+			EndedAt:   session.EndedAt,
+			Active:    session.Active,
+		})
+	}
+	sort.Slice(sessions, func(i, j int) bool { return sessions[i].ID < sessions[j].ID })
+	return hostMaterialRepository{
+		ID:             repository.ID,
+		Name:           repository.Name,
+		Root:           repository.Root,
+		Convention:     repository.Convention,
+		DetectionError: repository.DetectionError,
+		Active:         repository.Active(),
+		ActiveAgent:    repository.ActiveAgentLabel(),
+		Sessions:       sessions,
+	}
 }
 
 func stableArtifacts(items []specs.Artifact) []specs.Artifact {

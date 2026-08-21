@@ -9,7 +9,7 @@ import (
 )
 
 func (CodexScanner) Scan() ([]Observation, error) {
-	output, err := exec.Command("ps", "-axo", "pid=,command=").Output()
+	output, err := exec.Command("ps", "-axww", "-o", "pid=,command=").Output()
 	if err != nil {
 		return nil, err
 	}

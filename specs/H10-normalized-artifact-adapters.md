@@ -146,6 +146,35 @@ all Markdown task checkboxes in tasks.md complete -> done
 
 This is a compatibility projection, not a GitHub Spec Kit status standard.
 
+## Representative fixture
+
+The adapter is validated against a repository fixture under:
+
+```text
+internal/specs/testdata/github-spec-kit/
+```
+
+The fixture follows the current Spec Kit document shapes closely enough to exercise the real adapter boundary rather than isolated parser helpers. It includes:
+
+- `.specify/memory/constitution.md`;
+- a feature `spec.md` with feature branch, Draft status, user scenario, acceptance scenarios, and functional requirements;
+- `plan.md`;
+- `research.md`;
+- partially completed `tasks.md` using Spec Kit checkbox syntax;
+- `contracts/api.yaml`.
+
+The integration test exercises:
+
+```text
+NewAdapter
+  -> GitHubSpecKitAdapter
+  -> Store.Refresh
+  -> normalized Artifact[]
+  -> feature status + supporting artifacts + relations
+```
+
+Spec Kit's own `**Status**: Draft` field remains source-framework metadata. Specview does not reinterpret it as the execution workflow state; the current compatibility board state is derived separately from plan/tasks progress.
+
 ## Current truth vs work in flight
 
 The normalized model must be capable of representing the OpenSpec-style distinction between:
@@ -190,6 +219,7 @@ The adapter/core boundary should allow future list, board, graph, timeline, evid
 - GitHub Spec Kit supporting artifacts are indexed but do not become extra dashboard cards;
 - normalized artifacts expose stable semantic kinds independent of directory names;
 - normalized relations can be represented even if the current UI does not render all of them;
+- representative Spec Kit repository structure is covered by an end-to-end adapter fixture;
 - unsupported adapter names fail explicitly rather than silently choosing another interpretation;
 - no Jira/Linear task-management behavior is introduced;
 - no specification editing is introduced;
@@ -214,15 +244,16 @@ Completed:
 - Spec Kit feature artifacts map to normalized semantic kinds;
 - current Spec Kit feature status is deterministically projected from plan/tasks artifacts;
 - `specview init` detects `.specify/` and writes the GitHub Spec Kit adapter;
+- representative GitHub Spec Kit fixture added and exercised through the production adapter/store boundary;
 - current dashboard remains visually spec-oriented while the Store can contain additional artifact kinds.
 
 Remaining H10 work:
 
-- verify the adapter against representative real Spec Kit repositories and edge cases;
+- evaluate edge cases from additional real-world Spec Kit repositories as they appear;
 - extract individual requirements and tasks only if needed by the normalized relation model;
 - implement broader runtime auto-detection only if it can remain unambiguous and backward-compatible;
 - parse normalized relations from native Specview metadata once the relation contract is finalized;
-- decide whether H10 should close after GitHub Spec Kit validation or include a second foreign adapter to prove the contract further.
+- decide whether H10 should close after CI validation or include a second foreign adapter to prove the contract further.
 
 ## References
 

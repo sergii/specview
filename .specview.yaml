@@ -5,6 +5,7 @@ project:
   root: "."
 
 specs:
+  adapter: specview
   path: specs
   pattern: "*.md"
 

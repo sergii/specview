@@ -111,19 +111,31 @@ Deleting the local Specview database must not destroy canonical project knowledg
 
 Specview normalizes external conventions instead of forcing every project into one directory format.
 
+The native Specview convention is owned by `SpecviewAdapter`:
+
+```text
+specs/
+  H01.md
+  H02.md
+```
+
+`SpecviewAdapter` is the zero-config/default adapter and preserves the original v0.0.1 behavior. It is not a generic name for every Markdown layout.
+
 Initial adapter classes:
 
-- artifact adapters: Generic Markdown, GitHub Spec Kit, OpenSpec, Kiro, BMAD, custom company layouts;
+- artifact adapters: SpecviewAdapter, GitHub Spec Kit, OpenSpec, Kiro, BMAD, and future custom company adapters;
 - SCM adapters: Git, GitHub, later GitLab and others;
 - execution adapters: filesystem, generic processes, Codex, Claude Code, OpenCode, Docker, systemd, and others;
 - verification adapters: test, lint, security, architecture, performance, hardware, and other evidence producers;
 - review adapters: human, AI reviewer, GitHub review, and other approval mechanisms.
 
+A future custom Markdown adapter may observe arbitrary company-specific directories, but it is semantically distinct from `SpecviewAdapter`.
+
 Adapters emit normalized facts/events. The core domain model must not depend on adapter-specific file paths or tool names.
 
 ## Consequences
 
-- The existing v0.0.1 filesystem watcher remains useful as the first artifact adapter.
+- The existing v0.0.1 filesystem watcher becomes the implementation behind `SpecviewAdapter`.
 - The current dashboard can remain unchanged while the domain model evolves underneath it.
 - Future SQLite support can index and correlate artifacts without becoming their canonical store.
 - A future Go-to-Rust rewrite can preserve the same semantic and adapter contracts.

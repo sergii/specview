@@ -87,7 +87,7 @@ error    verifier failed to produce a trustworthy verdict
 skipped  verifier intentionally did not run
 ```
 
-A `passed` result can be factual for a revision, but whether that logical check is required or sufficient belongs to policy.
+A `passed` result is a fact about one revision. Whether that logical check is required or sufficient belongs to policy.
 
 ## Atomic publication
 

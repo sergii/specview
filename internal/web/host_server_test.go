@@ -56,6 +56,22 @@ func TestHostDashboardAndProjectProjection(t *testing.T) {
 			t.Fatalf("host dashboard missing %q", want)
 		}
 	}
+	if strings.Contains(body, "window.location.reload") {
+		t.Fatal("host dashboard must not reload the full page for live updates")
+	}
+
+	response = httptest.NewRecorder()
+	server.hostFragment(response, httptest.NewRequest(http.MethodGet, "/fragments/host", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("host fragment status = %d", response.Code)
+	}
+	body = response.Body.String()
+	if !strings.Contains(body, "candidate-api") || !strings.Contains(body, "Today") {
+		t.Fatalf("host fragment missing repository projection: %s", body)
+	}
+	if strings.Contains(strings.ToLower(body), "<!doctype") || strings.Contains(body, "host-search-form") {
+		t.Fatalf("host fragment rendered full page chrome: %s", body)
+	}
 
 	repo := catalog.Repositories()[0]
 	response = httptest.NewRecorder()
@@ -68,6 +84,22 @@ func TestHostDashboardAndProjectProjection(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("project page missing %q", want)
 		}
+	}
+	if strings.Contains(body, "window.location.reload") {
+		t.Fatal("project page must not reload the full page for live updates")
+	}
+
+	response = httptest.NewRecorder()
+	server.projectFragment(response, httptest.NewRequest(http.MethodGet, "/fragments/project?id="+repo.ID, nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("project fragment status = %d body=%s", response.Code, response.Body.String())
+	}
+	body = response.Body.String()
+	if !strings.Contains(body, `id="project-live"`) || !strings.Contains(body, "Worktrees") {
+		t.Fatalf("project fragment missing live projection: %s", body)
+	}
+	if strings.Contains(strings.ToLower(body), "<!doctype") || strings.Contains(body, "<header") {
+		t.Fatalf("project fragment rendered full page chrome: %s", body)
 	}
 }
 
@@ -140,5 +172,12 @@ func TestHostDashboardSearchUsesIndexIdentityAndLiveCatalogProjection(t *testing
 	}
 	if strings.Contains(body, "candidate-api") {
 		t.Fatalf("search leaked unmatched repository: %s", body)
+	}
+
+	response = httptest.NewRecorder()
+	server.hostFragment(response, httptest.NewRequest(http.MethodGet, "/fragments/host?q=spotwo", nil))
+	body = response.Body.String()
+	if !strings.Contains(body, "Results") || !strings.Contains(body, "wms") {
+		t.Fatalf("live search fragment missing: %s", body)
 	}
 }

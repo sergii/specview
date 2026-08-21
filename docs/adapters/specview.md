@@ -4,22 +4,27 @@
 
 ## Native convention
 
-The default root is:
+Specview separates tool metadata from project knowledge.
+
+```text
+repo/
+├── .specview.yaml       # versioned Specview configuration / adapter selection
+├── .specview/           # reserved runtime namespace, cache/index later
+└── specs/               # user-owned durable specification artifacts
+    ├── H01.md
+    ├── H02.md
+    └── H03.md
+```
+
+The default artifact root is:
 
 ```text
 specs/
 ```
 
-The minimal layout is intentionally lightweight:
+`specs/` is ordinary repository content. It is not, by itself, a reliable signature that a repository uses the native Specview format because other SDD systems, including GitHub Spec Kit, also use a top-level `specs/` directory.
 
-```text
-specs/
-  H01.md
-  H02.md
-  H03.md
-```
-
-Each Markdown file is projected as a normalized artifact with at least:
+Each native Markdown file is projected as a normalized artifact with at least:
 
 ```text
 id
@@ -43,7 +48,7 @@ specview:
 
 A file without status metadata defaults to `new`.
 
-## Configuration
+## Configuration and identity
 
 Explicit configuration:
 
@@ -54,35 +59,35 @@ specs:
   pattern: "*.md"
 ```
 
-For backward compatibility, an omitted `specs.adapter` currently resolves to `specview`.
+For backward compatibility, an omitted `specs.adapter` in `.specview.yaml` currently resolves to `specview`.
 
-## Adapter identity
+`.specview.yaml` means the repository has explicitly configured Specview. It does not necessarily mean the native adapter forever: the configuration may later select `github-spec-kit`, `openspec`, `kiro`, or another adapter.
 
-`SpecviewAdapter` is not a synonym for "any directory containing Markdown".
+The `.specview/` directory is reserved for Specview-owned runtime material such as a rebuildable SQLite projection, indexes, sockets, or transient state. It must not become the canonical store for project intent.
 
-A future custom Markdown adapter may support arbitrary company-specific layouts and metadata. Keeping that concern separate prevents the native Specview contract from becoming ambiguous.
+`SpecviewAdapter` is not a synonym for "any directory containing Markdown". A future custom Markdown adapter may support arbitrary company-specific layouts and metadata.
 
 ## Detection precedence
 
-Other SDD frameworks may also use `specs/`. GitHub Spec Kit is the important example.
-
-Future zero-config detection must therefore prefer specific framework signatures before falling back to `SpecviewAdapter`:
+Adapter selection follows authority rather than folder-name guessing:
 
 ```text
-.specify/          -> GitHub Spec Kit adapter
-openspec/          -> OpenSpec adapter
-.kiro/specs/       -> Kiro adapter
-_bmad-output/      -> BMAD adapter
-specs/             -> SpecviewAdapter fallback
+1. .specview.yaml with explicit adapter   -> configured adapter
+2. .specview.yaml without adapter         -> SpecviewAdapter (compatibility default)
+3. .specify/                              -> GitHub Spec Kit adapter
+4. openspec/                              -> OpenSpec adapter
+5. .kiro/specs/                           -> Kiro adapter
+6. _bmad-output/                          -> BMAD adapter
+7. specs/ only                            -> ambiguous, not a Specview signature
 ```
 
-Explicit configuration always wins over detection.
+A plain top-level `specs/` directory may still be observed after explicit configuration, but Specview should not silently claim ownership of its semantics during framework auto-detection.
 
 ## Source of truth
 
 `SpecviewAdapter` reads repository files. It does not own canonical project intent and does not write status changes.
 
-A future SQLite projection may cache and index the normalized artifacts, but deleting that database must not remove project knowledge.
+A future SQLite projection under `.specview/` may cache and index normalized artifacts, but deleting that runtime state must not remove project knowledge.
 
 ## UI independence
 

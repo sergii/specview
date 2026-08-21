@@ -51,6 +51,8 @@ Linux
 
 `XDG_STATE_HOME` remains respected through the catalog state directory.
 
+The state directory is private (`0700`) and the SQLite database is explicitly protected as `0600` after creation.
+
 The SQLite schema is versioned and starts with:
 
 ```text
@@ -117,12 +119,15 @@ If the index cannot be opened or synchronized:
 - repository pages continue to work;
 - search reports that the host index is unavailable.
 
+After a synchronization failure the index marks itself stale instead of silently serving the previous snapshot. A later successful runtime sync clears the stale condition automatically.
+
 Index failure must never stop Codex discovery or make an observed repository disappear from the unfiltered host page.
 
 ## Acceptance criteria
 
 - [x] SQLite host index is a separate package from portable host domain state.
 - [x] SQLite database lives outside observed repositories in the host state directory.
+- [x] Host state directory/database permissions remain private.
 - [x] Schema version is explicit.
 - [x] Repository and execution-session history are projected into SQLite.
 - [x] The index is rebuildable from the host catalog.
@@ -130,7 +135,7 @@ Index failure must never stop Codex discovery or make an observed repository dis
 - [x] Search matches repository name, path, convention, and agent.
 - [x] Search returns repository identity while live catalog state remains UI authority.
 - [x] Host page exposes a restrained search UI without changing repository/project hierarchy.
-- [x] SQLite failure degrades search independently from host observation.
+- [x] SQLite failure/staleness degrades search independently from host observation.
 - [x] SQLite implementation is CGO-free and not OS-specific.
 - [ ] `gofmt`, module verification, `go vet`, race tests, build, and release cross-build pass.
 - [ ] Real macOS host confirms `index.sqlite` creation and live repository search.

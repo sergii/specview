@@ -112,10 +112,10 @@ This separation prevents stale index rows from becoming UI authority.
 
 The browser must not reload the full page when host state changes.
 
-Specview keeps the existing Server-Sent Events connection as the server-to-browser notification channel:
+Specview keeps Server-Sent Events as the server-to-browser notification channel:
 
 ```text
-host/runtime change
+material state change
       ↓
 SSE `changed`
       ↓
@@ -131,6 +131,34 @@ Search requests use a short debounce and `AbortController` so fast typing cancel
 The repository page uses the same pattern and refreshes only its live repository projection. The top-bar execution label is synchronized from fragment metadata.
 
 No frontend framework is required for this slice. Browser-native `EventSource`, `fetch`, `AbortController`, History API, and DOM replacement are sufficient.
+
+### Material event filtering
+
+A scanner heartbeat is not automatically a browser event.
+
+Each SSE connection has an explicit projection scope:
+
+```text
+/events?scope=host
+/events?scope=project&id=<repository-id>
+```
+
+The server keeps a stable material fingerprint for that scope. Runtime pulses and a one-second server-side probe recompute the fingerprint, but `event: changed` is emitted only when the digest changes.
+
+The host fingerprint intentionally excludes `LastSeenAt`, so seeing the same process again two seconds later does not cause an SSE event. It includes repository identity, specification convention/error state, and execution-session start/stop identity.
+
+The repository fingerprint includes the state actually projected by the repository page:
+
+- logical execution session identity, location, start time, and process count;
+- Git worktrees, branch/HEAD, dirty count, upstream, ahead/behind, and last commit;
+- provider PR/check context;
+- specification convention and parsed work artifacts.
+
+Raw process PID replacement is not treated as a UI change when the logical execution shape and displayed process count stay the same.
+
+The periodic server-side probe is intentional. It lets an idle repository page notice Git/spec/provider changes without browser polling and without requiring a full recursive filesystem watcher. Browser clients only listen to SSE.
+
+SSE comments remain available as transport keepalives; keepalives are not `changed` events and never trigger fragment fetches.
 
 ## Failure semantics
 
@@ -164,10 +192,14 @@ A failed fragment fetch leaves the last successfully rendered DOM in place. It m
 - [x] Host and repository pages use SSE-triggered fragment refresh instead of full-page reload.
 - [x] Search input/focus are outside the replaced live region.
 - [x] Search uses debounce plus request cancellation for out-of-order protection.
+- [x] SSE connections are scoped to host or one repository projection.
+- [x] Heartbeat-only `last_seen` updates do not change the host material fingerprint.
+- [x] Execution stop/start changes the host material fingerprint.
+- [x] Git dirty-state changes the repository material fingerprint.
 - [x] SQLite failure/staleness degrades search independently from host observation.
 - [x] SQLite implementation is CGO-free and not OS-specific.
 - [ ] `gofmt`, module verification, `go vet`, race tests, build, and release cross-build pass.
-- [ ] Real macOS host confirms `index.sqlite` creation, live repository search, and reload-free SSE updates while typing.
+- [ ] Real macOS host confirms `index.sqlite` creation, live repository search, reload-free updates, and no fragment request on heartbeat-only SSE pulses.
 
 ## Out of scope
 
@@ -178,6 +210,7 @@ A failed fragment fetch leaves the last successfully rendered DOM in place. It m
 - indexing GitHub PR text;
 - React, Vue, or another client-side application framework;
 - WebSocket transport while browser updates remain server-to-client notifications;
+- recursive filesystem watching for repository live projection;
 - multi-host federation;
 - retention/compaction policy for long-term history;
 - Acceptance policy.

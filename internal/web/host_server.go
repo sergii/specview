@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sergii/specview/internal/config"
@@ -17,14 +18,19 @@ import (
 	"github.com/sergii/specview/internal/specs"
 )
 
+type RepositorySearcher interface {
+	SearchRepositoryIDs(context.Context, string, int) ([]string, error)
+}
+
 type HostServer struct {
-	catalog         *hoststate.Catalog
-	hub             *Hub
-	host            string
-	port            int
-	tmpl            *template.Template
-	executionSource hoststate.ExecutionSource
-	sourceControl   sourcecontrol.Source
+	catalog          *hoststate.Catalog
+	hub              *Hub
+	host             string
+	port             int
+	tmpl             *template.Template
+	executionSource  hoststate.ExecutionSource
+	sourceControl    sourcecontrol.Source
+	repositorySearch RepositorySearcher
 }
 
 func NewHostServer(catalog *hoststate.Catalog, hub *Hub, host string, port int, executionSources ...hoststate.ExecutionSource) *HostServer {
@@ -32,16 +38,31 @@ func NewHostServer(catalog *hoststate.Catalog, hub *Hub, host string, port int, 
 	if len(executionSources) > 0 && executionSources[0] != nil {
 		executionSource = executionSources[0]
 	}
-	return NewHostServerWithSources(catalog, hub, host, port, executionSource, sourcecontrol.DefaultService())
+	return newHostServer(catalog, hub, host, port, executionSource, sourcecontrol.DefaultService(), nil)
 }
 
-func NewHostServerWithSources(catalog *hoststate.Catalog, hub *Hub, host string, port int, executionSource hoststate.ExecutionSource, sourceControl sourcecontrol.Source) *HostServer {
+func NewHostServerWithSources(catalog *hoststate.Catalog, hub *Hub, host string, port int, executionSource hoststate.ExecutionSource, sourceControl sourcecontrol.Source, searchers ...RepositorySearcher) *HostServer {
 	if executionSource == nil {
 		executionSource = hoststate.DefaultExecutionRegistry()
 	}
 	if sourceControl == nil {
 		sourceControl = sourcecontrol.DefaultService()
 	}
+	var searcher RepositorySearcher
+	if len(searchers) > 0 {
+		searcher = searchers[0]
+	}
+	return newHostServer(catalog, hub, host, port, executionSource, sourceControl, searcher)
+}
+
+func NewHostServerWithSearch(catalog *hoststate.Catalog, hub *Hub, host string, port int, executionSource hoststate.ExecutionSource, searcher RepositorySearcher) *HostServer {
+	if executionSource == nil {
+		executionSource = hoststate.DefaultExecutionRegistry()
+	}
+	return newHostServer(catalog, hub, host, port, executionSource, sourcecontrol.DefaultService(), searcher)
+}
+
+func newHostServer(catalog *hoststate.Catalog, hub *Hub, host string, port int, executionSource hoststate.ExecutionSource, sourceControl sourcecontrol.Source, searcher RepositorySearcher) *HostServer {
 	funcs := template.FuncMap{
 		"since": func(t time.Time) string { return since(t) },
 		"projectItem": func(repoID string, item specs.Artifact) projectItemData {
@@ -50,13 +71,14 @@ func NewHostServerWithSources(catalog *hoststate.Catalog, hub *Hub, host string,
 	}
 	tmpl := template.Must(template.New("host.html").Funcs(funcs).ParseFS(templateFS, "templates/*.html"))
 	return &HostServer{
-		catalog:         catalog,
-		hub:             hub,
-		host:            host,
-		port:            port,
-		tmpl:            tmpl,
-		executionSource: executionSource,
-		sourceControl:   sourceControl,
+		catalog:          catalog,
+		hub:              hub,
+		host:             host,
+		port:             port,
+		tmpl:             tmpl,
+		executionSource:  executionSource,
+		sourceControl:    sourceControl,
+		repositorySearch: searcher,
 	}
 }
 
@@ -97,28 +119,58 @@ func (s *HostServer) ListenAndServe(ctx context.Context) error {
 }
 
 type hostData struct {
-	Hostname  string
-	Today     []hoststate.Repository
-	Yesterday []hoststate.Repository
-	Earlier   []hoststate.Repository
-	Total     int
+	Hostname    string
+	Query       string
+	Filtered    bool
+	SearchError string
+	Results     []hoststate.Repository
+	Today       []hoststate.Repository
+	Yesterday   []hoststate.Repository
+	Earlier     []hoststate.Repository
+	Total       int
 }
 
-func (s *HostServer) index(w http.ResponseWriter, _ *http.Request) {
+func (s *HostServer) index(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	startToday := startOfDay(now)
 	startYesterday := startToday.AddDate(0, 0, -1)
 
-	data := hostData{Hostname: s.catalog.Hostname()}
-	for _, repo := range s.catalog.Repositories() {
-		data.Total++
-		switch {
-		case !repo.LastSeenAt.Before(startToday):
-			data.Today = append(data.Today, repo)
-		case !repo.LastSeenAt.Before(startYesterday):
-			data.Yesterday = append(data.Yesterday, repo)
-		default:
-			data.Earlier = append(data.Earlier, repo)
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	data := hostData{Hostname: s.catalog.Hostname(), Query: query, Filtered: query != ""}
+	repositories := s.catalog.Repositories()
+
+	if query != "" {
+		if s.repositorySearch == nil {
+			data.SearchError = "Host index unavailable."
+		} else {
+			ids, err := s.repositorySearch.SearchRepositoryIDs(r.Context(), query, 100)
+			if err != nil {
+				data.SearchError = "Host index search unavailable."
+			} else {
+				matches := make(map[string]struct{}, len(ids))
+				for _, id := range ids {
+					matches[id] = struct{}{}
+				}
+				for _, repo := range repositories {
+					if _, ok := matches[repo.ID]; !ok {
+						continue
+					}
+					data.Results = append(data.Results, repo)
+				}
+				data.Total = len(data.Results)
+			}
+		}
+	} else {
+		for _, repo := range repositories {
+			data.Total++
+			switch {
+			case !repo.LastSeenAt.Before(startToday):
+				data.Today = append(data.Today, repo)
+			case !repo.LastSeenAt.Before(startYesterday):
+				data.Yesterday = append(data.Yesterday, repo)
+			default:
+				data.Earlier = append(data.Earlier, repo)
+			}
 		}
 	}
 

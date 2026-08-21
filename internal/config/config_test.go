@@ -8,12 +8,12 @@ import (
 
 func TestInitAndLoad(t *testing.T) {
 	root := t.TempDir()
-	createdConfig, createdSpecs, err := Init(root)
+	createdConfig, createdArtifacts, artifactPath, err := Init(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !createdConfig || !createdSpecs {
-		t.Fatalf("expected config and specs directory to be created")
+	if !createdConfig || !createdArtifacts || artifactPath != "specs" {
+		t.Fatalf("unexpected init result: config=%v artifacts=%v path=%q", createdConfig, createdArtifacts, artifactPath)
 	}
 	cfg, err := Load(root)
 	if err != nil {
@@ -45,12 +45,12 @@ func TestInitDetectsGitHubSpecKit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	createdConfig, _, err := Init(root)
+	createdConfig, _, artifactPath, err := Init(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !createdConfig {
-		t.Fatal("expected config to be created")
+	if !createdConfig || artifactPath != "specs" {
+		t.Fatalf("unexpected init result: config=%v path=%q", createdConfig, artifactPath)
 	}
 
 	cfg, err := Load(root)
@@ -59,6 +59,51 @@ func TestInitDetectsGitHubSpecKit(t *testing.T) {
 	}
 	if cfg.Specs.Adapter != "github-spec-kit" {
 		t.Fatalf("specs.adapter = %q, want github-spec-kit", cfg.Specs.Adapter)
+	}
+}
+
+func TestInitDetectsOpenSpecWithoutCreatingTopLevelSpecs(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "openspec", "changes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "openspec", "specs", "auth"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	createdConfig, createdArtifacts, artifactPath, err := Init(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !createdConfig || createdArtifacts || artifactPath != "openspec" {
+		t.Fatalf("unexpected init result: config=%v artifacts=%v path=%q", createdConfig, createdArtifacts, artifactPath)
+	}
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Specs.Adapter != "openspec" || cfg.Specs.Path != "openspec" {
+		t.Fatalf("unexpected OpenSpec config: %#v", cfg.Specs)
+	}
+	if _, err := os.Stat(filepath.Join(root, "specs")); !os.IsNotExist(err) {
+		t.Fatalf("top-level specs directory should not be created, stat err=%v", err)
+	}
+}
+
+func TestInitRejectsAmbiguousFrameworkDetection(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".specify"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "openspec", "changes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, _, err := Init(root); err == nil {
+		t.Fatal("expected ambiguous framework detection error")
+	}
+	if _, err := os.Stat(filepath.Join(root, FileName)); !os.IsNotExist(err) {
+		t.Fatalf("config should not be written after ambiguous detection, stat err=%v", err)
 	}
 }
 
@@ -141,12 +186,15 @@ func TestInitDoesNotOverwriteConfig(t *testing.T) {
 	if err := os.WriteFile(path, []byte(custom), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	createdConfig, _, err := Init(root)
+	createdConfig, createdArtifacts, artifactPath, err := Init(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if createdConfig {
 		t.Fatal("config should not be overwritten")
+	}
+	if !createdArtifacts || artifactPath != "custom" {
+		t.Fatalf("expected configured artifact root to be created, got created=%v path=%q", createdArtifacts, artifactPath)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {

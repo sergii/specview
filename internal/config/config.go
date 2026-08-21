@@ -12,21 +12,10 @@ import (
 
 const FileName = ".specview.yaml"
 
-var defaultConfig = []byte(`version: 1
-
-project:
-  name: ""
-  root: "."
-
-specs:
-  adapter: specview
-  path: specs
-  pattern: "*.md"
-
-server:
-  host: 127.0.0.1
-  port: 7331
-`)
+const (
+	defaultAdapterName       = "specview"
+	githubSpecKitAdapterName = "github-spec-kit"
+)
 
 type Config struct {
 	Version int
@@ -143,7 +132,7 @@ func Load(root string) (Config, error) {
 		cfg.Project.Root = "."
 	}
 	if cfg.Specs.Adapter == "" {
-		cfg.Specs.Adapter = "specview"
+		cfg.Specs.Adapter = defaultAdapterName
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, fmt.Errorf("invalid %s: %w", FileName, err)
@@ -211,7 +200,7 @@ func (c Config) ResolveProjectRoot(configRoot string) string {
 func Init(root string) (createdConfig bool, createdSpecs bool, err error) {
 	configPath := filepath.Join(root, FileName)
 	if _, statErr := os.Stat(configPath); errors.Is(statErr, os.ErrNotExist) {
-		if writeErr := os.WriteFile(configPath, defaultConfig, 0o644); writeErr != nil {
+		if writeErr := os.WriteFile(configPath, initialConfig(root), 0o644); writeErr != nil {
 			return false, false, fmt.Errorf("write %s: %w", FileName, writeErr)
 		}
 		createdConfig = true
@@ -230,4 +219,27 @@ func Init(root string) (createdConfig bool, createdSpecs bool, err error) {
 	}
 
 	return createdConfig, createdSpecs, nil
+}
+
+func initialConfig(root string) []byte {
+	adapter := defaultAdapterName
+	if info, err := os.Stat(filepath.Join(root, ".specify")); err == nil && info.IsDir() {
+		adapter = githubSpecKitAdapterName
+	}
+
+	return []byte(fmt.Sprintf(`version: 1
+
+project:
+  name: ""
+  root: "."
+
+specs:
+  adapter: %s
+  path: specs
+  pattern: "*.md"
+
+server:
+  host: 127.0.0.1
+  port: 7331
+`, adapter))
 }

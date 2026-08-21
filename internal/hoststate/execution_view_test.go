@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestParseWorktrees(t *testing.T) {
@@ -65,6 +66,51 @@ func TestInspectGitRepositoryIncludesRemoteAndDirtyState(t *testing.T) {
 	}
 	if view.Worktrees[0].ChangeLabel() != "1 change" {
 		t.Fatalf("change label = %q", view.Worktrees[0].ChangeLabel())
+	}
+}
+
+func TestRepositoryExecutionViewUsesInjectedExecutionSource(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repo")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runTestGit(t, root, "init")
+
+	started := time.Now().Add(-time.Minute)
+	repo := Repository{
+		Root: root,
+		Sessions: []Session{{
+			Agent:     "FutureAgent",
+			PID:       777,
+			StartedAt: started,
+			Active:    true,
+		}},
+	}
+	registry := NewExecutionRegistry(fakeExecutionAdapter{
+		name: "future",
+		sessions: []ExecutionSession{{
+			Adapter:        "future",
+			ID:             "execution-future",
+			Agent:          "FutureAgent",
+			CWD:            root,
+			RepositoryRoot: root,
+			WorktreeRoot:   root,
+			ProcessIDs:     []int{777},
+		}},
+	})
+
+	view := repo.ExecutionView(registry)
+	if view.Error != "" {
+		t.Fatalf("execution view error = %q", view.Error)
+	}
+	if len(view.Sessions) != 1 || view.Sessions[0].Adapter != "future" {
+		t.Fatalf("sessions = %#v", view.Sessions)
+	}
+	if !view.Sessions[0].StartedAt.Equal(started) {
+		t.Fatalf("started at = %v, want %v", view.Sessions[0].StartedAt, started)
+	}
+	if len(view.Worktrees) != 1 || view.Worktrees[0].AgentLabel() != "FutureAgent" {
+		t.Fatalf("worktrees = %#v", view.Worktrees)
 	}
 }
 

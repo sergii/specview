@@ -13,8 +13,22 @@ type Scanner interface {
 
 type CodexScanner struct{}
 
+type ScanDiagnostic struct {
+	PID            int
+	Command        string
+	Matched        bool
+	CWD            string
+	RepositoryRoot string
+	Stage          string
+	Error          string
+}
+
 func NewCodexScanner() Scanner {
 	return CodexScanner{}
+}
+
+func DiagnoseCodex() ([]ScanDiagnostic, error) {
+	return diagnoseCodex()
 }
 
 func looksLikeCodex(command string) bool {
@@ -66,7 +80,6 @@ func canonicalRepositoryRoot(cwd string) (string, error) {
 				if root != "" {
 					return filepath.Clean(root), nil
 				}
-			}
 		}
 	}
 

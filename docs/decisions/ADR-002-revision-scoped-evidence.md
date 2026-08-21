@@ -13,7 +13,7 @@ A dashboard that merely says `RSpec PASS` or `CI PASS` without identifying the v
 
 ## Decision
 
-Every acceptance-eligible Evidence record must identify an opaque revision of the subject it verified.
+Every trustworthy Evidence record must identify the revision of the subject it verified.
 
 The minimal identity is:
 
@@ -24,7 +24,9 @@ check
 provider
 ```
 
-Examples of revision identities include:
+`revision` is opaque to the Evidence domain.
+
+Examples:
 
 ```text
 git:<commit-sha>
@@ -34,17 +36,33 @@ image:sha256:<digest>
 firmware:sha256:<digest>
 ```
 
-The Evidence core treats `revision` as opaque. It does not assume Git is the only revision system.
+The Evidence core does not assume Git is the only revision system.
 
-Future SCM and Execution adapters are responsible for determining the current revision/fingerprint of a work item. Future Acceptance policy compares required Evidence with that current revision.
+Future SCM and Execution adapters determine the current revision/fingerprint of a work item. Future Acceptance policy compares required Evidence with that current revision.
+
+## Logical check vs provider
+
+`check` identifies the stable verification capability that project policy can require.
+
+`provider` identifies the concrete tool that produced the fact.
+
+Example:
+
+```text
+check=unit-tests
+provider=rspec
+```
+
+Policy should generally depend on `check`, not `provider`, so tooling can be replaced without changing workflow semantics.
 
 ## Consequences
 
-- Evidence from a previous revision remains useful as history but cannot prove the current revision is acceptable.
+- Evidence from a previous revision remains useful as history but cannot prove the current revision.
 - A new source change can automatically make previously green evidence stale without deleting it.
 - Git commits, dirty worktrees, container images, generated artifacts, and hardware firmware can use the same contract.
 - Evidence adapters do not need to know workflow stages.
 - Acceptance policy does not need to know tool-specific output formats.
+- A project can replace a verification provider while retaining the same logical check contract.
 
 ## Native transport
 

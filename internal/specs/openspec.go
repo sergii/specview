@@ -31,6 +31,10 @@ func (a *OpenSpecAdapter) WatchRoots() []string {
 }
 
 func (a *OpenSpecAdapter) Scan() ([]Artifact, error) {
+	policy, err := a.scanProjectPolicy()
+	if err != nil {
+		return nil, err
+	}
 	current, err := a.scanCurrentSpecs()
 	if err != nil {
 		return nil, err
@@ -39,8 +43,14 @@ func (a *OpenSpecAdapter) Scan() ([]Artifact, error) {
 	if err != nil {
 		return nil, err
 	}
+	archive, err := a.scanArchivedChanges()
+	if err != nil {
+		return nil, err
+	}
 
-	artifacts := append(current, changes...)
+	artifacts := append(policy, current...)
+	artifacts = append(artifacts, changes...)
+	artifacts = append(artifacts, archive...)
 	sort.Slice(artifacts, func(i, j int) bool {
 		if artifacts[i].Plane != artifacts[j].Plane {
 			return artifacts[i].Plane < artifacts[j].Plane
@@ -51,6 +61,28 @@ func (a *OpenSpecAdapter) Scan() ([]Artifact, error) {
 		return artifacts[i].Path < artifacts[j].Path
 	})
 	return artifacts, nil
+}
+
+func (a *OpenSpecAdapter) scanProjectPolicy() ([]Artifact, error) {
+	path := filepath.Join(a.root, "config.yaml")
+	artifact, ok, err := readOptionalArtifact(
+		path,
+		"config.yaml",
+		"openspec:config",
+		ArtifactPolicy,
+		StatusDone,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+	artifact.Title = "OpenSpec project configuration"
+	artifact.Plane = PlaneKnowledge
+	artifact.Role = RoleSupporting
+	return []Artifact{artifact}, nil
 }
 
 func (a *OpenSpecAdapter) scanCurrentSpecs() ([]Artifact, error) {
@@ -119,6 +151,30 @@ func (a *OpenSpecAdapter) scanActiveChanges() ([]Artifact, error) {
 			continue
 		}
 		changeArtifacts, err := a.scanChange(entry.Name())
+		if err != nil {
+			return nil, err
+		}
+		artifacts = append(artifacts, changeArtifacts...)
+	}
+	return artifacts, nil
+}
+
+func (a *OpenSpecAdapter) scanArchivedChanges() ([]Artifact, error) {
+	root := filepath.Join(a.root, "changes", "archive")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("scan OpenSpec archive: %w", err)
+	}
+
+	var artifacts []Artifact
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		changeArtifacts, err := a.scanArchivedChange(entry.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -250,6 +306,108 @@ func (a *OpenSpecAdapter) scanChange(changeID string) ([]Artifact, error) {
 	}
 
 	return artifacts, nil
+}
+
+func (a *OpenSpecAdapter) scanArchivedChange(archiveID string) ([]Artifact, error) {
+	root := filepath.Join(a.root, "changes", "archive", archiveID)
+	groupID := "archive:" + archiveID
+	originalID := archivedOriginalChangeID(archiveID)
+	baseRelations := []Relation{
+		{Type: "belongs_to", Target: groupID},
+		{Type: "archived_from", Target: originalID},
+	}
+
+	var artifacts []Artifact
+	known := []struct {
+		name string
+		kind ArtifactKind
+	}{
+		{name: "proposal.md", kind: ArtifactProposal},
+		{name: "design.md", kind: ArtifactDesign},
+		{name: "tasks.md", kind: ArtifactTask},
+	}
+
+	for _, item := range known {
+		fullPath := filepath.Join(root, item.name)
+		rel, err := filepath.Rel(a.root, fullPath)
+		if err != nil {
+			return nil, err
+		}
+		id := groupID + ":" + strings.TrimSuffix(item.name, filepath.Ext(item.name))
+		if item.name == "proposal.md" {
+			id = groupID
+		}
+		artifact, ok, err := readOptionalArtifact(
+			fullPath,
+			filepath.ToSlash(rel),
+			id,
+			item.kind,
+			StatusDone,
+			baseRelations,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		artifact.Plane = PlaneKnowledge
+		artifact.Role = RoleSupporting
+		artifact.WorkItemID = groupID
+		artifacts = append(artifacts, artifact)
+	}
+
+	deltaRoot := filepath.Join(root, "specs")
+	err := filepath.WalkDir(deltaRoot, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || entry.Name() != "spec.md" {
+			return nil
+		}
+		capabilityPath, err := filepath.Rel(deltaRoot, filepath.Dir(path))
+		if err != nil {
+			return err
+		}
+		capability := filepath.ToSlash(capabilityPath)
+		rel, err := filepath.Rel(a.root, path)
+		if err != nil {
+			return err
+		}
+		relations := append([]Relation{}, baseRelations...)
+		relations = append(relations, Relation{Type: "changes", Target: "current:" + capability})
+		artifact, ok, err := readOptionalArtifact(
+			path,
+			filepath.ToSlash(rel),
+			groupID+":delta:"+capability,
+			ArtifactSpec,
+			StatusDone,
+			relations,
+		)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+		artifact.Plane = PlaneKnowledge
+		artifact.Role = RoleSupporting
+		artifact.WorkItemID = groupID
+		artifacts = append(artifacts, artifact)
+		return nil
+	})
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("scan OpenSpec archived change %s delta specs: %w", archiveID, err)
+	}
+
+	return artifacts, nil
+}
+
+func archivedOriginalChangeID(archiveID string) string {
+	if len(archiveID) > 11 && archiveID[4] == '-' && archiveID[7] == '-' && archiveID[10] == '-' {
+		return archiveID[11:]
+	}
+	return archiveID
 }
 
 func deriveOpenSpecStatus(changeRoot string) (Status, error) {

@@ -85,7 +85,9 @@ func newHostServer(catalog *hoststate.Catalog, hub *Hub, host string, port int, 
 func (s *HostServer) ListenAndServe(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.index)
+	mux.HandleFunc("GET /fragments/host", s.hostFragment)
 	mux.HandleFunc("GET /project", s.project)
+	mux.HandleFunc("GET /fragments/project", s.projectFragment)
 	mux.HandleFunc("GET /project/spec", s.projectSpec)
 	mux.HandleFunc("GET /events", s.events)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -131,53 +133,70 @@ type hostData struct {
 }
 
 func (s *HostServer) index(w http.ResponseWriter, r *http.Request) {
-	now := time.Now()
+	data := s.loadHostData(r.Context(), r.URL.Query().Get("q"), time.Now())
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmpl.ExecuteTemplate(w, "host.html", data); err != nil {
+		http.Error(w, "render host dashboard", http.StatusInternalServerError)
+	}
+}
+
+func (s *HostServer) hostFragment(w http.ResponseWriter, r *http.Request) {
+	data := s.loadHostData(r.Context(), r.URL.Query().Get("q"), time.Now())
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := s.tmpl.ExecuteTemplate(w, "host-results", data); err != nil {
+		http.Error(w, "render host fragment", http.StatusInternalServerError)
+	}
+}
+
+func (s *HostServer) loadHostData(ctx context.Context, rawQuery string, now time.Time) hostData {
 	startToday := startOfDay(now)
 	startYesterday := startToday.AddDate(0, 0, -1)
 
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	query := strings.TrimSpace(rawQuery)
 	data := hostData{Hostname: s.catalog.Hostname(), Query: query, Filtered: query != ""}
 	repositories := s.catalog.Repositories()
 
 	if query != "" {
 		if s.repositorySearch == nil {
 			data.SearchError = "Host index unavailable."
-		} else {
-			ids, err := s.repositorySearch.SearchRepositoryIDs(r.Context(), query, 100)
-			if err != nil {
-				data.SearchError = "Host index search unavailable."
-			} else {
-				matches := make(map[string]struct{}, len(ids))
-				for _, id := range ids {
-					matches[id] = struct{}{}
-				}
-				for _, repo := range repositories {
-					if _, ok := matches[repo.ID]; !ok {
-						continue
-					}
-					data.Results = append(data.Results, repo)
-				}
-				data.Total = len(data.Results)
-			}
+			return data
 		}
-	} else {
+
+		ids, err := s.repositorySearch.SearchRepositoryIDs(ctx, query, 100)
+		if err != nil {
+			data.SearchError = "Host index search unavailable."
+			return data
+		}
+
+		matches := make(map[string]struct{}, len(ids))
+		for _, id := range ids {
+			matches[id] = struct{}{}
+		}
 		for _, repo := range repositories {
-			data.Total++
-			switch {
-			case !repo.LastSeenAt.Before(startToday):
-				data.Today = append(data.Today, repo)
-			case !repo.LastSeenAt.Before(startYesterday):
-				data.Yesterday = append(data.Yesterday, repo)
-			default:
-				data.Earlier = append(data.Earlier, repo)
+			if _, ok := matches[repo.ID]; !ok {
+				continue
 			}
+			data.Results = append(data.Results, repo)
 		}
+		data.Total = len(data.Results)
+		return data
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tmpl.ExecuteTemplate(w, "host.html", data); err != nil {
-		http.Error(w, "render host dashboard", http.StatusInternalServerError)
+	for _, repo := range repositories {
+		data.Total++
+		switch {
+		case !repo.LastSeenAt.Before(startToday):
+			data.Today = append(data.Today, repo)
+		case !repo.LastSeenAt.Before(startYesterday):
+			data.Yesterday = append(data.Yesterday, repo)
+		default:
+			data.Earlier = append(data.Earlier, repo)
+		}
 	}
+	return data
 }
 
 type projectItemData struct {
@@ -201,14 +220,8 @@ type projectData struct {
 }
 
 func (s *HostServer) project(w http.ResponseWriter, r *http.Request) {
-	repo, ok := s.catalog.Find(r.URL.Query().Get("id"))
+	data, ok := s.projectDataForRequest(w, r)
 	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-	data, err := s.loadProject(r.Context(), repo)
-	if err != nil {
-		http.Error(w, "load repository: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -216,6 +229,34 @@ func (s *HostServer) project(w http.ResponseWriter, r *http.Request) {
 	if err := s.tmpl.ExecuteTemplate(w, "project.html", data); err != nil {
 		http.Error(w, "render repository", http.StatusInternalServerError)
 	}
+}
+
+func (s *HostServer) projectFragment(w http.ResponseWriter, r *http.Request) {
+	data, ok := s.projectDataForRequest(w, r)
+	if !ok {
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := s.tmpl.ExecuteTemplate(w, "project-live", data); err != nil {
+		http.Error(w, "render repository fragment", http.StatusInternalServerError)
+	}
+}
+
+func (s *HostServer) projectDataForRequest(w http.ResponseWriter, r *http.Request) (projectData, bool) {
+	repo, ok := s.catalog.Find(r.URL.Query().Get("id"))
+	if !ok {
+		http.NotFound(w, r)
+		return projectData{}, false
+	}
+
+	data, err := s.loadProject(r.Context(), repo)
+	if err != nil {
+		http.Error(w, "load repository: "+err.Error(), http.StatusInternalServerError)
+		return projectData{}, false
+	}
+	return data, true
 }
 
 func (s *HostServer) projectSpec(w http.ResponseWriter, r *http.Request) {

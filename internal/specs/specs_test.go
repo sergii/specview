@@ -23,6 +23,12 @@ func TestSpecWithoutMetadataDefaultsToNew(t *testing.T) {
 	if item.Title != "First spec" {
 		t.Fatalf("unexpected title %q", item.Title)
 	}
+	if item.ID != "H01" {
+		t.Fatalf("unexpected id %q", item.ID)
+	}
+	if item.Kind != ArtifactSpec {
+		t.Fatalf("unexpected kind %q", item.Kind)
+	}
 }
 
 func TestSpecReadsStatus(t *testing.T) {
@@ -75,5 +81,50 @@ func TestStoreScansNestedSpecs(t *testing.T) {
 	items := store.All()
 	if len(items) != 1 || items[0].Path != "group/H04.md" {
 		t.Fatalf("unexpected items: %#v", items)
+	}
+	if store.AdapterName() != SpecviewAdapterName {
+		t.Fatalf("unexpected adapter %q", store.AdapterName())
+	}
+}
+
+func TestNewAdapterDefaultsToSpecview(t *testing.T) {
+	adapter, err := NewAdapter("", t.TempDir(), "*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adapter.Name() != SpecviewAdapterName {
+		t.Fatalf("adapter name = %q, want %q", adapter.Name(), SpecviewAdapterName)
+	}
+}
+
+func TestNewAdapterRejectsUnsupportedAdapter(t *testing.T) {
+	if _, err := NewAdapter("unknown", t.TempDir(), "*.md"); err == nil {
+		t.Fatal("expected unsupported adapter error")
+	}
+}
+
+type stubAdapter struct {
+	items []Spec
+}
+
+func (a stubAdapter) Name() string {
+	return "stub"
+}
+
+func (a stubAdapter) Scan() ([]Spec, error) {
+	return a.items, nil
+}
+
+func TestStoreUsesAdapterBoundary(t *testing.T) {
+	store := NewStoreWithAdapter(stubAdapter{items: []Spec{{ID: "A1", Kind: ArtifactRFC, Title: "Decision input"}}})
+	if err := store.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	items := store.All()
+	if len(items) != 1 || items[0].Kind != ArtifactRFC {
+		t.Fatalf("unexpected normalized artifacts: %#v", items)
+	}
+	if store.AdapterName() != "stub" {
+		t.Fatalf("unexpected adapter %q", store.AdapterName())
 	}
 }

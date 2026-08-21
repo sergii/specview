@@ -6,15 +6,40 @@ Specview should normalize existing repo-native spec-driven-development conventio
 
 There is currently no single formal SDD filesystem standard. The useful common denominator is semantic, not positional: projects persist intent, design/planning artifacts, executable tasks, and project-wide rules in version-controlled files.
 
+Specview does have one native convention of its own: top-level `specs/` observed by `SpecviewAdapter`. This is the zero-config/default path and adapter, not a claim that `specs/` is an industry-wide standard.
+
 ## Compared conventions
 
 | Convention | Primary paths | Main unit | Persistent project context | Characteristic model |
 | --- | --- | --- | --- | --- |
+| Specview native | `specs/` | project-defined spec | `.specview.yaml` | lightweight repo-native specs |
 | GitHub Spec Kit | `specs/<feature>/` | feature | `.specify/memory/constitution.md` | spec -> plan -> tasks -> implement |
 | OpenSpec | `openspec/specs/`, `openspec/changes/<change>/` | current capability + change | `openspec/config.yaml` and current specs | current truth + change delta |
 | Kiro | `.kiro/specs/<feature>/` | feature | `.kiro/steering/`, optionally `AGENTS.md` | requirements -> design -> tasks |
 | BMAD | `_bmad-output/...` | PRD / epic / story / spec | project context | broader SDLC workflow |
-| Generic repo specs | configurable, default `specs/` | project-defined | project-defined | minimal Markdown convention |
+
+## Specview native
+
+The native adapter is `SpecviewAdapter`.
+
+Default structure:
+
+```text
+specs/
+  ATS-001.md
+  ATS-002.md
+```
+
+Optional namespaced front matter remains readable as ordinary Markdown without Specview:
+
+```yaml
+---
+specview:
+  status: in_progress
+---
+```
+
+`SpecviewAdapter` owns the semantics of the native `specs/` convention. An arbitrary Markdown directory such as `documents/`, `requirements/`, or `docs/decisions/` is not automatically a Specview-native layout merely because it contains Markdown.
 
 ## GitHub Spec Kit
 
@@ -44,6 +69,8 @@ Semantic mapping:
 - `research.md` -> short-lived research artifact;
 - `data-model.md` and `contracts/` -> design/contract artifacts;
 - `tasks.md` -> execution decomposition.
+
+Although Spec Kit also uses a top-level `specs/` directory, its feature-directory semantics are different from the flat/lightweight Specview-native convention. Auto-detection must prefer the more specific framework signature when `.specify/` is present.
 
 ## OpenSpec
 
@@ -164,53 +191,38 @@ These are semantic roles, not required filenames.
 
 ## Discovery strategy
 
-Specview should support zero-config detection where conventions are unambiguous:
+Specview should support zero-config detection where conventions are unambiguous. Detection order should prefer specific framework signatures before the native fallback:
 
 ```text
-.specify/          -> GitHub Spec Kit
-openspec/          -> OpenSpec
-.kiro/specs/       -> Kiro
-_bmad-output/      -> BMAD
-specs/             -> Generic Markdown fallback
-specifications/    -> Generic Markdown fallback
+.specify/          -> GitHub Spec Kit adapter
+openspec/          -> OpenSpec adapter
+.kiro/specs/       -> Kiro adapter
+_bmad-output/      -> BMAD adapter
+specs/             -> SpecviewAdapter fallback
 ```
 
 Explicit configuration must override discovery.
 
-Example:
+Native example:
+
+```yaml
+specs:
+  adapter: specview
+  path: specs
+  pattern: "*.md"
+```
+
+A future custom Markdown adapter may support arbitrary company-specific roots, for example:
 
 ```yaml
 artifacts:
-  adapter: generic
+  adapter: custom-markdown
   roots:
     - specifications
     - docs/decisions
 ```
 
-## Generic Markdown fallback
-
-The first-party minimal convention remains intentionally small:
-
-```text
-specs/
-  ATS-001.md
-  ATS-002.md
-```
-
-A file may declare normalized metadata through front matter, while ordinary Markdown remains readable without Specview.
-
-Example:
-
-```yaml
----
-specview:
-  id: ATS-001
-  kind: spec
-  status: new
----
-```
-
-Specview must not require projects to migrate from an established SDD framework merely to use the dashboard.
+That future adapter is intentionally separate from `SpecviewAdapter`.
 
 ## Adapter contract direction
 
@@ -246,10 +258,11 @@ The UI consumes the normalized projection and should not contain framework-speci
 
 ## Initial adapter priority
 
-1. Generic Markdown - preserves the current Specview POC and zero-config `specs/` workflow.
+1. SpecviewAdapter - preserves the current POC and zero-config `specs/` workflow.
 2. GitHub Spec Kit - feature-centric and increasingly common in agentic development.
 3. OpenSpec - valuable current-truth vs change-in-flight model.
 4. Kiro - explicit requirements/design/tasks model.
 5. BMAD - broader methodology, useful after the core normalization contract stabilizes.
+6. Custom Markdown - company-specific layouts after the normalized contract is proven.
 
 This order is an implementation priority, not a product endorsement ranking.

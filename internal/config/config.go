@@ -15,6 +15,7 @@ const FileName = ".specview.yaml"
 const (
 	defaultAdapterName       = "specview"
 	githubSpecKitAdapterName = "github-spec-kit"
+	openSpecAdapterName      = "openspec"
 )
 
 type Config struct {
@@ -197,36 +198,80 @@ func (c Config) ResolveProjectRoot(configRoot string) string {
 	return filepath.Clean(filepath.Join(configRoot, c.Project.Root))
 }
 
-func Init(root string) (createdConfig bool, createdSpecs bool, err error) {
+func Init(root string) (createdConfig bool, createdArtifactRoot bool, artifactPath string, err error) {
 	configPath := filepath.Join(root, FileName)
 	if _, statErr := os.Stat(configPath); errors.Is(statErr, os.ErrNotExist) {
-		if writeErr := os.WriteFile(configPath, initialConfig(root), 0o644); writeErr != nil {
-			return false, false, fmt.Errorf("write %s: %w", FileName, writeErr)
+		adapter, path, detectErr := detectInitConvention(root)
+		if detectErr != nil {
+			return false, false, "", detectErr
+		}
+		if writeErr := os.WriteFile(configPath, initialConfig(adapter, path), 0o644); writeErr != nil {
+			return false, false, "", fmt.Errorf("write %s: %w", FileName, writeErr)
 		}
 		createdConfig = true
+		artifactPath = path
 	} else if statErr != nil {
-		return false, false, statErr
-	}
-
-	specsPath := filepath.Join(root, "specs")
-	if _, statErr := os.Stat(specsPath); errors.Is(statErr, os.ErrNotExist) {
-		if mkdirErr := os.MkdirAll(specsPath, 0o755); mkdirErr != nil {
-			return createdConfig, false, fmt.Errorf("create specs directory: %w", mkdirErr)
+		return false, false, "", statErr
+	} else {
+		cfg, loadErr := Load(root)
+		if loadErr != nil {
+			return false, false, "", loadErr
 		}
-		createdSpecs = true
-	} else if statErr != nil {
-		return createdConfig, false, statErr
+		artifactPath = cfg.Specs.Path
 	}
 
-	return createdConfig, createdSpecs, nil
+	cfg, loadErr := Load(root)
+	if loadErr != nil {
+		return createdConfig, false, artifactPath, loadErr
+	}
+	projectRoot := cfg.ResolveProjectRoot(root)
+	artifactRoot := filepath.Join(projectRoot, cfg.Specs.Path)
+	if _, statErr := os.Stat(artifactRoot); errors.Is(statErr, os.ErrNotExist) {
+		if mkdirErr := os.MkdirAll(artifactRoot, 0o755); mkdirErr != nil {
+			return createdConfig, false, artifactPath, fmt.Errorf("create artifact directory: %w", mkdirErr)
+		}
+		createdArtifactRoot = true
+	} else if statErr != nil {
+		return createdConfig, false, artifactPath, statErr
+	}
+
+	return createdConfig, createdArtifactRoot, artifactPath, nil
 }
 
-func initialConfig(root string) []byte {
-	adapter := defaultAdapterName
-	if info, err := os.Stat(filepath.Join(root, ".specify")); err == nil && info.IsDir() {
-		adapter = githubSpecKitAdapterName
-	}
+func detectInitConvention(root string) (adapter, path string, err error) {
+	specKit := isDir(filepath.Join(root, ".specify"))
+	openSpec := isOpenSpecRoot(filepath.Join(root, "openspec"))
 
+	if specKit && openSpec {
+		return "", "", errors.New("multiple SDD conventions detected (.specify and openspec); create .specview.yaml with an explicit specs.adapter")
+	}
+	if specKit {
+		return githubSpecKitAdapterName, "specs", nil
+	}
+	if openSpec {
+		return openSpecAdapterName, "openspec", nil
+	}
+	return defaultAdapterName, "specs", nil
+}
+
+func isOpenSpecRoot(root string) bool {
+	if !isDir(root) {
+		return false
+	}
+	for _, marker := range []string{"config.yaml", "specs", "changes"} {
+		if _, err := os.Stat(filepath.Join(root, marker)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+func initialConfig(adapter, path string) []byte {
 	return []byte(fmt.Sprintf(`version: 1
 
 project:
@@ -235,11 +280,11 @@ project:
 
 specs:
   adapter: %s
-  path: specs
+  path: %s
   pattern: "*.md"
 
 server:
   host: 127.0.0.1
   port: 7331
-`, adapter))
+`, adapter, path))
 }

@@ -19,6 +19,7 @@ project:
   root: "."
 
 specs:
+  adapter: specview
   path: specs
   pattern: "*.md"
 
@@ -40,6 +41,7 @@ type Project struct {
 }
 
 type Specs struct {
+	Adapter string
 	Path    string
 	Pattern string
 }
@@ -108,6 +110,8 @@ func Load(root string) (Config, error) {
 			}
 		case "specs":
 			switch key {
+			case "adapter":
+				cfg.Specs.Adapter = value
 			case "path":
 				cfg.Specs.Path = value
 			case "pattern":
@@ -137,6 +141,9 @@ func Load(root string) (Config, error) {
 	}
 	if cfg.Project.Root == "" {
 		cfg.Project.Root = "."
+	}
+	if cfg.Specs.Adapter == "" {
+		cfg.Specs.Adapter = "specview"
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, fmt.Errorf("invalid %s: %w", FileName, err)
@@ -169,6 +176,9 @@ func (c Config) Validate() error {
 	}
 	if c.Project.Root == "" {
 		return errors.New("project.root is required")
+	}
+	if c.Specs.Adapter == "" {
+		return errors.New("specs.adapter is required")
 	}
 	if c.Specs.Path == "" {
 		return errors.New("specs.path is required")

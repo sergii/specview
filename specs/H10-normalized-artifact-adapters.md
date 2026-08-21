@@ -11,7 +11,7 @@ Introduce the first architecture boundary that separates repository-specific spe
 
 Specview must be able to observe repo-native specification systems without requiring every project to store files in the same directory structure.
 
-The native top-level `specs/` convention is owned by `SpecviewAdapter` and must continue to work as the zero-config/default workflow.
+The native artifact root defaults to top-level `specs/`, but `specs/` is project content, not a sufficient Specview framework signature by itself. Native semantics are selected by `.specview.yaml` configuration.
 
 The core vocabulary is:
 
@@ -56,9 +56,9 @@ Not every kind needs a dedicated UI in this slice.
 
 The first implementation must support:
 
-1. `SpecviewAdapter` using the existing configured `specs.path`, with `specs/` as the native default;
+1. `SpecviewAdapter` using the existing configured `specs.path`, with `specs/` as the native default artifact root;
 2. optional explicit adapter selection through `specs.adapter`;
-3. backward compatibility: configs without `specs.adapter` resolve to `specview`;
+3. backward compatibility: `.specview.yaml` configs without `specs.adapter` resolve to `specview`;
 4. normalized artifacts that contain no framework-specific path assumptions in the UI layer;
 5. normalized relations such as `depends_on`, `relates_to`, `resolves`, and `supersedes` can be represented even before every adapter can discover them;
 6. a store/projection that depends on the adapter contract rather than directly scanning Markdown files.
@@ -74,15 +74,35 @@ Candidate later adapters:
 
 ## Adapter naming
 
-`SpecviewAdapter` is the canonical name for Specview's own native repository convention:
+`SpecviewAdapter` is the canonical name for Specview's own native repository convention when selected by `.specview.yaml`:
 
 ```text
-specs/
-  H01.md
-  H02.md
+repo/
+├── .specview.yaml
+└── specs/
+    ├── H01.md
+    └── H02.md
 ```
 
 Do not call this adapter `GenericMarkdownAdapter`. Generic/custom Markdown is a different future concern because arbitrary Markdown directories do not necessarily follow Specview semantics.
+
+A plain `specs/` directory is ambiguous because other SDD frameworks may use the same path.
+
+## Adapter detection
+
+Selection must prefer explicit configuration and strong framework signatures:
+
+```text
+.specview.yaml + explicit adapter   -> configured adapter
+.specview.yaml without adapter      -> SpecviewAdapter compatibility default
+.specify/                           -> GitHub Spec Kit adapter
+openspec/                           -> OpenSpec adapter
+.kiro/specs/                        -> Kiro adapter
+_bmad-output/                       -> BMAD adapter
+specs/ only                         -> ambiguous
+```
+
+`.specview/` is reserved for future Specview-owned runtime material such as a rebuildable SQLite projection, indexes, sockets, or transient state. Durable intent remains in ordinary repository files such as `specs/`.
 
 ## Current truth vs work in flight
 
@@ -116,9 +136,10 @@ The current UI is a projection. The adapter/core boundary should allow future li
 
 ## Acceptance
 
-- existing native `specs/*.md` projects continue to render unchanged through `SpecviewAdapter`;
+- existing native `specs/*.md` projects continue to render unchanged through `SpecviewAdapter` when Specview configuration selects it;
 - `.specview.yaml` may explicitly declare `specs.adapter: specview`;
-- old configuration without `specs.adapter` remains valid and defaults to `specview`;
+- old `.specview.yaml` configuration without `specs.adapter` remains valid and defaults to `specview`;
+- `specs/` alone is not treated as a definitive Specview framework signature;
 - artifact discovery is behind an adapter interface rather than embedded in the store or UI;
 - normalized artifacts expose stable semantic kinds independent of directory names;
 - normalized relations can be represented even if the current UI does not render all of them;
@@ -145,7 +166,7 @@ Completed in the first H10 increment:
 Remaining H10 work:
 
 - extract more adapter-neutral model details if needed as additional adapters are implemented;
-- add framework auto-detection before native `specs/` fallback;
+- implement strong framework auto-detection that does not infer Specview semantics from `specs/` alone;
 - implement the first non-Specview adapter, most likely GitHub Spec Kit;
 - parse normalized relations from native metadata once the relation contract is finalized.
 
@@ -153,3 +174,4 @@ Remaining H10 work:
 
 - `docs/decisions/ADR-001-intent-execution-evidence.md`
 - `docs/research/spec-driven-layouts.md`
+- `docs/adapters/specview.md`

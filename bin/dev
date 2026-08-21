@@ -57,24 +57,29 @@ install() {
   build
 
   log "Starting Specview"
-  exec env \
-    SPECVIEW_LOG_FORMAT="${SPECVIEW_LOG_FORMAT:-console}" \
-    SPECVIEW_LOG_LEVEL="${SPECVIEW_LOG_LEVEL:-debug}" \
-    ./bin/specview
+  exec ./bin/specview "$@"
 }
 
 usage() {
   cat <<'USAGE'
 Usage:
-  bin/dev install   Fetch, pull, verify, test, build, and run Specview
-  bin/dev check     Run formatting, module, vet, and race-test gates
-  bin/dev build     Build ./bin/specview from the current checkout
+  bin/dev install [specview options]   Fetch, pull, verify, test, build, and run Specview
+  bin/dev check                        Run formatting, module, vet, and race-test gates
+  bin/dev build                        Build ./bin/specview from the current checkout
+
+Examples:
+  bin/dev install
+  bin/dev install --verbose
+  bin/dev install --debug
 USAGE
 }
 
 case "${1:-install}" in
   install)
-    install
+    if [[ "${1:-}" == "install" ]]; then
+      shift
+    fi
+    install "$@"
     ;;
   check)
     check

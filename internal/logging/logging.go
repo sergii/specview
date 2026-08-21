@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -9,23 +10,32 @@ import (
 	"github.com/lmittmann/tint"
 )
 
+const silentLevel = slog.Level(100)
+
 type Settings struct {
+	Enabled   bool
 	Format    string
 	Level     slog.Level
 	AddSource bool
 	Color     bool
 }
 
-func Configure(version string) (*slog.Logger, Settings) {
-	settings := settingsFromEnv()
+// Configure installs the process-wide slog logger. Logging is intentionally
+// disabled by default; passing a level override or setting SPECVIEW_LOG_LEVEL
+// enables it. A CLI-provided override takes precedence over the environment.
+func Configure(version string, levelOverrides ...string) (*slog.Logger, Settings) {
+	settings := settingsFromEnv(levelOverrides...)
 
 	var handler slog.Handler
-	if settings.Format == "json" {
+	switch {
+	case !settings.Enabled:
+		handler = slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: silentLevel})
+	case settings.Format == "json":
 		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 			Level:     settings.Level,
 			AddSource: settings.AddSource,
 		})
-	} else {
+	default:
 		handler = tint.NewTextHandler(os.Stderr, &tint.Options{
 			Level:      settings.Level,
 			AddSource:  settings.AddSource,
@@ -40,6 +50,7 @@ func Configure(version string) (*slog.Logger, Settings) {
 	)
 	slog.SetDefault(logger)
 	logger.Debug("logging configured",
+		"enabled", settings.Enabled,
 		"format", settings.Format,
 		"level", settings.Level.String(),
 		"source", settings.AddSource,
@@ -48,7 +59,7 @@ func Configure(version string) (*slog.Logger, Settings) {
 	return logger, settings
 }
 
-func settingsFromEnv() Settings {
+func settingsFromEnv(levelOverrides ...string) Settings {
 	format := strings.ToLower(strings.TrimSpace(os.Getenv("SPECVIEW_LOG_FORMAT")))
 	if format == "" {
 		if strings.EqualFold(os.Getenv("SPECVIEW_ENV"), "production") {
@@ -61,28 +72,35 @@ func settingsFromEnv() Settings {
 		format = "console"
 	}
 
-	level := slog.LevelDebug
-	if format == "json" {
-		level = slog.LevelInfo
+	levelText := strings.TrimSpace(os.Getenv("SPECVIEW_LOG_LEVEL"))
+	if len(levelOverrides) > 0 {
+		if override := strings.TrimSpace(levelOverrides[0]); override != "" {
+			levelText = override
+		}
 	}
-	if value := strings.TrimSpace(os.Getenv("SPECVIEW_LOG_LEVEL")); value != "" {
+
+	enabled := false
+	level := slog.LevelInfo
+	if levelText != "" {
 		var parsed slog.Level
-		if err := parsed.UnmarshalText([]byte(value)); err == nil {
+		if err := parsed.UnmarshalText([]byte(levelText)); err == nil {
+			enabled = true
 			level = parsed
 		}
 	}
 
-	addSource := format == "console"
+	addSource := enabled && format == "console" && level <= slog.LevelDebug
 	if value := strings.TrimSpace(os.Getenv("SPECVIEW_LOG_SOURCE")); value != "" {
 		addSource = parseBool(value, addSource)
 	}
 
-	color := format == "console" && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
+	color := enabled && format == "console" && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
 	if value := strings.TrimSpace(os.Getenv("SPECVIEW_LOG_COLOR")); value != "" {
 		color = parseBool(value, color)
 	}
 
 	return Settings{
+		Enabled:   enabled,
 		Format:    format,
 		Level:     level,
 		AddSource: addSource,

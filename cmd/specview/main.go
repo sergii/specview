@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,17 +19,73 @@ import (
 
 var version = "dev"
 
+type cliOptions struct {
+	args     []string
+	logLevel string
+}
+
 func main() {
-	_, settings := logging.Configure(version)
+	options, err := parseCLIOptions(os.Args[1:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "specview: %v\n", err)
+		os.Exit(2)
+	}
+
+	_, settings := logging.Configure(version, options.logLevel)
 	slog.Debug("process started",
 		"pid", os.Getpid(),
-		"arg_count", len(os.Args)-1,
+		"arg_count", len(options.args),
 		"log_format", settings.Format,
 	)
 
-	if err := run(os.Args[1:]); err != nil {
-		slog.Error("command failed", "error", err)
+	if err := run(options.args); err != nil {
+		fmt.Fprintf(os.Stderr, "specview: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+func parseCLIOptions(args []string) (cliOptions, error) {
+	var options cliOptions
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--":
+			options.args = append(options.args, args[i+1:]...)
+			return options, nil
+		case arg == "--verbose":
+			options.logLevel = "info"
+		case arg == "--debug":
+			options.logLevel = "debug"
+		case arg == "--log-level":
+			if i+1 >= len(args) {
+				return cliOptions{}, fmt.Errorf("--log-level requires debug, info, warn, or error")
+			}
+			i++
+			level, err := normalizeLogLevel(args[i])
+			if err != nil {
+				return cliOptions{}, err
+			}
+			options.logLevel = level
+		case strings.HasPrefix(arg, "--log-level="):
+			level, err := normalizeLogLevel(strings.TrimPrefix(arg, "--log-level="))
+			if err != nil {
+				return cliOptions{}, err
+			}
+			options.logLevel = level
+		default:
+			options.args = append(options.args, arg)
+		}
+	}
+	return options, nil
+}
+
+func normalizeLogLevel(value string) (string, error) {
+	level := strings.ToLower(strings.TrimSpace(value))
+	switch level {
+	case "debug", "info", "warn", "error":
+		return level, nil
+	default:
+		return "", fmt.Errorf("invalid --log-level %q; want debug, info, warn, or error", value)
 	}
 }
 
@@ -217,19 +274,34 @@ func printHelp() {
 	fmt.Printf(`Specview - local-first observation for repo-native, spec-driven software work.
 
 Usage:
-  specview              Start the host dashboard and observe active repositories
-  specview serve        Start the host dashboard and observe active repositories
-  specview init         Detect the current repository convention and create .specview.yaml
-  specview doctor       Diagnose the registered Codex execution adapter
-  specview version      Print the version
-  specview help         Show this help
+  specview [options]             Start the host dashboard and observe active repositories
+  specview serve [options]       Start the host dashboard and observe active repositories
+  specview init [options]        Detect the current repository convention and create .specview.yaml
+  specview doctor [options]      Diagnose the registered Codex execution adapter
+  specview version               Print the version
+  specview help                  Show this help
+
+Options:
+  --verbose                      Enable informational runtime logs
+  --debug                        Enable debug runtime logs with source locations
+  --log-level <level>            Set runtime log level: debug, info, warn, or error
+  -v, --version                  Print the version
+  -h, --help                     Show this help
 
 Logging:
-  SPECVIEW_LOG_FORMAT   console (default) or json
-  SPECVIEW_LOG_LEVEL    debug (dev default), info, warn, or error
-  SPECVIEW_LOG_SOURCE   true/false; source is on by default in console mode
-  SPECVIEW_LOG_COLOR    true/false; colors are on by default in console mode
-  SPECVIEW_ENV          production defaults logging to JSON/info
+  Runtime logs are disabled by default.
+  CLI logging flags override SPECVIEW_LOG_LEVEL.
+  SPECVIEW_LOG_LEVEL             debug, info, warn, or error; setting it enables logs
+  SPECVIEW_LOG_FORMAT            console (default) or json
+  SPECVIEW_LOG_SOURCE            true/false; defaults on only for console debug logs
+  SPECVIEW_LOG_COLOR             true/false; colors default on for enabled console logs
+  SPECVIEW_ENV                   production defaults the enabled log format to JSON
+
+Examples:
+  specview --verbose
+  specview --debug
+  specview serve --log-level=warn
+  SPECVIEW_LOG_LEVEL=debug specview
 
 The host dashboard does not require .specview.yaml. Project configuration remains
 an optional repository-level override.

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 )
 
 const GitHubSpecKitAdapterName = "github-spec-kit"
@@ -261,4 +260,3 @@ func readOptionalArtifact(fullPath, relPath, id string, kind ArtifactKind, statu
 }
 
 var _ Adapter = (*GitHubSpecKitAdapter)(nil)
-var _ = time.Time{}

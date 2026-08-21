@@ -22,7 +22,7 @@
 <section class="section">
   <div class="section-head"><span>Active now</span><span class="section-count">{{len $execution.Sessions}}</span></div>
   {{if $execution.Error}}
-    <div class="notice">Git execution context unavailable: {{$execution.Error}}</div>
+    <div class="notice">Execution context unavailable: {{$execution.Error}}</div>
   {{else}}
     {{range $execution.Sessions}}
       <div class="execution-row">

@@ -1,6 +1,6 @@
 ---
 specview:
-  status: in_progress
+  status: done
 ---
 
 # Normalized evidence contract
@@ -15,7 +15,7 @@ INTENT | EXECUTION | EVIDENCE
 
 ## Intent
 
-Specview must be able to consume verification results from heterogeneous tools without hard-coding Rails, Go, Rust, CI, security, performance, or hardware semantics into the core.
+Specview consumes verification results from heterogeneous tools without hard-coding Rails, Go, Rust, CI, security, performance, or hardware semantics into the core.
 
 A verification tool produces evidence. Specview observes and normalizes that evidence. Specview does not become the test runner or CI system in this slice.
 
@@ -23,7 +23,7 @@ A verification tool produces evidence. Specview observes and normalizes that evi
 
 A green result is meaningful only for the exact software revision it verified.
 
-Therefore every acceptance-eligible evidence record must identify:
+Every trustworthy evidence record therefore identifies:
 
 ```text
 work_item + revision + check + provider
@@ -39,13 +39,11 @@ image:sha256:...
 firmware:sha256:...
 ```
 
-Specview does not interpret the revision format in this slice. It treats it as an opaque identity that future Execution/SCM adapters can correlate with the current subject.
+Specview does not interpret the revision format in this slice. Future Execution/SCM adapters correlate the opaque identity with the current subject.
 
 Evidence for a different revision is historical/stale evidence, not proof for the current Acceptance decision.
 
 ## Normalized evidence
-
-The initial model contains:
 
 ```text
 Evidence
@@ -62,9 +60,44 @@ Evidence
 ├── observed_at
 ├── summary
 ├── metrics
-├── path/source metadata
+├── source path
 └── validation error
 ```
+
+### Check vs provider vs kind
+
+These fields intentionally mean different things.
+
+```text
+check
+  stable logical verification capability required by project policy
+
+provider
+  concrete tool that produced the result
+
+kind
+  broad semantic category used for grouping and presentation
+```
+
+Example:
+
+```text
+check      = unit-tests
+provider   = rspec
+kind       = test
+```
+
+A project policy should normally require `unit-tests`, not `rspec`. The provider may later change from RSpec to Minitest without changing the workflow contract.
+
+Another example:
+
+```text
+check      = static-analysis
+provider   = go-vet
+kind       = static_analysis
+```
+
+This separation is central to adapter portability.
 
 ### Kinds
 
@@ -72,6 +105,7 @@ The core recognizes broad semantic kinds without knowing tool-specific details:
 
 - compile;
 - typecheck;
+- static_analysis;
 - lint;
 - test;
 - acceptance;
@@ -100,7 +134,7 @@ Pact              -> kind=contract
 k6                -> kind=performance
 cargo test        -> kind=test
 clippy            -> kind=lint
-go vet             -> kind=static/custom until a stronger semantic mapping is needed
+go vet             -> kind=static_analysis
 hardware rig      -> kind=hardware
 GitHub Actions    -> kind=ci
 ```
@@ -118,11 +152,22 @@ error
 skipped
 ```
 
-`failed` means the verification completed and found a problem in the subject.
+`failed` means verification completed and found a problem in the subject.
 
 `error` means the verification mechanism itself could not produce a trustworthy verdict.
 
 `skipped` is not equivalent to `passed`; policy decides whether a skipped check is acceptable.
+
+## Revision predicates
+
+The Evidence domain can answer factual questions only:
+
+```text
+MatchesRevision(revision)
+PassedForRevision(revision)
+```
+
+It deliberately does not expose an `AcceptanceEligible` policy concept. Evidence reports facts; policy decides sufficiency.
 
 ## Native evidence transport
 
@@ -135,9 +180,9 @@ The first proof uses a passive filesystem transport under the reserved Specview 
     └── ...
 ```
 
-`.specview/` is derived/runtime material and should not be committed. It is distinct from `.specview.yaml`, which is durable project configuration.
+`.specview/` is derived/runtime material and is ignored by Git. It is distinct from `.specview.yaml`, which is durable project configuration.
 
-External tools, wrappers, agents, CI sync adapters, or future dedicated adapters may publish records atomically into this directory. The Specview core reads them through `NativeEvidenceAdapter`.
+External tools, wrappers, agents, CI sync adapters, or future dedicated adapters may publish records atomically into this directory. The core reads them through `NativeEvidenceAdapter`.
 
 Example:
 
@@ -165,8 +210,6 @@ Example:
 Publishers should write to a temporary file and rename to `.json` atomically. The native adapter ignores non-JSON and temporary files.
 
 ## Adapter boundary
-
-Conceptually:
 
 ```text
 EvidenceAdapter
@@ -203,22 +246,22 @@ Policy answers:
 
 > Is this set of evidence sufficient to move this work item through Acceptance?
 
-Therefore the Evidence record does not own fields such as `required: true` or `blocks_merge: true`.
+Therefore Evidence does not own fields such as `required: true` or `blocks_merge: true`.
 
-A later policy slice may declare, for example:
+A later policy slice may declare logical checks, for example:
 
 ```text
-Rails project:
-  require test + lint + security
+Rails:
+  require unit-tests + lint + security
 
-IoT project:
-  require test + contract + concurrency + hardware
+IoT:
+  require unit-tests + protocol-contract + concurrency + hardware-in-loop
 
 Landing page:
   require build + smoke
 ```
 
-The same Evidence model serves all of them.
+Concrete providers can vary while these policy names remain stable.
 
 ## UI
 
@@ -236,6 +279,22 @@ Mutant       RUNNING
 
 but the current board remains unchanged until Acceptance policy is introduced.
 
+## Implementation
+
+Completed:
+
+- `internal/evidence` domain package;
+- normalized `Record`, `Kind`, and `Result` types;
+- revision matching and current-pass predicates;
+- `EvidenceAdapter` interface;
+- concurrent-safe Evidence `Store`;
+- `NativeEvidenceAdapter` for strict JSON records;
+- invalid records preserved with validation errors;
+- non-JSON/temporary files ignored;
+- `.specview/` runtime namespace ignored by Git;
+- native transport documentation;
+- ADR-002 for revision-scoped evidence.
+
 ## Acceptance
 
 - normalized Evidence types are independent of specific tool implementations;
@@ -243,7 +302,7 @@ but the current board remains unchanged until Acceptance policy is introduced.
 - stale evidence can be distinguished from evidence for the current revision;
 - `failed`, `error`, and `skipped` remain semantically distinct;
 - native filesystem evidence is observed from `.specview/evidence/`;
-- invalid evidence records remain observable as validation errors instead of crashing the store;
+- invalid evidence records remain observable instead of crashing the store;
 - temporary/non-JSON files are ignored;
 - adapter scan and store behavior are covered by tests;
 - `.specview/` runtime material is ignored by Git;
@@ -251,7 +310,24 @@ but the current board remains unchanged until Acceptance policy is introduced.
 - Specview does not decide Acceptance policy in this slice;
 - UI remains unchanged.
 
+## Verification
+
+GitHub Actions code gate passed with:
+
+```text
+gofmt            PASS
+go mod verify     PASS
+go vet            PASS
+go test -race     PASS
+go build           PASS
+```
+
+## Follow-up
+
+The next logical slice is Acceptance policy: map project-specific required logical checks plus current revision into an Acceptance state without coupling policy to providers.
+
 ## References
 
 - `docs/decisions/ADR-001-intent-execution-evidence.md`
 - `docs/decisions/ADR-002-revision-scoped-evidence.md`
+- `docs/evidence/native-evidence.md`

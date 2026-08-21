@@ -53,7 +53,7 @@ func initProject() error {
 		return err
 	}
 
-	createdConfig, createdSpecs, err := config.Init(root)
+	createdConfig, createdArtifactRoot, artifactPath, err := config.Init(root)
 	if err != nil {
 		return err
 	}
@@ -63,10 +63,10 @@ func initProject() error {
 	} else {
 		fmt.Println("• .specview.yaml already exists")
 	}
-	if createdSpecs {
-		fmt.Println("✓ Created specs/")
+	if createdArtifactRoot {
+		fmt.Printf("✓ Created %s/\n", artifactPath)
 	} else {
-		fmt.Println("• specs/ already exists")
+		fmt.Printf("• %s/ already exists\n", artifactPath)
 	}
 	fmt.Println("\nRun 'specview' to start observing specifications.")
 	return nil
@@ -103,7 +103,7 @@ func serveRoot(configRoot string) error {
 
 	specRoot := filepath.Join(projectRoot, cfg.Specs.Path)
 	if err := os.MkdirAll(specRoot, 0o755); err != nil {
-		return fmt.Errorf("create specs directory: %w", err)
+		return fmt.Errorf("create artifact directory: %w", err)
 	}
 
 	adapter, err := specs.NewAdapter(cfg.Specs.Adapter, specRoot, cfg.Specs.Pattern)
@@ -162,12 +162,12 @@ func serveRoot(configRoot string) error {
 }
 
 func printHelp() {
-	fmt.Printf(`Specview - live, read-only observation for Markdown specifications.
+	fmt.Printf(`Specview - live, read-only observation for repo-native specifications.
 
 Usage:
   specview              Start the dashboard using .specview.yaml in the current directory
   specview serve        Start the dashboard using .specview.yaml in the current directory
-  specview init         Create .specview.yaml and specs/
+  specview init         Detect the repository convention and create .specview.yaml
   specview version      Print the version
   specview help         Show this help
 `)

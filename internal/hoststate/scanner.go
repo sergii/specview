@@ -80,6 +80,7 @@ func canonicalRepositoryRoot(cwd string) (string, error) {
 				if root != "" {
 					return filepath.Clean(root), nil
 				}
+			}
 		}
 	}
 

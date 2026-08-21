@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -80,5 +81,64 @@ func TestHostDashboardEmptyToday(t *testing.T) {
 	server.index(response, httptest.NewRequest(http.MethodGet, "/", nil))
 	if !strings.Contains(response.Body.String(), "You haven't run anything yet.") {
 		t.Fatalf("empty state missing: %s", response.Body.String())
+	}
+}
+
+type fakeRepositorySearcher struct {
+	ids []string
+}
+
+func (f fakeRepositorySearcher) SearchRepositoryIDs(context.Context, string, int) ([]string, error) {
+	return append([]string(nil), f.ids...), nil
+}
+
+func TestHostDashboardSearchUsesIndexIdentityAndLiveCatalogProjection(t *testing.T) {
+	catalog, err := hoststate.OpenCatalog("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	for pid, root := range map[int]string{
+		101: filepath.Join(t.TempDir(), "wms"),
+		202: filepath.Join(t.TempDir(), "candidate-api"),
+	} {
+		if _, err := catalog.Observe([]hoststate.Observation{{
+			Agent:          "Codex",
+			PID:            pid,
+			RepositoryRoot: root,
+		}}, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	repositories := catalog.Repositories()
+	var wanted hoststate.Repository
+	for _, repository := range repositories {
+		if repository.Name == "wms" {
+			wanted = repository
+			break
+		}
+	}
+	if wanted.ID == "" {
+		t.Fatal("wms repository missing from test catalog")
+	}
+
+	server := NewHostServerWithSources(
+		catalog,
+		NewHub(),
+		"127.0.0.1",
+		7331,
+		nil,
+		nil,
+		fakeRepositorySearcher{ids: []string{wanted.ID}},
+	)
+	response := httptest.NewRecorder()
+	server.index(response, httptest.NewRequest(http.MethodGet, "/?q=spotwo", nil))
+	body := response.Body.String()
+	if !strings.Contains(body, "Results") || !strings.Contains(body, "wms") {
+		t.Fatalf("search result missing: %s", body)
+	}
+	if strings.Contains(body, "candidate-api") {
+		t.Fatalf("search leaked unmatched repository: %s", body)
 	}
 }

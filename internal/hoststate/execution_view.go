@@ -1,15 +1,16 @@
 package hoststate
 
 import (
-	"path/filepath"
 	"sort"
-	"strings"
 	"time"
+
+	"github.com/sergii/specview/internal/sourcecontrol"
 )
 
-// RepositoryExecutionView is a read-only projection of the current execution
-// context for one repository. Git remains authoritative for repository and
-// worktree state; execution adapters remain authoritative for active sessions.
+// RepositoryExecutionView is a read-only projection of current execution
+// context for one repository. Source-control mechanics are provided by the
+// portable sourcecontrol layer; execution adapters remain authoritative for
+// active sessions.
 type RepositoryExecutionView struct {
 	Remote    string
 	Worktrees []Worktree
@@ -18,40 +19,8 @@ type RepositoryExecutionView struct {
 }
 
 type Worktree struct {
-	Path       string
-	Branch     string
-	Head       string
-	Detached   bool
-	DirtyCount int
-	Agents     []string
-}
-
-func (w Worktree) BranchLabel() string {
-	if w.Detached {
-		return "detached"
-	}
-	if w.Branch == "" {
-		return "unknown"
-	}
-	return w.Branch
-}
-
-func (w Worktree) ShortHead() string {
-	if len(w.Head) <= 8 {
-		return w.Head
-	}
-	return w.Head[:8]
-}
-
-func (w Worktree) ChangeLabel() string {
-	switch w.DirtyCount {
-	case 0:
-		return "clean"
-	case 1:
-		return "1 change"
-	default:
-		return itoa(w.DirtyCount) + " changes"
-	}
+	sourcecontrol.Worktree
+	Agents []string
 }
 
 func (w Worktree) AgentLabel() string {
@@ -64,14 +33,23 @@ func (w Worktree) AgentLabel() string {
 	return itoa(len(w.Agents)) + " agents"
 }
 
-// ExecutionView accepts an optional source so the host server can pass the same
-// registry used by the runtime. The default preserves the convenient template
-// method for callers that do not need dependency injection.
+// ExecutionView keeps the H13 convenience API while delegating local Git
+// inspection to the source-control layer introduced by H15.
 func (r Repository) ExecutionView(sources ...ExecutionSource) RepositoryExecutionView {
-	view, err := inspectGitRepository(r.Root)
+	gitContext, err := sourcecontrol.InspectGit(r.Root)
 	if err != nil {
-		view.Error = err.Error()
-		return view
+		return RepositoryExecutionView{Error: err.Error()}
+	}
+	return r.ExecutionViewWithGit(gitContext, sources...)
+}
+
+// ExecutionViewWithGit allows the web projection to reuse the exact Git
+// snapshot already collected for RepositoryContext rather than issuing a
+// duplicate set of Git commands.
+func (r Repository) ExecutionViewWithGit(gitContext sourcecontrol.GitContext, sources ...ExecutionSource) RepositoryExecutionView {
+	view := RepositoryExecutionView{Remote: gitContext.Remote}
+	for _, worktree := range gitContext.Worktrees {
+		view.Worktrees = append(view.Worktrees, Worktree{Worktree: worktree})
 	}
 
 	var source ExecutionSource = DefaultExecutionRegistry()
@@ -134,74 +112,27 @@ func (r Repository) startedAtForProcesses(agent string, processIDs []int) (start
 	return startedAt
 }
 
+// Compatibility helpers keep H13 tests focused on the same observable contract
+// while Git parsing now lives in internal/sourcecontrol.
 func inspectGitRepository(root string) (RepositoryExecutionView, error) {
-	view := RepositoryExecutionView{}
-
-	if output, err := runGit(root, "remote", "get-url", "origin"); err == nil {
-		view.Remote = strings.TrimSpace(string(output))
-	}
-
-	output, err := runGit(root, "worktree", "list", "--porcelain")
+	gitContext, err := sourcecontrol.InspectGit(root)
 	if err != nil {
-		return view, err
+		return RepositoryExecutionView{}, err
 	}
-	view.Worktrees = parseWorktrees(string(output))
-	for i := range view.Worktrees {
-		status, statusErr := runGit(view.Worktrees[i].Path, "status", "--porcelain")
-		if statusErr != nil {
-			continue
-		}
-		view.Worktrees[i].DirtyCount = countNonEmptyLines(string(status))
+	view := RepositoryExecutionView{Remote: gitContext.Remote}
+	for _, worktree := range gitContext.Worktrees {
+		view.Worktrees = append(view.Worktrees, Worktree{Worktree: worktree})
 	}
 	return view, nil
 }
 
 func parseWorktrees(output string) []Worktree {
-	var worktrees []Worktree
-	var current *Worktree
-	flush := func() {
-		if current == nil || current.Path == "" {
-			return
-		}
-		worktrees = append(worktrees, *current)
-		current = nil
+	parsed := sourcecontrol.ParseWorktrees(output)
+	worktrees := make([]Worktree, 0, len(parsed))
+	for _, worktree := range parsed {
+		worktrees = append(worktrees, Worktree{Worktree: worktree})
 	}
-
-	for _, raw := range strings.Split(output, "\n") {
-		line := strings.TrimSpace(raw)
-		if line == "" {
-			flush()
-			continue
-		}
-		if strings.HasPrefix(line, "worktree ") {
-			flush()
-			current = &Worktree{Path: filepath.Clean(strings.TrimSpace(strings.TrimPrefix(line, "worktree ")))}
-			continue
-		}
-		if current == nil {
-			continue
-		}
-		switch {
-		case strings.HasPrefix(line, "HEAD "):
-			current.Head = strings.TrimSpace(strings.TrimPrefix(line, "HEAD "))
-		case strings.HasPrefix(line, "branch "):
-			current.Branch = strings.TrimPrefix(strings.TrimSpace(strings.TrimPrefix(line, "branch ")), "refs/heads/")
-		case line == "detached":
-			current.Detached = true
-		}
-	}
-	flush()
 	return worktrees
-}
-
-func countNonEmptyLines(value string) int {
-	count := 0
-	for _, line := range strings.Split(value, "\n") {
-		if strings.TrimSpace(line) != "" {
-			count++
-		}
-	}
-	return count
 }
 
 func itoa(value int) string {

@@ -13,15 +13,18 @@ import (
 
 	"github.com/sergii/specview/internal/config"
 	"github.com/sergii/specview/internal/hoststate"
+	"github.com/sergii/specview/internal/sourcecontrol"
 	"github.com/sergii/specview/internal/specs"
 )
 
 type HostServer struct {
-	catalog *hoststate.Catalog
-	hub     *Hub
-	host    string
-	port    int
-	tmpl    *template.Template
+	catalog         *hoststate.Catalog
+	hub             *Hub
+	host            string
+	port            int
+	tmpl            *template.Template
+	executionSource hoststate.ExecutionSource
+	sourceControl   sourcecontrol.Source
 }
 
 func NewHostServer(catalog *hoststate.Catalog, hub *Hub, host string, port int, executionSources ...hoststate.ExecutionSource) *HostServer {
@@ -29,23 +32,31 @@ func NewHostServer(catalog *hoststate.Catalog, hub *Hub, host string, port int, 
 	if len(executionSources) > 0 && executionSources[0] != nil {
 		executionSource = executionSources[0]
 	}
+	return NewHostServerWithSources(catalog, hub, host, port, executionSource, sourcecontrol.DefaultService())
+}
 
+func NewHostServerWithSources(catalog *hoststate.Catalog, hub *Hub, host string, port int, executionSource hoststate.ExecutionSource, sourceControl sourcecontrol.Source) *HostServer {
+	if executionSource == nil {
+		executionSource = hoststate.DefaultExecutionRegistry()
+	}
+	if sourceControl == nil {
+		sourceControl = sourcecontrol.DefaultService()
+	}
 	funcs := template.FuncMap{
 		"since": func(t time.Time) string { return since(t) },
 		"projectItem": func(repoID string, item specs.Artifact) projectItemData {
 			return projectItemData{RepoID: repoID, Item: item}
 		},
-		"executionView": func(repo hoststate.Repository) hoststate.RepositoryExecutionView {
-			return repo.ExecutionView(executionSource)
-		},
 	}
 	tmpl := template.Must(template.New("host.html").Funcs(funcs).ParseFS(templateFS, "templates/*.html"))
 	return &HostServer{
-		catalog: catalog,
-		hub:     hub,
-		host:    host,
-		port:    port,
-		tmpl:    tmpl,
+		catalog:         catalog,
+		hub:             hub,
+		host:            host,
+		port:            port,
+		tmpl:            tmpl,
+		executionSource: executionSource,
+		sourceControl:   sourceControl,
 	}
 }
 
@@ -124,6 +135,8 @@ type projectItemData struct {
 
 type projectData struct {
 	Repo              hoststate.Repository
+	Execution         hoststate.RepositoryExecutionView
+	SourceControl     sourcecontrol.RepositoryContext
 	Convention        config.Convention
 	DetectionError    string
 	Unsupported       bool
@@ -141,7 +154,7 @@ func (s *HostServer) project(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data, err := s.loadProject(repo)
+	data, err := s.loadProject(r.Context(), repo)
 	if err != nil {
 		http.Error(w, "load repository: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -181,11 +194,19 @@ func (s *HostServer) projectSpec(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *HostServer) loadProject(repo hoststate.Repository) (projectData, error) {
+func (s *HostServer) loadProject(ctx context.Context, repo hoststate.Repository) (projectData, error) {
 	data, store, err := s.projectStore(repo)
 	if err != nil {
 		return projectData{}, err
 	}
+
+	repositoryContext, err := s.sourceControl.Inspect(ctx, repo.Root)
+	if err != nil {
+		return projectData{}, err
+	}
+	data.SourceControl = repositoryContext
+	data.Execution = repo.ExecutionViewWithGit(repositoryContext.Git, s.executionSource)
+
 	if store == nil {
 		return data, nil
 	}

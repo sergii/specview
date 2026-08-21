@@ -39,6 +39,8 @@ func (a *GitHubSpecKitAdapter) Scan() ([]Artifact, error) {
 	if artifact, ok, err := readOptionalArtifact(constitutionPath, ".specify/memory/constitution.md", "constitution", ArtifactPolicy, StatusDone, nil); err != nil {
 		return nil, err
 	} else if ok {
+		artifact.Plane = PlaneKnowledge
+		artifact.Role = RoleSupporting
 		artifacts = append(artifacts, artifact)
 	}
 
@@ -102,6 +104,9 @@ func (a *GitHubSpecKitAdapter) scanFeature(featureID string) ([]Artifact, error)
 	if err != nil {
 		return nil, err
 	}
+	main.Plane = PlaneWork
+	main.Role = RolePrimary
+	main.WorkItemID = featureID
 
 	latestModified := main.ModifiedAt
 	artifacts := []Artifact{main}
@@ -134,6 +139,9 @@ func (a *GitHubSpecKitAdapter) scanFeature(featureID string) ([]Artifact, error)
 		if !ok {
 			continue
 		}
+		artifact.Plane = PlaneWork
+		artifact.Role = RoleSupporting
+		artifact.WorkItemID = featureID
 		artifacts = append(artifacts, artifact)
 		if artifact.ModifiedAt.After(latestModified) {
 			latestModified = artifact.ModifiedAt
@@ -164,6 +172,9 @@ func (a *GitHubSpecKitAdapter) scanFeature(featureID string) ([]Artifact, error)
 			return err
 		}
 		if ok {
+			artifact.Plane = PlaneWork
+			artifact.Role = RoleSupporting
+			artifact.WorkItemID = featureID
 			artifacts = append(artifacts, artifact)
 			if artifact.ModifiedAt.After(latestModified) {
 				latestModified = artifact.ModifiedAt

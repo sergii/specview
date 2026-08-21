@@ -33,6 +33,22 @@ func DiagnoseCodex() ([]ScanDiagnostic, error) {
 	return diagnoseCodex()
 }
 
+// normalizeFilesystemPath returns a stable path identity while preserving
+// callers' original path spelling for display. This matters on systems such as
+// macOS where /var and /private/var can refer to the same directory.
+func normalizeFilesystemPath(path string) string {
+	clean := filepath.Clean(path)
+	resolved, err := filepath.EvalSymlinks(clean)
+	if err == nil && resolved != "" {
+		return filepath.Clean(resolved)
+	}
+	return clean
+}
+
+func sameFilesystemPath(left, right string) bool {
+	return normalizeFilesystemPath(left) == normalizeFilesystemPath(right)
+}
+
 func looksLikeCodex(command string) bool {
 	fields := strings.Fields(strings.ToLower(command))
 	if len(fields) == 0 {

@@ -85,7 +85,7 @@ func (r Repository) ExecutionView(sources ...ExecutionSource) RepositoryExecutio
 		return view
 	}
 	for _, session := range sessions {
-		if filepath.Clean(session.RepositoryRoot) != filepath.Clean(r.Root) {
+		if !sameFilesystemPath(session.RepositoryRoot, r.Root) {
 			continue
 		}
 		session.StartedAt = r.startedAtForProcesses(session.Agent, session.ProcessIDs)
@@ -101,7 +101,7 @@ func (r Repository) ExecutionView(sources ...ExecutionSource) RepositoryExecutio
 	for i := range view.Worktrees {
 		seen := make(map[string]struct{})
 		for _, session := range view.Sessions {
-			if filepath.Clean(session.WorktreeRoot) != filepath.Clean(view.Worktrees[i].Path) {
+			if !sameFilesystemPath(session.WorktreeRoot, view.Worktrees[i].Path) {
 				continue
 			}
 			if _, ok := seen[session.Agent]; ok {

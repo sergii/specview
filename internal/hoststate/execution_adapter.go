@@ -155,10 +155,15 @@ func sessionsFromDiagnostics(adapter, agent string, diagnostics []ScanDiagnostic
 		cwd := filepath.Clean(diagnostic.CWD)
 		worktreeRoot := cwd
 		if output, err := runGit(cwd, "rev-parse", "--show-toplevel"); err == nil {
-			worktreeRoot = filepath.Clean(strings.TrimSpace(string(output)))
+			candidate := filepath.Clean(strings.TrimSpace(string(output)))
+			if !sameFilesystemPath(candidate, cwd) {
+				worktreeRoot = candidate
+			}
 		}
 
-		key := adapter + "\x00" + repositoryRoot + "\x00" + cwd
+		identityRepository := normalizeFilesystemPath(repositoryRoot)
+		identityCWD := normalizeFilesystemPath(cwd)
+		key := adapter + "\x00" + identityRepository + "\x00" + identityCWD
 		session := byKey[key]
 		if session == nil {
 			session = &ExecutionSession{
@@ -189,6 +194,6 @@ func sessionsFromDiagnostics(adapter, agent string, diagnostics []ScanDiagnostic
 }
 
 func executionSessionID(adapter, repositoryRoot, cwd string) string {
-	sum := sha256.Sum256([]byte(adapter + "\x00" + filepath.Clean(repositoryRoot) + "\x00" + filepath.Clean(cwd)))
+	sum := sha256.Sum256([]byte(adapter + "\x00" + normalizeFilesystemPath(repositoryRoot) + "\x00" + normalizeFilesystemPath(cwd)))
 	return "execution-" + hex.EncodeToString(sum[:8])
 }

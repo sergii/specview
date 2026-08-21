@@ -106,8 +106,14 @@ func (s *Server) projectName() string {
 
 func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	items := s.store.All()
-	data := boardData{ProjectName: s.projectName(), SpecsPath: s.cfg.Specs.Path, Total: len(items)}
+	data := boardData{ProjectName: s.projectName(), SpecsPath: s.cfg.Specs.Path}
 	for _, item := range items {
+		// The normalized store may contain policy, plan, task, contract, and
+		// other artifacts. The current v0 dashboard is still a spec projection.
+		if item.Kind != specs.ArtifactSpec {
+			continue
+		}
+		data.Total++
 		if item.Error != "" {
 			data.Invalid = append(data.Invalid, item)
 			continue
@@ -130,7 +136,7 @@ func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	item, ok := s.store.Find(path)
-	if !ok {
+	if !ok || item.Kind != specs.ArtifactSpec {
 		http.NotFound(w, r)
 		return
 	}

@@ -162,9 +162,9 @@ type stubAdapter struct {
 	records []Record
 }
 
-func (a stubAdapter) Name() string              { return "stub" }
-func (a stubAdapter) Scan() ([]Record, error)   { return a.records, nil }
-func (a stubAdapter) WatchRoots() []string      { return nil }
+func (a stubAdapter) Name() string            { return "stub" }
+func (a stubAdapter) Scan() ([]Record, error) { return a.records, nil }
+func (a stubAdapter) WatchRoots() []string    { return nil }
 
 func TestStoreUsesEvidenceAdapterBoundary(t *testing.T) {
 	store := NewStore(stubAdapter{records: []Record{

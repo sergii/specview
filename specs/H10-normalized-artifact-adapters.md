@@ -1,40 +1,56 @@
 ---
 specview:
-  status: in_progress
+  status: done
 ---
 
 # Normalized artifact adapters
 
-Introduce the first architecture boundary that separates repository-specific spec layouts from the Specview domain model.
+Introduce the architecture boundary that separates repository-specific SDD layouts from the Specview domain model.
 
 ## Intent
 
-Specview must be able to observe repo-native specification systems without requiring every project to store files in the same directory structure.
+Specview observes repo-native specification systems without requiring every project to store or name artifacts the same way.
 
-The native artifact root defaults to top-level `specs/`, but `specs/` is project content, not a sufficient Specview framework signature by itself. Native semantics are selected by `.specview.yaml` configuration.
-
-The core vocabulary is:
+The core vocabulary remains:
 
 ```text
 INTENT | EXECUTION | EVIDENCE
 ```
 
-This slice is limited to the Intent side of that model.
+This slice establishes the normalized Intent input boundary.
 
-## Scope
+## Native convention
 
-Define a normalized artifact model and adapter boundary for repository artifacts.
+The native Specview artifact root defaults to top-level `specs/`, but `specs/` is project content and not a sufficient Specview signature by itself.
 
-Initial normalized concepts:
+```text
+repo/
+├── .specview.yaml
+└── specs/
+    ├── H01.md
+    └── H02.md
+```
 
-- artifact;
-- artifact kind;
-- work item/capability/change identity when derivable;
-- source path;
-- declared metadata;
-- relation between artifacts.
+`SpecviewAdapter` is selected by configuration. Old `.specview.yaml` files without `specs.adapter` remain compatible and resolve to `specview`.
 
-Initial artifact kinds should be able to represent:
+## Normalized artifact model
+
+Artifacts expose framework-independent semantics:
+
+```text
+Artifact
+├── id
+├── kind
+├── plane
+├── role
+├── work_item_id
+├── path
+├── title
+├── declared/projected status
+└── relations
+```
+
+Supported semantic kinds include:
 
 - policy;
 - proposal;
@@ -50,93 +66,85 @@ Initial artifact kinds should be able to represent:
 - research;
 - checklist.
 
-Not every kind needs a dedicated UI in this slice.
+## Knowledge vs Work
 
-## Adapter behavior
+A repository may contain durable system knowledge that is not active work.
 
-The implementation must support:
-
-1. `SpecviewAdapter` using the existing configured `specs.path`, with `specs/` as the native default artifact root;
-2. explicit adapter selection through `specs.adapter`;
-3. backward compatibility: `.specview.yaml` configs without `specs.adapter` resolve to `specview`;
-4. normalized artifacts that contain no framework-specific path assumptions in the UI layer;
-5. normalized relations such as `depends_on`, `relates_to`, `resolves`, `supersedes`, and adapter-specific structural relations;
-6. a store/projection that depends on the adapter contract rather than directly scanning Markdown files;
-7. adapter-defined watch roots so a framework can observe more than one artifact directory without polling the whole source tree.
-
-Supported adapters in this slice:
-
-- `SpecviewAdapter`;
-- `GitHubSpecKitAdapter`.
-
-Candidate later adapters:
-
-- OpenSpec;
-- Kiro;
-- BMAD;
-- custom company layouts;
-- custom Markdown layouts that are deliberately distinct from the native `SpecviewAdapter` convention.
-
-## Adapter naming
-
-`SpecviewAdapter` is the canonical name for Specview's own native repository convention when selected by `.specview.yaml`:
+The normalized model therefore has two temporal planes:
 
 ```text
-repo/
-├── .specview.yaml
-└── specs/
-    ├── H01.md
-    └── H02.md
+PlaneKnowledge
+  current or historical project truth
+
+PlaneWork
+  artifacts participating in an active change
 ```
 
-Do not call this adapter `GenericMarkdownAdapter`. Generic/custom Markdown is a different future concern because arbitrary Markdown directories do not necessarily follow Specview semantics.
-
-A plain `specs/` directory is ambiguous because other SDD frameworks may use the same path.
-
-## Adapter detection
-
-Selection prefers explicit configuration. `specview init` may use strong framework signatures to create that configuration:
+Artifacts inside a work item also have a structural role:
 
 ```text
-.specview.yaml + explicit adapter   -> configured adapter
-.specview.yaml without adapter      -> SpecviewAdapter compatibility default
-.specify/ during init               -> write github-spec-kit
-specs/ only                         -> do not infer a foreign framework
+RolePrimary
+  represents the work item in a board/list projection
+
+RoleSupporting
+  belongs to the same work item without becoming another card
 ```
 
-Future adapters may add similarly strong init-time signatures:
+The current dashboard is now derived from:
 
 ```text
-openspec/                           -> OpenSpec adapter
-.kiro/specs/                        -> Kiro adapter
-_bmad-output/                       -> BMAD adapter
+plane = work
+role  = primary
 ```
 
-`.specview/` is reserved for future Specview-owned runtime material such as a rebuildable SQLite projection, indexes, sockets, or transient state. Durable intent remains in ordinary repository files such as `specs/`.
+rather than from a framework-specific filename or `kind=spec` check.
 
-## GitHub Spec Kit projection
+## Supported adapters
 
-`GitHubSpecKitAdapter` recognizes the feature-centric layout:
+### SpecviewAdapter
+
+Native lightweight convention:
+
+```text
+specs/*.md
+```
+
+Each native specification is normalized as:
+
+```text
+kind        = spec
+plane       = work
+role        = primary
+work_item   = file id
+```
+
+### GitHubSpecKitAdapter
+
+Recognizes:
 
 ```text
 .specify/
   memory/
     constitution.md
 
-specs/
-  001-feature/
-    spec.md
-    plan.md
-    research.md
-    data-model.md
-    quickstart.md
-    contracts/
-    tasks.md
+specs/<feature>/
+  spec.md
+  plan.md
+  research.md
+  data-model.md
+  quickstart.md
+  contracts/
+  tasks.md
 ```
 
-The feature `spec.md` becomes the dashboard-visible `ArtifactSpec`. Supporting files are indexed as related policy, plan, research, design, checklist, task, and contract artifacts.
+Projection:
 
-For the current three-column UI only, feature status is derived without requiring Specview metadata:
+- constitution -> knowledge/policy;
+- feature `spec.md` -> work/primary;
+- plan, research, data model, quickstart, tasks, contracts -> work/supporting;
+- supporting artifacts relate to the feature through `belongs_to`.
+
+The current three-column status is a compatibility projection:
 
 ```text
 spec.md only                                      -> new
@@ -144,116 +152,142 @@ plan.md or incomplete tasks.md                    -> in_progress
 all Markdown task checkboxes in tasks.md complete -> done
 ```
 
-This is a compatibility projection, not a GitHub Spec Kit status standard.
+Spec Kit's own specification metadata remains source-framework intent and is not confused with Specview execution state.
 
-## Representative fixture
-
-The adapter is validated against a repository fixture under:
+A representative fixture lives under:
 
 ```text
 internal/specs/testdata/github-spec-kit/
 ```
 
-The fixture follows the current Spec Kit document shapes closely enough to exercise the real adapter boundary rather than isolated parser helpers. It includes:
+and is exercised through `NewAdapter -> Store.Refresh -> Artifact[]`.
 
-- `.specify/memory/constitution.md`;
-- a feature `spec.md` with feature branch, Draft status, user scenario, acceptance scenarios, and functional requirements;
-- `plan.md`;
-- `research.md`;
-- partially completed `tasks.md` using Spec Kit checkbox syntax;
-- `contracts/api.yaml`.
+### OpenSpecAdapter
 
-The integration test exercises:
+Recognizes the OpenSpec namespace:
 
 ```text
-NewAdapter
-  -> GitHubSpecKitAdapter
-  -> Store.Refresh
-  -> normalized Artifact[]
-  -> feature status + supporting artifacts + relations
+openspec/
+├── specs/                 # current source of truth
+└── changes/               # changes in flight
+    ├── <change>/
+    │   ├── proposal.md
+    │   ├── design.md
+    │   ├── tasks.md
+    │   └── specs/**/spec.md
+    └── archive/
 ```
 
-Spec Kit's own `**Status**: Draft` field remains source-framework metadata. Specview does not reinterpret it as the execution workflow state; the current compatibility board state is derived separately from plan/tasks progress.
-
-## Current truth vs work in flight
-
-The normalized model must be capable of representing the OpenSpec-style distinction between:
+Projection:
 
 ```text
-CURRENT KNOWLEDGE
+openspec/specs/**/spec.md
+  -> plane=knowledge
+
+active change primary artifact
+  -> plane=work, role=primary
+
+change design/tasks/delta specs
+  -> plane=work, role=supporting
 ```
 
-and:
+Delta specs relate to the current capability they modify:
 
 ```text
-CHANGE IN FLIGHT
+change:delta:auth
+  --changes--> current:auth
 ```
 
-The first implementation does not need to render a dedicated UI for this distinction, but it must not choose a schema that makes the distinction impossible later.
+The adapter preserves OpenSpec's fluid workflow. `proposal.md` is preferred as the primary artifact, but if artifacts are created in another order the first available change artifact can represent the work item without imposing an artificial waterfall.
+
+Archived changes are excluded from active work in this slice.
+
+A representative fixture lives under:
+
+```text
+internal/specs/testdata/openspec/
+```
+
+and validates current knowledge, an active change, delta relations, task-derived status, fluid artifact order, and archive exclusion.
+
+## Adapter detection
+
+Explicit configuration wins.
+
+`specview init` uses only strong signatures:
+
+```text
+.specify/                         -> github-spec-kit, path=specs
+openspec/ with OpenSpec markers   -> openspec, path=openspec
+no strong signature              -> specview, path=specs
+```
+
+If multiple strong SDD conventions are present, initialization fails rather than choosing arbitrary precedence.
+
+A plain `specs/` directory remains ambiguous.
+
+## Watch roots
+
+Adapters define their own observation roots.
+
+- SpecviewAdapter watches its configured artifact root.
+- GitHubSpecKitAdapter watches `specs/` and `.specify/memory/`.
+- OpenSpecAdapter watches the `openspec/` namespace.
+
+The application source tree is not scanned merely to observe specification changes.
 
 ## SQLite
 
 A future SQLite database may index normalized artifacts, relations, full-text search, and derived state.
 
-SQLite is explicitly not the canonical source of repository intent. The projection must be rebuildable from authoritative adapters.
-
-SQLite implementation is outside this slice unless needed for a minimal proof of the adapter boundary.
+SQLite is not canonical intent storage. The projection must remain rebuildable from authoritative adapters.
 
 ## UI
 
-Do not redesign the dashboard as part of this slice.
+No UI redesign is part of H10.
 
-The current UI is a projection. It renders only normalized `ArtifactSpec` entries as cards even when the Store contains policy, plan, task, contract, and other artifacts.
-
-The adapter/core boundary should allow future list, board, graph, timeline, evidence, and workspace views without changing input contracts.
+The current dashboard remains a projection over the normalized model. Future list, board, graph, timeline, evidence, and workspace views can consume the same model without adapter-specific path logic.
 
 ## Acceptance
 
-- existing native `specs/*.md` projects continue to render unchanged through `SpecviewAdapter` when Specview configuration selects it;
-- `.specview.yaml` may explicitly declare `specs.adapter: specview` or `specs.adapter: github-spec-kit`;
-- old `.specview.yaml` configuration without `specs.adapter` remains valid and defaults to `specview`;
-- `specview init` detects `.specify/` and creates configuration using `github-spec-kit`;
-- `specs/` alone is not treated as a definitive Specview framework signature;
-- artifact discovery is behind an adapter interface rather than embedded in the store or UI;
-- adapters can define multiple narrow watch roots;
-- GitHub Spec Kit supporting artifacts are indexed but do not become extra dashboard cards;
-- normalized artifacts expose stable semantic kinds independent of directory names;
-- normalized relations can be represented even if the current UI does not render all of them;
-- representative Spec Kit repository structure is covered by an end-to-end adapter fixture;
-- unsupported adapter names fail explicitly rather than silently choosing another interpretation;
-- no Jira/Linear task-management behavior is introduced;
+- existing Specview-native repositories remain compatible;
+- adapter selection is explicit or strongly detected during init;
+- `specs/` alone does not identify a framework;
+- Store depends on the adapter interface rather than direct Markdown scanning;
+- adapters define their own watch roots;
+- normalized artifacts represent semantic kind, knowledge/work plane, primary/supporting role, work-item identity, and relations;
+- GitHub Spec Kit supporting artifacts are indexed without becoming duplicate board cards;
+- OpenSpec current specs are indexed as knowledge rather than active work;
+- OpenSpec active changes become one work item with supporting artifacts;
+- OpenSpec archive does not reappear as active work;
+- current UI contains no Spec Kit or OpenSpec path logic;
+- no Jira/Linear behavior is introduced;
 - no specification editing is introduced;
-- no embedded LLM is introduced;
-- documentation references ADR-001 as the governing semantic model.
+- no embedded LLM is introduced.
 
-## Implementation progress
+## Verification
 
-Completed:
+The GitHub Actions code gate passed with:
 
-- `SpecviewAdapter` introduced in the Go domain package;
-- adapter interface introduced;
-- Store now refreshes through an adapter;
-- adapter-defined watch roots introduced;
-- normalized artifact kinds and relations introduced;
-- native specs receive normalized `id` and `kind=spec`;
-- `.specview.yaml` supports `specs.adapter`;
-- missing adapter configuration defaults to `specview`;
-- Specview dogfoods explicit `adapter: specview`;
-- `GitHubSpecKitAdapter` implemented;
-- `.specify/memory/constitution.md` maps to project policy;
-- Spec Kit feature artifacts map to normalized semantic kinds;
-- current Spec Kit feature status is deterministically projected from plan/tasks artifacts;
-- `specview init` detects `.specify/` and writes the GitHub Spec Kit adapter;
-- representative GitHub Spec Kit fixture added and exercised through the production adapter/store boundary;
-- current dashboard remains visually spec-oriented while the Store can contain additional artifact kinds.
+```text
+gofmt            PASS
+go mod verify     PASS
+go vet            PASS
+go test -race     PASS
+go build           PASS
+```
 
-Remaining H10 work:
+## Follow-up slices
 
-- evaluate edge cases from additional real-world Spec Kit repositories as they appear;
-- extract individual requirements and tasks only if needed by the normalized relation model;
-- implement broader runtime auto-detection only if it can remain unambiguous and backward-compatible;
-- parse normalized relations from native Specview metadata once the relation contract is finalized;
-- decide whether H10 should close after CI validation or include a second foreign adapter to prove the contract further.
+H10 intentionally stops at the normalized adapter boundary.
+
+Good follow-ups are independent work:
+
+- native Specview relation metadata and an Intent graph;
+- requirement/scenario extraction where useful;
+- additional Kiro/BMAD/custom adapters;
+- Execution adapters;
+- Evidence adapters and acceptance policy.
 
 ## References
 
@@ -261,3 +295,4 @@ Remaining H10 work:
 - `docs/research/spec-driven-layouts.md`
 - `docs/adapters/specview.md`
 - `docs/adapters/github-spec-kit.md`
+- `docs/adapters/openspec.md`

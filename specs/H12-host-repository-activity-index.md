@@ -48,6 +48,8 @@ Plain `specs/` remains ambiguous. Kiro and BMAD are detection-only in this slice
 
 Observed host history is stored outside repositories. The POC uses a small JSON catalog under the user's host state directory and is explicitly replaceable by SQLite later.
 
+Development diagnostics now include broad structured logging and `specview doctor` / `bin/doctor` for the process -> cwd -> Git repository discovery path. Development logs use a colorized `slog` handler; production can switch to structured JSON without changing domain logging calls.
+
 ## Acceptance
 
 - `specview` starts without `.specview.yaml` in the current directory;
@@ -64,27 +66,11 @@ Observed host history is stored outside repositories. The POC uses a small JSON 
 - supported repository adapters still render existing project work;
 - Kiro/BMAD detection does not pretend parser support exists;
 - host activity refreshes through SSE;
-- project files are never created by host discovery.
-
-## Verification
-
-The implementation passed the GitHub Actions gates:
-
-```text
-gofmt                         PASS
-go mod tidy / module hygiene  PASS
-go vet ./...                   PASS
-go test -race ./...            PASS
-go build ./cmd/specview        PASS
-release cross-build            PASS
-```
-
-Release cross-build covers Linux and macOS on amd64 and arm64.
+- project files are never created by host discovery;
+- `bin/dev install` can fetch, pull, verify, test, rebuild, and run the current branch;
+- `bin/doctor` rebuilds before running discovery diagnostics;
+- development logs expose scanner/runtime/SSE/HTTP activity without logging secrets.
 
 ## Non-goals
 
 SQLite migration, worktree UI, company hierarchy, recursive repository discovery, repository search, Claude/OpenCode auto-discovery, multi-host aggregation, and Acceptance policy.
-
-## References
-
-- `docs/decisions/ADR-003-host-repository-session-model.md`

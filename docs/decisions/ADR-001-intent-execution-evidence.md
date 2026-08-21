@@ -82,6 +82,48 @@ Examples:
 
 Evidence is project-specific. A landing page and an industrial IoT system may use the same Specview core with very different acceptance policies.
 
+## Durable knowledge vs active work
+
+Intent artifacts do not all represent work that should appear on an execution board.
+
+OpenSpec makes this distinction explicit: current specs describe the system as it is, while changes describe proposed work. Specview therefore classifies normalized artifacts on two temporal planes:
+
+```text
+KNOWLEDGE
+Durable current or historical project truth.
+
+WORK
+Artifacts that belong to a change currently moving through execution.
+```
+
+Artifacts also have a structural role inside a work item:
+
+```text
+PRIMARY
+The artifact representing the work item itself in a projection.
+
+SUPPORTING
+Artifacts that belong to the same work item but are not separate board cards.
+```
+
+Examples:
+
+```text
+OpenSpec current auth spec
+  plane = knowledge
+  role  = primary
+
+OpenSpec add-2fa proposal
+  plane = work
+  role  = primary
+
+OpenSpec add-2fa design/tasks/delta specs
+  plane = work
+  role  = supporting
+```
+
+The current board projects `plane=work + role=primary`. Other views may project knowledge, relationships, evidence, or history without changing adapter contracts.
+
 ## Workflow is a separate projection
 
 Intent, Execution, and Evidence are not workflow columns.
@@ -136,7 +178,8 @@ Adapters emit normalized facts/events. The core domain model must not depend on 
 ## Consequences
 
 - The existing v0.0.1 filesystem watcher becomes the implementation behind `SpecviewAdapter`.
-- The current dashboard can remain unchanged while the domain model evolves underneath it.
+- The current dashboard can remain visually unchanged while the domain model evolves underneath it.
+- Current knowledge can be indexed without being confused with active work.
 - Future SQLite support can index and correlate artifacts without becoming their canonical store.
 - A future Go-to-Rust rewrite can preserve the same semantic and adapter contracts.
 - Specview can support multiple spec-driven-development frameworks without becoming a new competing spec format.

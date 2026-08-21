@@ -6,12 +6,23 @@ import (
 	"testing"
 )
 
-func TestOpenSpecAdapterSeparatesCurrentKnowledgeFromActiveWork(t *testing.T) {
+func TestOpenSpecAdapterSeparatesKnowledgeHistoryFromActiveWork(t *testing.T) {
 	root := filepath.Join("testdata", "openspec")
 	adapter := NewOpenSpecAdapter(root)
 	artifacts, err := adapter.Scan()
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	policy, ok := findArtifact(artifacts, "openspec:config")
+	if !ok {
+		t.Fatalf("OpenSpec project config not found: %#v", artifacts)
+	}
+	if policy.Kind != ArtifactPolicy || policy.Plane != PlaneKnowledge || policy.Role != RoleSupporting {
+		t.Fatalf("unexpected OpenSpec policy artifact: %#v", policy)
+	}
+	if policy.IsBoardItem() {
+		t.Fatal("OpenSpec project config must not become an active board item")
 	}
 
 	current, ok := findArtifact(artifacts, "current:auth")
@@ -47,9 +58,20 @@ func TestOpenSpecAdapterSeparatesCurrentKnowledgeFromActiveWork(t *testing.T) {
 		t.Fatalf("delta spec does not point at current auth spec: %#v", delta.Relations)
 	}
 
-	if _, ok := findArtifact(artifacts, "2026-08-01-old-change"); ok {
-		t.Fatal("archived change must not be active work")
+	archived, ok := findArtifact(artifacts, "archive:2026-08-01-old-change")
+	if !ok {
+		t.Fatalf("archived change history not found: %#v", artifacts)
 	}
+	if archived.Kind != ArtifactProposal || archived.Plane != PlaneKnowledge || archived.Role != RoleSupporting {
+		t.Fatalf("unexpected archived change artifact: %#v", archived)
+	}
+	if archived.WorkItemID != "archive:2026-08-01-old-change" || archived.IsBoardItem() {
+		t.Fatalf("archived change must remain searchable history, not active work: %#v", archived)
+	}
+	if !hasRelation(archived.Relations, "archived_from", "old-change") {
+		t.Fatalf("archived change does not retain original change identity: %#v", archived.Relations)
+	}
+
 	if roots := adapter.WatchRoots(); len(roots) != 1 || roots[0] != filepath.Clean(root) {
 		t.Fatalf("unexpected OpenSpec watch roots: %#v", roots)
 	}
@@ -99,6 +121,29 @@ func TestOpenSpecAdapterSupportsFluidArtifactOrder(t *testing.T) {
 	}
 }
 
+func TestOpenSpecAdapterIndexesArchivedDeltaSpecsAsKnowledge(t *testing.T) {
+	projectRoot := t.TempDir()
+	root := filepath.Join(projectRoot, "openspec")
+	archiveRoot := filepath.Join(root, "changes", "archive", "2026-08-21-add-search")
+	writeTestFile(t, filepath.Join(archiveRoot, "proposal.md"), "# Add search\n")
+	writeTestFile(t, filepath.Join(archiveRoot, "specs", "search", "spec.md"), "# Search\n")
+
+	artifacts, err := NewOpenSpecAdapter(root).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta, ok := findArtifact(artifacts, "archive:2026-08-21-add-search:delta:search")
+	if !ok {
+		t.Fatalf("archived delta spec not found: %#v", artifacts)
+	}
+	if delta.Plane != PlaneKnowledge || delta.Role != RoleSupporting || delta.IsBoardItem() {
+		t.Fatalf("unexpected archived delta projection: %#v", delta)
+	}
+	if !hasRelation(delta.Relations, "changes", "current:search") || !hasRelation(delta.Relations, "archived_from", "add-search") {
+		t.Fatalf("archived delta relations are incomplete: %#v", delta.Relations)
+	}
+}
+
 func TestNewAdapterBuildsOpenSpecAdapter(t *testing.T) {
 	projectRoot := t.TempDir()
 	root := filepath.Join(projectRoot, "openspec")
@@ -111,6 +156,15 @@ func TestNewAdapterBuildsOpenSpecAdapter(t *testing.T) {
 	}
 	if adapter.Name() != OpenSpecAdapterName {
 		t.Fatalf("adapter name = %q, want %q", adapter.Name(), OpenSpecAdapterName)
+	}
+}
+
+func TestArchivedOriginalChangeID(t *testing.T) {
+	if got := archivedOriginalChangeID("2026-08-21-add-search"); got != "add-search" {
+		t.Fatalf("archivedOriginalChangeID() = %q, want add-search", got)
+	}
+	if got := archivedOriginalChangeID("legacy-folder"); got != "legacy-folder" {
+		t.Fatalf("archivedOriginalChangeID() = %q, want legacy-folder", got)
 	}
 }
 

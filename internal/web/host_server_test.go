@@ -74,7 +74,7 @@ func TestHostDashboardEmptyToday(t *testing.T) {
 	server := NewHostServer(catalog, NewHub(), "127.0.0.1", 7331)
 	response := httptest.NewRecorder()
 	server.index(response, httptest.NewRequest(http.MethodGet, "/", nil))
-	if !strings.Contains(response.Body.String(), "You haven&#39;t run anything yet.") {
+	if !strings.Contains(response.Body.String(), "You haven't run anything yet.") {
 		t.Fatalf("empty state missing: %s", response.Body.String())
 	}
 }

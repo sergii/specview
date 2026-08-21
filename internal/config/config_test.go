@@ -19,7 +19,7 @@ func TestInitAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Specs.Path != "specs" || cfg.Specs.Pattern != "*.md" {
+	if cfg.Specs.Adapter != "specview" || cfg.Specs.Path != "specs" || cfg.Specs.Pattern != "*.md" {
 		t.Fatalf("unexpected specs config: %#v", cfg.Specs)
 	}
 	if cfg.Server.Host != "127.0.0.1" || cfg.Server.Port != 7331 {
@@ -38,7 +38,7 @@ func TestInitAndLoad(t *testing.T) {
 
 func TestLoadProjectMetadata(t *testing.T) {
 	root := t.TempDir()
-	data := "version: 1\nproject:\n  name: \"Observed Project\"\n  root: ./demo\nspecs:\n  path: specs\n  pattern: '*.md'\nserver:\n  host: 127.0.0.1\n  port: 7331\n"
+	data := "version: 1\nproject:\n  name: \"Observed Project\"\n  root: ./demo\nspecs:\n  adapter: specview\n  path: specs\n  pattern: '*.md'\nserver:\n  host: 127.0.0.1\n  port: 7331\n"
 	if err := os.WriteFile(filepath.Join(root, FileName), []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -49,9 +49,27 @@ func TestLoadProjectMetadata(t *testing.T) {
 	if cfg.Project.Name != "Observed Project" || cfg.Project.Root != "./demo" {
 		t.Fatalf("unexpected project config: %#v", cfg.Project)
 	}
+	if cfg.Specs.Adapter != "specview" {
+		t.Fatalf("unexpected specs adapter %q", cfg.Specs.Adapter)
+	}
 	want := filepath.Join(root, "demo")
 	if got := cfg.ResolveProjectRoot(root); got != want {
 		t.Fatalf("ResolveProjectRoot() = %q, want %q", got, want)
+	}
+}
+
+func TestLoadConfigWithoutAdapterDefaultsToSpecview(t *testing.T) {
+	root := t.TempDir()
+	data := "version: 1\nproject:\n  name: \"Legacy\"\nspecs:\n  path: specs\n  pattern: '*.md'\nserver:\n  host: 127.0.0.1\n  port: 7331\n"
+	if err := os.WriteFile(filepath.Join(root, FileName), []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Specs.Adapter != "specview" {
+		t.Fatalf("config specs.adapter = %q, want specview", cfg.Specs.Adapter)
 	}
 }
 

@@ -89,19 +89,25 @@ func initProject() error {
 }
 
 func doctor() error {
-	slog.Info("doctor started", "check", "codex-discovery")
-	diagnostics, err := hoststate.DiagnoseCodex()
-	if err != nil {
-		return fmt.Errorf("diagnose Codex discovery: %w", err)
+	registry := hoststate.DefaultExecutionRegistry()
+	adapter, ok := registry.Adapter("codex")
+	if !ok {
+		return fmt.Errorf("Codex execution adapter is not registered")
 	}
 
-	fmt.Println("Specview doctor - Codex discovery")
+	slog.Info("doctor started", "adapter", adapter.Name(), "check", "process-cwd-repository")
+	diagnostics, err := adapter.Diagnostics()
+	if err != nil {
+		return fmt.Errorf("diagnose %s execution adapter: %w", adapter.Name(), err)
+	}
+
+	fmt.Printf("Specview doctor - %s execution adapter\n", adapter.Name())
 	if len(diagnostics) == 0 {
-		fmt.Println("Matched Codex processes: 0")
-		slog.Warn("doctor found no Codex processes")
+		fmt.Println("Matched processes: 0")
+		slog.Warn("doctor found no matching processes", "adapter", adapter.Name())
 		return nil
 	}
-	fmt.Printf("Matched Codex processes: %d\n", len(diagnostics))
+	fmt.Printf("Matched processes: %d\n", len(diagnostics))
 	for _, diagnostic := range diagnostics {
 		fmt.Printf("\nPID %d\n", diagnostic.PID)
 		if diagnostic.Command != "" {
@@ -119,6 +125,7 @@ func doctor() error {
 			fmt.Printf("  error: %s\n", diagnostic.Error)
 		}
 		slog.Debug("doctor diagnostic",
+			"adapter", adapter.Name(),
 			"pid", diagnostic.PID,
 			"matched", diagnostic.Matched,
 			"cwd", diagnostic.CWD,
@@ -127,7 +134,7 @@ func doctor() error {
 			"error", diagnostic.Error,
 		)
 	}
-	slog.Info("doctor completed", "diagnostics", len(diagnostics))
+	slog.Info("doctor completed", "adapter", adapter.Name(), "diagnostics", len(diagnostics))
 	return nil
 }
 
@@ -143,8 +150,9 @@ func serve() error {
 		return err
 	}
 
+	executions := hoststate.DefaultExecutionRegistry()
 	hub := webui.NewHub()
-	runtime := hoststate.NewRuntime(catalog, hoststate.NewCodexScanner(), 2*time.Second, hub.Broadcast)
+	runtime := hoststate.NewRuntime(catalog, executions, 2*time.Second, hub.Broadcast)
 	observations, err := runtime.Refresh()
 	if err != nil {
 		slog.Warn("initial host activity scan failed", "error", err)
@@ -164,6 +172,7 @@ func serve() error {
 		"state", statePath,
 		"address", fmt.Sprintf("http://%s:%d", host, port),
 		"scan_interval", 2*time.Second,
+		"execution_registry", "default",
 	)
 
 	err = server.ListenAndServe(ctx)
@@ -180,7 +189,7 @@ Usage:
   specview              Start the host dashboard and observe active repositories
   specview serve        Start the host dashboard and observe active repositories
   specview init         Detect the current repository convention and create .specview.yaml
-  specview doctor       Diagnose host Codex process -> cwd -> Git repository discovery
+  specview doctor       Diagnose the registered Codex execution adapter
   specview version      Print the version
   specview help         Show this help
 

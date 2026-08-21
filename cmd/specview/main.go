@@ -21,7 +21,7 @@ func main() {
 	_, settings := logging.Configure(version)
 	slog.Debug("process started",
 		"pid", os.Getpid(),
-		"args", os.Args[1:],
+		"arg_count", len(os.Args)-1,
 		"log_format", settings.Format,
 	)
 

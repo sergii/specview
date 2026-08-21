@@ -24,11 +24,19 @@ type HostServer struct {
 	tmpl    *template.Template
 }
 
-func NewHostServer(catalog *hoststate.Catalog, hub *Hub, host string, port int) *HostServer {
+func NewHostServer(catalog *hoststate.Catalog, hub *Hub, host string, port int, executionSources ...hoststate.ExecutionSource) *HostServer {
+	var executionSource hoststate.ExecutionSource = hoststate.DefaultExecutionRegistry()
+	if len(executionSources) > 0 && executionSources[0] != nil {
+		executionSource = executionSources[0]
+	}
+
 	funcs := template.FuncMap{
 		"since": func(t time.Time) string { return since(t) },
 		"projectItem": func(repoID string, item specs.Artifact) projectItemData {
 			return projectItemData{RepoID: repoID, Item: item}
+		},
+		"executionView": func(repo hoststate.Repository) hoststate.RepositoryExecutionView {
+			return repo.ExecutionView(executionSource)
 		},
 	}
 	tmpl := template.Must(template.New("host.html").Funcs(funcs).ParseFS(templateFS, "templates/*.html"))

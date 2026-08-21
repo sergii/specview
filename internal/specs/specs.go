@@ -52,7 +52,7 @@ type Relation struct {
 	Target string
 }
 
-type Spec struct {
+type Artifact struct {
 	ID         string
 	Kind       ArtifactKind
 	Path       string
@@ -64,9 +64,13 @@ type Spec struct {
 	Relations  []Relation
 }
 
+// Spec is a compatibility alias for the current spec-oriented UI.
+// New domain code should use Artifact.
+type Spec = Artifact
+
 type Adapter interface {
 	Name() string
-	Scan() ([]Spec, error)
+	Scan() ([]Artifact, error)
 }
 
 type SpecviewAdapter struct {
@@ -82,7 +86,7 @@ func (a *SpecviewAdapter) Name() string {
 	return SpecviewAdapterName
 }
 
-func (a *SpecviewAdapter) Scan() ([]Spec, error) {
+func (a *SpecviewAdapter) Scan() ([]Artifact, error) {
 	return scan(a.root, a.pattern)
 }
 
@@ -98,7 +102,7 @@ func NewAdapter(name, root, pattern string) (Adapter, error) {
 type Store struct {
 	adapter Adapter
 	mu      sync.RWMutex
-	items   []Spec
+	items   []Artifact
 }
 
 func NewStore(root, pattern string) *Store {
@@ -124,15 +128,15 @@ func (s *Store) Refresh() error {
 	return nil
 }
 
-func (s *Store) All() []Spec {
+func (s *Store) All() []Artifact {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	items := make([]Spec, len(s.items))
+	items := make([]Artifact, len(s.items))
 	copy(items, s.items)
 	return items
 }
 
-func (s *Store) Find(path string) (Spec, bool) {
+func (s *Store) Find(path string) (Artifact, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, item := range s.items {
@@ -140,11 +144,11 @@ func (s *Store) Find(path string) (Spec, bool) {
 			return item, true
 		}
 	}
-	return Spec{}, false
+	return Artifact{}, false
 }
 
-func scan(root, pattern string) ([]Spec, error) {
-	var items []Spec
+func scan(root, pattern string) ([]Artifact, error) {
+	var items []Artifact
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -182,14 +186,14 @@ func scan(root, pattern string) ([]Spec, error) {
 	return items, nil
 }
 
-func parseFile(fullPath, relPath string) (Spec, error) {
+func parseFile(fullPath, relPath string) (Artifact, error) {
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
-		return Spec{}, err
+		return Artifact{}, err
 	}
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		return Spec{}, err
+		return Artifact{}, err
 	}
 
 	metadata, body, metadataErr := splitFrontMatter(data)
@@ -216,7 +220,7 @@ func parseFile(fullPath, relPath string) (Spec, error) {
 
 	id := strings.TrimSuffix(filepath.Base(relPath), filepath.Ext(relPath))
 
-	return Spec{
+	return Artifact{
 		ID:         id,
 		Kind:       ArtifactSpec,
 		Path:       relPath,

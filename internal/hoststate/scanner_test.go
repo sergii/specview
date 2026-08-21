@@ -1,6 +1,9 @@
 package hoststate
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestLooksLikeCodexCommandForms(t *testing.T) {
 	tests := []struct {
@@ -24,5 +27,15 @@ func TestLooksLikeCodexCommandForms(t *testing.T) {
 				t.Fatalf("looksLikeCodex(%q) = %v, want %v", tt.command, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCanonicalRepositoryRootPreservesGitDiagnosticContext(t *testing.T) {
+	_, err := canonicalRepositoryRoot(t.TempDir())
+	if err == nil {
+		t.Fatal("expected a Git repository resolution error")
+	}
+	if !strings.Contains(err.Error(), "git rev-parse --show-toplevel") {
+		t.Fatalf("error should identify the failing Git operation: %v", err)
 	}
 }

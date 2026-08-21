@@ -14,21 +14,17 @@ openspec/
 
 Current specs describe how the system behaves now. Changes package proposed modifications until they are archived and their deltas are folded into current specs.
 
-The default OpenSpec schema commonly uses:
+The default OpenSpec schema uses the flow:
 
 ```text
-proposal
-   ├── specs
-   └── design
-        \ /
-        tasks
+proposal -> specs -> design -> tasks
 ```
 
-OpenSpec is intentionally fluid: artifact dependencies describe what can be created, not mandatory waterfall phase gates. Custom schemas may define different artifact graphs.
+OpenSpec is intentionally fluid: artifact dependencies describe how artifacts build on each other, not mandatory waterfall phase gates. Custom schemas may define different artifact graphs.
 
 ## Configuration
 
-Explicit configuration:
+Explicit Specview configuration:
 
 ```yaml
 specs:
@@ -41,6 +37,14 @@ specs:
 
 If both OpenSpec and another strong SDD signature such as `.specify/` are present, initialization fails instead of guessing. The user can then create `.specview.yaml` with an explicit adapter.
 
+OpenSpec's own:
+
+```text
+openspec/config.yaml
+```
+
+is indexed as a normalized `policy` artifact in the knowledge plane. It remains owned by OpenSpec; Specview only observes it.
+
 ## Normalized temporal planes
 
 OpenSpec motivated an explicit distinction in the Specview core:
@@ -49,6 +53,19 @@ OpenSpec motivated an explicit distinction in the Specview core:
 PlaneKnowledge
 PlaneWork
 ```
+
+### Project policy
+
+`openspec/config.yaml` maps to:
+
+```text
+kind        = policy
+plane       = knowledge
+role        = supporting
+id          = openspec:config
+```
+
+This makes OpenSpec context and rules available to future search/correlation without turning them into active work.
 
 ### Current specs
 
@@ -78,7 +95,7 @@ An active change under:
 openspec/changes/<change-id>/
 ```
 
-maps to one work item.
+maps to one active work item.
 
 The preferred primary artifact is:
 
@@ -111,7 +128,7 @@ changes -> current:<capability>
 
 ## Fluid artifact order
 
-OpenSpec does not require proposal-first execution in all circumstances.
+OpenSpec allows artifacts to be revised and does not require a strict proposal-first execution sequence.
 
 If a change directory contains no `proposal.md` yet, the adapter promotes the first available known artifact to the normalized primary role. This preserves one board work item without imposing a stricter workflow than OpenSpec itself.
 
@@ -126,15 +143,30 @@ tasks.md with open tasks              -> in_progress
 all tasks.md checkboxes completed     -> done
 ```
 
-This projection is temporary UI compatibility, not an OpenSpec standard.
+This projection is temporary UI compatibility, not an OpenSpec standard. In particular, an active change can project as `done` when its tasks are complete even though OpenSpec has not archived it yet.
 
 Future `TODO -> IN PROGRESS -> ACCEPTANCE -> IN REVIEW -> DONE` lifecycle policy will be independent of the source framework.
 
-## Archive
+## Archive and history
 
-`openspec/changes/archive/` is historical context, not active work.
+OpenSpec preserves completed changes under:
 
-The first adapter version excludes archive contents from the active projection. A later knowledge/history view may index archived changes separately without putting them back on the board.
+```text
+openspec/changes/archive/YYYY-MM-DD-<change>/
+```
+
+Specview indexes those artifacts as historical knowledge rather than discarding them:
+
+```text
+plane       = knowledge
+role        = supporting
+status      = done
+work_item   = archive:<archive-folder>
+```
+
+Archived proposal/design/tasks/delta specs therefore remain available to future SQLite/FTS search and graph correlation, but `IsBoardItem()` remains false, so completed historical work never reappears on the active board.
+
+Archived artifacts retain an `archived_from` relation to the original change identity. Archived delta specs also preserve their `changes -> current:<capability>` relation.
 
 ## Watch scope
 
@@ -142,10 +174,11 @@ The first adapter version excludes archive contents from the active projection. 
 
 This captures:
 
+- OpenSpec project configuration;
 - current specs;
 - active changes;
 - archive transitions;
-- OpenSpec configuration and custom schema changes.
+- custom schema-related changes inside the OpenSpec namespace.
 
 ## UI independence
 
@@ -158,4 +191,4 @@ plane = work
 role  = primary
 ```
 
-Therefore current source-of-truth specs remain searchable/indexable inputs without being confused with active work.
+Therefore current source-of-truth specs, project policy, and archived history remain indexable inputs without being confused with active work.

@@ -12,43 +12,45 @@ const NativeAdapterName = "native"
 type Kind string
 
 const (
-	KindCompile      Kind = "compile"
-	KindTypecheck    Kind = "typecheck"
-	KindLint         Kind = "lint"
-	KindTest         Kind = "test"
-	KindAcceptance   Kind = "acceptance"
-	KindContract     Kind = "contract"
-	KindProperty     Kind = "property"
-	KindFuzz         Kind = "fuzz"
-	KindMutation     Kind = "mutation"
-	KindArchitecture Kind = "architecture"
-	KindSecurity     Kind = "security"
-	KindMigration    Kind = "migration"
-	KindPerformance  Kind = "performance"
-	KindHardware     Kind = "hardware"
-	KindReview       Kind = "review"
-	KindCI           Kind = "ci"
-	KindCustom       Kind = "custom"
+	KindCompile        Kind = "compile"
+	KindTypecheck      Kind = "typecheck"
+	KindStaticAnalysis Kind = "static_analysis"
+	KindLint           Kind = "lint"
+	KindTest           Kind = "test"
+	KindAcceptance     Kind = "acceptance"
+	KindContract       Kind = "contract"
+	KindProperty       Kind = "property"
+	KindFuzz           Kind = "fuzz"
+	KindMutation       Kind = "mutation"
+	KindArchitecture   Kind = "architecture"
+	KindSecurity       Kind = "security"
+	KindMigration      Kind = "migration"
+	KindPerformance    Kind = "performance"
+	KindHardware       Kind = "hardware"
+	KindReview         Kind = "review"
+	KindCI             Kind = "ci"
+	KindCustom         Kind = "custom"
 )
 
 var validKinds = map[Kind]struct{}{
-	KindCompile:      {},
-	KindTypecheck:    {},
-	KindLint:         {},
-	KindTest:         {},
-	KindAcceptance:   {},
-	KindContract:     {},
-	KindProperty:     {},
-	KindFuzz:         {},
-	KindMutation:     {},
-	KindArchitecture: {},
-	KindSecurity:     {},
-	KindMigration:    {},
-	KindPerformance:  {},
-	KindHardware:     {},
-	KindReview:       {},
-	KindCI:           {},
-	KindCustom:       {},
+	KindCompile:        {},
+	KindTypecheck:      {},
+	KindStaticAnalysis: {},
+	KindLint:           {},
+	KindTest:           {},
+	KindAcceptance:     {},
+	KindContract:       {},
+	KindProperty:       {},
+	KindFuzz:           {},
+	KindMutation:       {},
+	KindArchitecture:   {},
+	KindSecurity:       {},
+	KindMigration:      {},
+	KindPerformance:    {},
+	KindHardware:       {},
+	KindReview:         {},
+	KindCI:             {},
+	KindCustom:         {},
 }
 
 type Result string
@@ -103,7 +105,7 @@ func (r Record) MatchesRevision(revision string) bool {
 	return r.Error == "" && revision != "" && r.Revision == revision
 }
 
-func (r Record) AcceptanceEligible(revision string) bool {
+func (r Record) PassedForRevision(revision string) bool {
 	return r.MatchesRevision(revision) && r.Result == ResultPassed
 }
 

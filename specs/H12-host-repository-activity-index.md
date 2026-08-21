@@ -1,6 +1,6 @@
 ---
 specview:
-  status: in_progress
+  status: done
 ---
 
 # Host repository activity index
@@ -66,6 +66,25 @@ Observed host history is stored outside repositories. The POC uses a small JSON 
 - host activity refreshes through SSE;
 - project files are never created by host discovery.
 
+## Verification
+
+The implementation passed the GitHub Actions gates:
+
+```text
+gofmt                         PASS
+go mod tidy / module hygiene  PASS
+go vet ./...                   PASS
+go test -race ./...            PASS
+go build ./cmd/specview        PASS
+release cross-build            PASS
+```
+
+Release cross-build covers Linux and macOS on amd64 and arm64.
+
 ## Non-goals
 
 SQLite migration, worktree UI, company hierarchy, recursive repository discovery, repository search, Claude/OpenCode auto-discovery, multi-host aggregation, and Acceptance policy.
+
+## References
+
+- `docs/decisions/ADR-003-host-repository-session-model.md`

@@ -1,6 +1,6 @@
 ---
 specview:
-  status: in_progress
+  status: done
 ---
 
 # H13 - Repository Execution View
@@ -108,17 +108,41 @@ Specview is observing this repository read-only.
 
 ## Acceptance criteria
 
-- [ ] Clicking a repository opens a repository execution page.
-- [ ] A repository with no remote shows `No remote`.
-- [ ] A repository with `origin` shows that exact configured remote value.
-- [ ] `git worktree list --porcelain` is projected into repository child rows.
-- [ ] Worktree branch, HEAD, and dirty count are visible.
-- [ ] Active Codex cwd is visible.
-- [ ] Multiple Codex helper processes sharing a cwd are grouped into one logical row.
-- [ ] Linked worktrees remain one top-level repository on the host page.
-- [ ] Existing Specview / GitHub Spec Kit / OpenSpec work-item projection still renders.
-- [ ] No repository or specification files are written by observation.
-- [ ] gofmt, module verification, go vet, race tests, build, and release cross-build pass.
+- [x] Clicking a repository opens a repository execution page.
+- [x] A repository with no remote shows `No remote`.
+- [x] A repository with `origin` shows that exact configured remote value.
+- [x] `git worktree list --porcelain` is projected into repository child rows.
+- [x] Worktree branch, HEAD, and dirty count are visible.
+- [x] Active Codex cwd is visible.
+- [x] Multiple Codex helper processes sharing a cwd are grouped into one logical row.
+- [x] Linked worktrees remain one top-level repository on the host page.
+- [x] Existing Specview / GitHub Spec Kit / OpenSpec work-item projection still renders.
+- [x] No repository or specification files are written by observation.
+- [x] gofmt, module verification, go vet, race tests, build, and release cross-build pass.
+
+## Verification
+
+Automated verification passed on the H13 implementation:
+
+```text
+gofmt                         PASS
+module verification            PASS
+go vet ./...                   PASS
+go test -race ./...            PASS
+go build ./cmd/specview        PASS
+release cross-build            PASS
+```
+
+The Git projection test covers an exact `origin` value and dirty-state counting. A real macOS host acceptance run confirmed:
+
+```text
+repository: wms
+worktrees:  main + project-login
+execution:  Codex active in main
+processes:  2 OS processes -> 1 logical execution row
+remote:     No remote
+specs:      No recognized specification pattern
+```
 
 ## Out of scope
 

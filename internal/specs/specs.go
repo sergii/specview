@@ -71,6 +71,7 @@ type Spec = Artifact
 type Adapter interface {
 	Name() string
 	Scan() ([]Artifact, error)
+	WatchRoots() []string
 }
 
 type SpecviewAdapter struct {
@@ -90,10 +91,20 @@ func (a *SpecviewAdapter) Scan() ([]Artifact, error) {
 	return scan(a.root, a.pattern)
 }
 
+func (a *SpecviewAdapter) WatchRoots() []string {
+	return []string{a.root}
+}
+
 func NewAdapter(name, root, pattern string) (Adapter, error) {
+	cleanRoot := filepath.Clean(root)
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "", SpecviewAdapterName:
-		return NewSpecviewAdapter(root, pattern), nil
+		return NewSpecviewAdapter(cleanRoot, pattern), nil
+	case GitHubSpecKitAdapterName:
+		if filepath.Base(cleanRoot) != "specs" {
+			return nil, fmt.Errorf("%s expects specs.path to resolve to a top-level specs directory", GitHubSpecKitAdapterName)
+		}
+		return NewGitHubSpecKitAdapter(filepath.Dir(cleanRoot), cleanRoot), nil
 	default:
 		return nil, fmt.Errorf("unsupported specs adapter %q", name)
 	}

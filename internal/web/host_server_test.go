@@ -129,15 +129,25 @@ func TestHostDashboardSearchUsesIndexIdentityAndLiveCatalogProjection(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	root := t.TempDir()
+	wmsRoot := filepath.Join(root, "spotwo", "wms")
+	candidateRoot := filepath.Join(root, "other", "candidate-api")
+	for _, repositoryRoot := range []string{wmsRoot, candidateRoot} {
+		if err := os.MkdirAll(repositoryRoot, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	now := time.Now()
-	for pid, root := range map[int]string{
-		101: filepath.Join(t.TempDir(), "wms"),
-		202: filepath.Join(t.TempDir(), "candidate-api"),
+	for pid, repositoryRoot := range map[int]string{
+		101: wmsRoot,
+		202: candidateRoot,
 	} {
 		if _, err := catalog.Observe([]hoststate.Observation{{
 			Agent:          "Codex",
 			PID:            pid,
-			RepositoryRoot: root,
+			RepositoryRoot: repositoryRoot,
 		}}, now); err != nil {
 			t.Fatal(err)
 		}
@@ -146,13 +156,16 @@ func TestHostDashboardSearchUsesIndexIdentityAndLiveCatalogProjection(t *testing
 	repositories := catalog.Repositories()
 	var wanted hoststate.Repository
 	for _, repository := range repositories {
-		if repository.Name == "wms" {
+		if repository.Root == wmsRoot {
 			wanted = repository
 			break
 		}
 	}
 	if wanted.ID == "" {
 		t.Fatal("wms repository missing from test catalog")
+	}
+	if wanted.Name != "spotwo/wms" {
+		t.Fatalf("wms display name = %q, want %q", wanted.Name, "spotwo/wms")
 	}
 
 	server := NewHostServerWithSources(
@@ -167,7 +180,7 @@ func TestHostDashboardSearchUsesIndexIdentityAndLiveCatalogProjection(t *testing
 	response := httptest.NewRecorder()
 	server.index(response, httptest.NewRequest(http.MethodGet, "/?q=spotwo", nil))
 	body := response.Body.String()
-	if !strings.Contains(body, "Results") || !strings.Contains(body, "wms") {
+	if !strings.Contains(body, "Results") || !strings.Contains(body, "spotwo/wms") {
 		t.Fatalf("search result missing: %s", body)
 	}
 	if strings.Contains(body, "candidate-api") {
@@ -177,7 +190,7 @@ func TestHostDashboardSearchUsesIndexIdentityAndLiveCatalogProjection(t *testing
 	response = httptest.NewRecorder()
 	server.hostFragment(response, httptest.NewRequest(http.MethodGet, "/fragments/host?q=spotwo", nil))
 	body = response.Body.String()
-	if !strings.Contains(body, "Results") || !strings.Contains(body, "wms") {
+	if !strings.Contains(body, "Results") || !strings.Contains(body, "spotwo/wms") {
 		t.Fatalf("live search fragment missing: %s", body)
 	}
 }

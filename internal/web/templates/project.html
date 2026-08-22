@@ -69,7 +69,7 @@
 {{$execution := .Execution}}
 {{$source := .SourceControl}}
 <div class="context">
-  <div class="path">{{.Repo.Root}}</div>
+  <div class="path" title="{{.Repo.Root}}">{{.Repo.Name}}</div>
   <div class="remote">{{if $source.Git.Remote}}{{$source.Git.Remote}}{{else}}No remote{{end}}</div>
 </div>
 
@@ -82,8 +82,8 @@
       <div class="execution-row">
         <div class="agent"><span class="active">●</span> {{.Agent}}</div>
         <div class="execution-location">
-          <div class="mono">{{.CWD}}</div>
-          {{if and .WorktreeRoot (ne .WorktreeRoot .CWD)}}<div class="location-context">worktree: {{.WorktreeRoot}}</div>{{end}}
+          <div class="mono" title="{{.CWD}}">{{.DisplayCWD}}</div>
+          {{if and .WorktreeRoot (ne .WorktreeRoot .CWD)}}<div class="location-context" title="{{.WorktreeRoot}}">worktree: {{.DisplayWorktreeRoot}}</div>{{end}}
         </div>
         <div class="status">{{.ProcessLabel}}{{if not .StartedAt.IsZero}} · {{since .StartedAt}}{{end}}</div>
       </div>
@@ -98,7 +98,7 @@
   {{range $execution.Worktrees}}
     <div class="worktree-row">
       <div class="agent">{{.BranchLabel}}</div>
-      <div class="mono" title="{{.LastCommit}}">{{.Path}}</div>
+      <div class="mono" title="{{.Path}}">{{.DisplayPath}}</div>
       <div class="status">{{.ShortHead}}</div>
       <div class="status">{{.SyncLabel}}</div>
       <div class="status">{{.ChangeLabel}}{{if .Agents}} · <span class="active">● {{.AgentLabel}}</span>{{end}}</div>

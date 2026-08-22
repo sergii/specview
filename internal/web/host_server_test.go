@@ -85,6 +85,9 @@ func TestHostDashboardAndProjectProjection(t *testing.T) {
 			t.Fatalf("project page missing %q", want)
 		}
 	}
+	if !strings.Contains(body, `class="path-help"`) || !strings.Contains(body, `data-full-path=`) {
+		t.Fatalf("project page missing discoverable full-path affordance: %s", body)
+	}
 	if strings.Contains(body, "window.location.reload") {
 		t.Fatal("project page must not reload the full page for live updates")
 	}
@@ -97,6 +100,9 @@ func TestHostDashboardAndProjectProjection(t *testing.T) {
 	body = response.Body.String()
 	if !strings.Contains(body, `id="project-live"`) || !strings.Contains(body, "Worktrees") {
 		t.Fatalf("project fragment missing live projection: %s", body)
+	}
+	if !strings.Contains(body, `class="path-help"`) || !strings.Contains(body, `data-full-path=`) {
+		t.Fatalf("project fragment missing discoverable full-path affordance: %s", body)
 	}
 	if strings.Contains(strings.ToLower(body), "<!doctype") || strings.Contains(body, "<header") {
 		t.Fatalf("project fragment rendered full page chrome: %s", body)

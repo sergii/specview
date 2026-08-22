@@ -33,6 +33,18 @@ func (w Worktree) AgentLabel() string {
 	return itoa(len(w.Agents)) + " agents"
 }
 
+func (w Worktree) DisplayPath() string {
+	return repositoryDisplayName(w.Path)
+}
+
+func (s ExecutionSession) DisplayCWD() string {
+	return repositoryDisplayName(s.CWD)
+}
+
+func (s ExecutionSession) DisplayWorktreeRoot() string {
+	return repositoryDisplayName(s.WorktreeRoot)
+}
+
 // ExecutionView keeps the H13 convenience API while delegating local Git
 // inspection to the source-control layer introduced by H15.
 func (r Repository) ExecutionView(sources ...ExecutionSource) RepositoryExecutionView {

@@ -17,27 +17,40 @@
     .live-dot { width:6px; height:6px; border-radius:50%; background:var(--active); }
     .live.reconnecting .live-dot { background:var(--quiet); }
     main { width:min(1180px,100%); margin:0 auto; padding:34px var(--gutter) 64px; }
-    .search { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; min-height:42px; margin-bottom:22px; border-bottom:1px solid var(--line); }
+    .search { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; min-height:42px; margin-bottom:12px; border-bottom:1px solid var(--line); }
     .search input { width:100%; border:0; outline:0; padding:0 0 8px; background:transparent; color:var(--text); font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
     .search input::placeholder { color:var(--quiet); }
     .search button { align-self:start; border:0; padding:1px 0 0; background:transparent; color:var(--quiet); font:inherit; font-size:10px; line-height:1.4; cursor:pointer; }
+    .view-switch { display:flex; justify-content:flex-end; align-items:center; gap:3px; min-height:24px; margin-bottom:8px; }
+    .view-switch button { border:0; padding:3px 6px; background:transparent; color:var(--quiet); font:10px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; cursor:pointer; }
+    .view-switch button[aria-pressed="true"] { color:var(--text); }
+    .view-switch .divider { color:var(--line-strong); font-size:10px; }
     .search-error { padding:0 0 18px; color:var(--muted); font-size:10px; }
     .section { margin-top:36px; } .section:first-of-type { margin-top:0; }
     .section-head { display:flex; align-items:baseline; justify-content:space-between; min-height:36px; padding:8px 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:10px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; }
     .count { color:var(--quiet); font-size:10px; font-weight:400; letter-spacing:.04em; }
     .repo-row { display:grid; grid-template-columns:minmax(180px,1.25fr) minmax(220px,1.5fr) minmax(130px,auto) minmax(150px,auto) auto; gap:18px; align-items:center; min-height:48px; border-bottom:1px solid var(--line); color:inherit; text-decoration:none; }
-    .repo-row:hover { background:#fcfcfb; }
+    .repo-row:hover, .tree-repo-head:hover { background:#fcfcfb; }
     .repo-name { min-width:0; overflow:hidden; font-size:12px; font-weight:540; text-overflow:ellipsis; white-space:nowrap; }
     .repo-path { min-width:0; overflow:hidden; color:var(--quiet); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
     .agent { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:10px; white-space:nowrap; }
+    .agent-stack { display:inline-flex; align-items:center; gap:3px; }
     .agent-icon { width:13px; height:13px; display:block; flex:0 0 auto; fill:currentColor; color:var(--quiet); }
-    .agent.active .agent-icon { color:var(--active); }
     .agent-icon-fallback { width:7px; height:7px; display:block; flex:0 0 auto; border:1px solid currentColor; color:var(--quiet); }
     .agent-mark { width:7px; height:7px; border:1px solid var(--line-strong); background:#fff; }
     .pattern { color:var(--muted); font-size:10px; white-space:nowrap; } .pattern.missing { color:var(--quiet); }
     .age { color:var(--quiet); font-size:10px; font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; }
     .empty { padding:24px 0; border-bottom:1px solid var(--line); color:var(--quiet); font-size:11px; }
-    @media(max-width:820px){.topbar{grid-template-columns:1fr auto}.host{display:none}.repo-row{grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;padding:10px 0}.repo-path{grid-column:1/-1;order:3}.pattern{grid-column:1;order:4}.age{grid-column:2;order:4}.agent{justify-self:end}}
+    .projection-hierarchy { display:none; }
+    body[data-host-view="hierarchy"] .projection-list { display:none; }
+    body[data-host-view="hierarchy"] .projection-hierarchy { display:block; }
+    .tree-repo { border-bottom:1px solid var(--line); }
+    .tree-repo-head { display:grid; grid-template-columns:minmax(180px,1fr) minmax(150px,auto) auto; gap:18px; align-items:center; min-height:46px; color:inherit; text-decoration:none; }
+    .tree-agents { margin:0 0 8px 7px; padding:0 0 2px 18px; border-left:1px solid var(--line); }
+    .tree-agent { display:flex; align-items:center; gap:8px; min-height:29px; color:var(--muted); font-size:11px; }
+    .tree-agent .agent-icon { width:13px; height:13px; }
+    .tree-agent.idle { color:var(--quiet); font-size:10px; }
+    @media(max-width:820px){.topbar{grid-template-columns:1fr auto}.host{display:none}.repo-row{grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;padding:10px 0}.repo-path{grid-column:1/-1;order:3}.pattern{grid-column:1;order:4}.age{grid-column:2;order:4}.agent{justify-self:end}.tree-repo-head{grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;padding:8px 0}.tree-repo-head .pattern{display:none}.tree-agents{margin-left:5px}}
   </style>
 </head>
 <body>
@@ -45,6 +58,7 @@
   <header class="topbar"><a class="brand" href="/">Specview</a><div class="host">HOST / {{.Hostname}}</div><div class="live" id="live-status"><span class="live-dot"></span><span id="live-label">Live</span></div></header>
   <main>
     <form class="search" id="host-search-form" method="get" action="/"><input id="host-search" type="search" name="q" value="{{.Query}}" placeholder="Search repositories, paths, agents" autocomplete="off" aria-label="Search repositories"><button id="host-search-clear" type="button" {{if not .Query}}hidden{{end}}>Clear</button></form>
+    <div class="view-switch" aria-label="Host view"><button type="button" data-host-view="list" aria-pressed="true">List</button><span class="divider">/</span><button type="button" data-host-view="hierarchy" aria-pressed="false">Hierarchy</button></div>
     <div id="host-results" aria-live="polite">{{template "host-results" .}}</div>
   </main>
 </div>
@@ -56,6 +70,8 @@
   const results = document.getElementById('host-results');
   const live = document.getElementById('live-status');
   const liveLabel = document.getElementById('live-label');
+  const viewButtons = Array.from(document.querySelectorAll('[data-host-view]'));
+  let hostView = new URL(window.location.href).searchParams.get('view') === 'hierarchy' ? 'hierarchy' : 'list';
   let debounceTimer = 0;
   let requestController = null;
   let requestSequence = 0;
@@ -63,7 +79,14 @@
   const updateLocation = query => {
     const url = new URL(window.location.href);
     if (query) url.searchParams.set('q', query); else url.searchParams.delete('q');
+    if (hostView === 'hierarchy') url.searchParams.set('view', 'hierarchy'); else url.searchParams.delete('view');
     history.replaceState(null, '', url.pathname + url.search);
+  };
+
+  const applyView = ({updateURL = false} = {}) => {
+    document.body.dataset.hostView = hostView;
+    for (const button of viewButtons) button.setAttribute('aria-pressed', String(button.dataset.hostView === hostView));
+    if (updateURL) updateLocation(input.value.trim());
   };
 
   const refresh = async ({updateURL = false} = {}) => {
@@ -96,6 +119,10 @@
     debounceTimer = window.setTimeout(() => refresh({updateURL:true}), 120);
   };
 
+  for (const button of viewButtons) button.addEventListener('click', () => {
+    hostView = button.dataset.hostView === 'hierarchy' ? 'hierarchy' : 'list';
+    applyView({updateURL:true});
+  });
   input.addEventListener('input', scheduleSearch);
   form.addEventListener('submit', event => {
     event.preventDefault();
@@ -109,10 +136,14 @@
     refresh({updateURL:true});
   });
   window.addEventListener('popstate', () => {
-    input.value = new URL(window.location.href).searchParams.get('q') || '';
+    const url = new URL(window.location.href);
+    input.value = url.searchParams.get('q') || '';
+    hostView = url.searchParams.get('view') === 'hierarchy' ? 'hierarchy' : 'list';
+    applyView();
     refresh();
   });
 
+  applyView();
   const events = new EventSource('/events?scope=host');
   events.addEventListener('changed', () => refresh());
   events.onopen = () => { live.classList.remove('reconnecting'); liveLabel.textContent = 'Live'; };
@@ -124,13 +155,26 @@
 
 {{define "host-results"}}
   {{if .SearchError}}<div class="search-error">{{.SearchError}}</div>{{end}}
-  {{if .Filtered}}
-    <section class="section"><div class="section-head"><span>Results</span><span class="count">{{len .Results}}</span></div>{{range .Results}}{{template "repo-row" .}}{{else}}<div class="empty">No repositories match “{{.Query}}”.</div>{{end}}</section>
-  {{else}}
-    <section class="section"><div class="section-head"><span>Today</span><span class="count">{{len .Today}}</span></div>{{range .Today}}{{template "repo-row" .}}{{else}}<div class="empty">You haven't run anything yet.</div>{{end}}</section>
-    {{if .Yesterday}}<section class="section"><div class="section-head"><span>Yesterday</span><span class="count">{{len .Yesterday}}</span></div>{{range .Yesterday}}{{template "repo-row" .}}{{end}}</section>{{end}}
-    {{if .Earlier}}<section class="section"><div class="section-head"><span>Earlier</span><span class="count">{{len .Earlier}}</span></div>{{range .Earlier}}{{template "repo-row" .}}{{end}}</section>{{end}}
-  {{end}}
+  <div class="projection-list">
+    {{if .Filtered}}
+      <section class="section"><div class="section-head"><span>Results</span><span class="count">{{len .Results}}</span></div>{{range .Results}}{{template "repo-row" .}}{{else}}<div class="empty">No repositories match “{{.Query}}”.</div>{{end}}</section>
+    {{else}}
+      <section class="section"><div class="section-head"><span>Today</span><span class="count">{{len .Today}}</span></div>{{range .Today}}{{template "repo-row" .}}{{else}}<div class="empty">You haven't run anything yet.</div>{{end}}</section>
+      {{if .Yesterday}}<section class="section"><div class="section-head"><span>Yesterday</span><span class="count">{{len .Yesterday}}</span></div>{{range .Yesterday}}{{template "repo-row" .}}{{end}}</section>{{end}}
+      {{if .Earlier}}<section class="section"><div class="section-head"><span>Earlier</span><span class="count">{{len .Earlier}}</span></div>{{range .Earlier}}{{template "repo-row" .}}{{end}}</section>{{end}}
+    {{end}}
+  </div>
+  <div class="projection-hierarchy">
+    {{if .Filtered}}
+      <section class="section"><div class="section-head"><span>Results</span><span class="count">{{len .Results}}</span></div>{{range .Results}}{{template "repo-tree" .}}{{else}}<div class="empty">No repositories match “{{.Query}}”.</div>{{end}}</section>
+    {{else}}
+      <section class="section"><div class="section-head"><span>Today</span><span class="count">{{len .Today}}</span></div>{{range .Today}}{{template "repo-tree" .}}{{else}}<div class="empty">You haven't run anything yet.</div>{{end}}</section>
+      {{if .Yesterday}}<section class="section"><div class="section-head"><span>Yesterday</span><span class="count">{{len .Yesterday}}</span></div>{{range .Yesterday}}{{template "repo-tree" .}}{{end}}</section>{{end}}
+      {{if .Earlier}}<section class="section"><div class="section-head"><span>Earlier</span><span class="count">{{len .Earlier}}</span></div>{{range .Earlier}}{{template "repo-tree" .}}{{end}}</section>{{end}}
+    {{end}}
+  </div>
 {{end}}
 
-{{define "repo-row"}}<a class="repo-row" href="/project?id={{urlquery .ID}}"><div class="repo-name">{{.Name}}</div><div class="repo-path">{{.Root}}</div>{{if .Active}}<div class="agent active">{{template "agent-icon" .ActiveAgentLabel}}<span>{{.ActiveAgentLabel}}</span></div>{{else}}<div class="agent"><span class="agent-mark"></span><span>Idle</span></div>{{end}}<div class="pattern {{if not .Convention.Recognized}}missing{{end}}">{{.SpecificationLabel}}</div><div class="age">{{since .LastSeenAt}}</div></a>{{end}}
+{{define "repo-row"}}<a class="repo-row" href="/project?id={{urlquery .ID}}"><div class="repo-name">{{.Name}}</div><div class="repo-path">{{.Root}}</div>{{if .Active}}<div class="agent active"><span class="agent-stack">{{range .ActiveAgents}}{{template "agent-icon" .}}{{end}}</span><span>{{.ActiveAgentLabel}}</span></div>{{else}}<div class="agent"><span class="agent-mark"></span><span>Idle</span></div>{{end}}<div class="pattern {{if not .Convention.Recognized}}missing{{end}}">{{.SpecificationLabel}}</div><div class="age">{{since .LastSeenAt}}</div></a>{{end}}
+
+{{define "repo-tree"}}<div class="tree-repo"><a class="tree-repo-head" href="/project?id={{urlquery .ID}}"><div class="repo-name">{{.Name}}</div><div class="pattern {{if not .Convention.Recognized}}missing{{end}}">{{.SpecificationLabel}}</div><div class="age">{{since .LastSeenAt}}</div></a><div class="tree-agents">{{range .ActiveAgents}}<div class="tree-agent">{{template "agent-icon" .}}<span>{{.}}</span></div>{{else}}<div class="tree-agent idle"><span class="agent-mark"></span><span>Idle</span></div>{{end}}</div></div>{{end}}

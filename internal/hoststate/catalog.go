@@ -171,6 +171,7 @@ func (c *Catalog) Repositories() []Repository {
 	repositories := make([]Repository, 0, len(c.repos))
 	for _, repo := range c.repos {
 		copyRepo := *repo
+		copyRepo.Name = repositoryDisplayName(copyRepo.Root)
 		copyRepo.Sessions = append([]Session(nil), repo.Sessions...)
 		repositories = append(repositories, copyRepo)
 	}
@@ -188,6 +189,7 @@ func (c *Catalog) Find(id string) (Repository, bool) {
 		return Repository{}, false
 	}
 	copyRepo := *repo
+	copyRepo.Name = repositoryDisplayName(copyRepo.Root)
 	copyRepo.Sessions = append([]Session(nil), repo.Sessions...)
 	return copyRepo, true
 }
@@ -314,6 +316,19 @@ func (c *Catalog) saveLocked() error {
 		return err
 	}
 	return os.Rename(tmp, c.path)
+}
+
+func repositoryDisplayName(root string) string {
+	clean := filepath.Clean(root)
+	base := filepath.Base(clean)
+	if base == "." || base == "" || base == string(filepath.Separator) {
+		return base
+	}
+	parent := filepath.Base(filepath.Dir(clean))
+	if parent == "." || parent == "" || parent == string(filepath.Separator) {
+		return base
+	}
+	return parent + "/" + base
 }
 
 func repositoryID(root string) string {

@@ -254,14 +254,16 @@ func serve() error {
 		repositorySearch = index
 	}
 	server := webui.NewHostServerWithSearch(catalog, hub, host, port, executions, repositorySearch)
+	address := fmt.Sprintf("http://%s:%d", host, port)
 	slog.Info("Specview host observer started",
 		"hostname", catalog.Hostname(),
 		"state", statePath,
 		"index", indexPath,
-		"address", fmt.Sprintf("http://%s:%d", host, port),
+		"address", address,
 		"scan_interval", 2*time.Second,
 		"execution_registry", "default",
 	)
+	fmt.Printf("Specview running at %s\n", address)
 
 	err = server.ListenAndServe(ctx)
 	if err == nil {

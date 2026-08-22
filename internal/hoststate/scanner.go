@@ -58,6 +58,10 @@ func looksLikeCodex(command string) bool {
 }
 
 func looksLikeClaude(command string) bool {
+	lower := strings.ToLower(command)
+	if strings.Contains(lower, "/.local/share/claude/versions/") || strings.Contains(lower, "/claude/versions/") {
+		return true
+	}
 	return looksLikeAgentCommand(command, "claude", "/@anthropic-ai/claude-code/")
 }
 

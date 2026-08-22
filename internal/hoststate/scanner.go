@@ -33,6 +33,10 @@ func DiagnoseCodex() ([]ScanDiagnostic, error) {
 	return diagnoseCodex()
 }
 
+func DiagnoseClaude() ([]ScanDiagnostic, error) {
+	return diagnoseClaude()
+}
+
 // normalizeFilesystemPath returns a stable path identity while preserving
 // callers' original path spelling for display. This matters on systems such as
 // macOS where /var and /private/var can refer to the same directory.
@@ -50,6 +54,14 @@ func sameFilesystemPath(left, right string) bool {
 }
 
 func looksLikeCodex(command string) bool {
+	return looksLikeAgentCommand(command, "codex", "/@openai/codex/")
+}
+
+func looksLikeClaude(command string) bool {
+	return looksLikeAgentCommand(command, "claude", "/@anthropic-ai/claude-code/")
+}
+
+func looksLikeAgentCommand(command, executable, packagePath string) bool {
 	fields := strings.Fields(strings.ToLower(command))
 	if len(fields) == 0 {
 		return false
@@ -58,19 +70,19 @@ func looksLikeCodex(command string) bool {
 	cleanField := func(field string) string {
 		return strings.Trim(field, "\"'")
 	}
-	isCodexExecutable := func(field string) bool {
+	isAgentExecutable := func(field string) bool {
 		clean := cleanField(field)
 		base := filepath.Base(clean)
-		return base == "codex" || strings.HasPrefix(base, "codex-")
+		return base == executable || strings.HasPrefix(base, executable+"-")
 	}
 
-	if isCodexExecutable(fields[0]) {
+	if isAgentExecutable(fields[0]) {
 		return true
 	}
 
 	for _, field := range fields[1:] {
 		clean := cleanField(field)
-		if strings.Contains(clean, "/@openai/codex/") {
+		if packagePath != "" && strings.Contains(clean, packagePath) {
 			return true
 		}
 	}
@@ -79,7 +91,7 @@ func looksLikeCodex(command string) bool {
 	switch wrapper {
 	case "node", "nodejs", "bun", "deno", "sh", "bash", "zsh", "dash", "npm", "npx", "pnpm", "yarn":
 		for _, field := range fields[1:] {
-			if isCodexExecutable(field) {
+			if isAgentExecutable(field) {
 				return true
 			}
 		}

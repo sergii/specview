@@ -30,6 +30,30 @@ func TestLooksLikeCodexCommandForms(t *testing.T) {
 	}
 }
 
+func TestLooksLikeClaudeCommandForms(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		{name: "native binary", command: "/Users/test/.local/bin/claude", want: true},
+		{name: "native target binary", command: "/tmp/claude-aarch64-apple-darwin", want: true},
+		{name: "node package path", command: "node /opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js", want: true},
+		{name: "shell shim", command: "/bin/sh /Users/test/.local/bin/claude", want: true},
+		{name: "npx", command: "npx claude", want: true},
+		{name: "ordinary node", command: "node server.js", want: false},
+		{name: "grep should not count", command: "grep claude", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := looksLikeClaude(tt.command); got != tt.want {
+				t.Fatalf("looksLikeClaude(%q) = %v, want %v", tt.command, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCanonicalRepositoryRootPreservesGitDiagnosticContext(t *testing.T) {
 	_, err := canonicalRepositoryRoot(t.TempDir())
 	if err == nil {

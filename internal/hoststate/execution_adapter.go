@@ -62,7 +62,7 @@ func NewExecutionRegistry(adapters ...ExecutionAdapter) *ExecutionRegistry {
 }
 
 func DefaultExecutionRegistry() *ExecutionRegistry {
-	return NewExecutionRegistry(CodexExecutionAdapter{})
+	return NewExecutionRegistry(CodexExecutionAdapter{}, ClaudeExecutionAdapter{})
 }
 
 func (r *ExecutionRegistry) Adapter(name string) (ExecutionAdapter, bool) {
@@ -125,8 +125,8 @@ func (r *ExecutionRegistry) Scan() ([]Observation, error) {
 	return observations, nil
 }
 
-// CodexExecutionAdapter is the first concrete execution adapter. Platform
-// mechanics remain in scanner_darwin.go / scanner_linux.go below this boundary.
+// CodexExecutionAdapter observes Codex. Platform mechanics remain below the
+// adapter boundary in the OS-specific scanner files.
 type CodexExecutionAdapter struct{}
 
 func (CodexExecutionAdapter) Name() string { return "codex" }
@@ -141,6 +141,24 @@ func (CodexExecutionAdapter) Sessions() ([]ExecutionSession, error) {
 		return nil, err
 	}
 	return sessionsFromDiagnostics("codex", "Codex", diagnostics), nil
+}
+
+// ClaudeExecutionAdapter observes Claude Code using the same normalized
+// execution contract as Codex.
+type ClaudeExecutionAdapter struct{}
+
+func (ClaudeExecutionAdapter) Name() string { return "claude" }
+
+func (ClaudeExecutionAdapter) Diagnostics() ([]ScanDiagnostic, error) {
+	return DiagnoseClaude()
+}
+
+func (ClaudeExecutionAdapter) Sessions() ([]ExecutionSession, error) {
+	diagnostics, err := DiagnoseClaude()
+	if err != nil {
+		return nil, err
+	}
+	return sessionsFromDiagnostics("claude", "Claude", diagnostics), nil
 }
 
 func sessionsFromDiagnostics(adapter, agent string, diagnostics []ScanDiagnostic) []ExecutionSession {
@@ -188,7 +206,10 @@ func sessionsFromDiagnostics(adapter, agent string, diagnostics []ScanDiagnostic
 		if sessions[i].RepositoryRoot != sessions[j].RepositoryRoot {
 			return sessions[i].RepositoryRoot < sessions[j].RepositoryRoot
 		}
-		return sessions[i].CWD < sessions[j].CWD
+		if sessions[i].CWD != sessions[j].CWD {
+			return sessions[i].CWD < sessions[j].CWD
+		}
+		return sessions[i].Adapter < sessions[j].Adapter
 	})
 	return sessions
 }

@@ -30,7 +30,10 @@
     .repo-name { min-width:0; overflow:hidden; font-size:12px; font-weight:540; text-overflow:ellipsis; white-space:nowrap; }
     .repo-path { min-width:0; overflow:hidden; color:var(--quiet); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
     .agent { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:10px; white-space:nowrap; }
-    .agent-mark { width:7px; height:7px; border:1px solid var(--line-strong); background:#fff; } .agent.active .agent-mark { border-color:var(--active); background:var(--active); }
+    .agent-icon { width:13px; height:13px; display:block; flex:0 0 auto; fill:currentColor; color:var(--quiet); }
+    .agent.active .agent-icon { color:var(--active); }
+    .agent-icon-fallback { width:7px; height:7px; display:block; flex:0 0 auto; border:1px solid currentColor; color:var(--quiet); }
+    .agent-mark { width:7px; height:7px; border:1px solid var(--line-strong); background:#fff; }
     .pattern { color:var(--muted); font-size:10px; white-space:nowrap; } .pattern.missing { color:var(--quiet); }
     .age { color:var(--quiet); font-size:10px; font-variant-numeric:tabular-nums; white-space:nowrap; text-align:right; }
     .empty { padding:24px 0; border-bottom:1px solid var(--line); color:var(--quiet); font-size:11px; }
@@ -130,4 +133,4 @@
   {{end}}
 {{end}}
 
-{{define "repo-row"}}<a class="repo-row" href="/project?id={{urlquery .ID}}"><div class="repo-name">{{.Name}}</div><div class="repo-path">{{.Root}}</div>{{if .Active}}<div class="agent active"><span class="agent-mark"></span><span>{{.ActiveAgentLabel}}</span></div>{{else}}<div class="agent"><span class="agent-mark"></span><span>Idle</span></div>{{end}}<div class="pattern {{if not .Convention.Recognized}}missing{{end}}">{{.SpecificationLabel}}</div><div class="age">{{since .LastSeenAt}}</div></a>{{end}}
+{{define "repo-row"}}<a class="repo-row" href="/project?id={{urlquery .ID}}"><div class="repo-name">{{.Name}}</div><div class="repo-path">{{.Root}}</div>{{if .Active}}<div class="agent active">{{template "agent-icon" .ActiveAgentLabel}}<span>{{.ActiveAgentLabel}}</span></div>{{else}}<div class="agent"><span class="agent-mark"></span><span>Idle</span></div>{{end}}<div class="pattern {{if not .Convention.Recognized}}missing{{end}}">{{.SpecificationLabel}}</div><div class="age">{{since .LastSeenAt}}</div></a>{{end}}

@@ -38,6 +38,7 @@ func TestLooksLikeClaudeCommandForms(t *testing.T) {
 	}{
 		{name: "native binary", command: "/Users/test/.local/bin/claude", want: true},
 		{name: "native target binary", command: "/tmp/claude-aarch64-apple-darwin", want: true},
+		{name: "native version install", command: "/Users/test/.local/share/claude/versions/2.1.0", want: true},
 		{name: "node package path", command: "node /opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js", want: true},
 		{name: "shell shim", command: "/bin/sh /Users/test/.local/bin/claude", want: true},
 		{name: "npx", command: "npx claude", want: true},

@@ -19,12 +19,16 @@ import (
 )
 
 type hostMaterialSession struct {
-	ID        string
-	Agent     string
-	PID       int
-	StartedAt time.Time
-	EndedAt   *time.Time
-	Active    bool
+	ID           string
+	IdentityKind string
+	Adapter      string
+	Agent        string
+	ProcessIDs   []int
+	CWD          string
+	WorktreeRoot string
+	StartedAt    time.Time
+	EndedAt      *time.Time
+	Active       bool
 }
 
 type hostMaterialRepository struct {
@@ -217,12 +221,16 @@ func materialRepository(repository hoststate.Repository) hostMaterialRepository 
 	sessions := make([]hostMaterialSession, 0, len(repository.Sessions))
 	for _, session := range repository.Sessions {
 		sessions = append(sessions, hostMaterialSession{
-			ID:        session.ID,
-			Agent:     session.Agent,
-			PID:       session.PID,
-			StartedAt: session.StartedAt,
-			EndedAt:   session.EndedAt,
-			Active:    session.Active,
+			ID:           session.ID,
+			IdentityKind: session.IdentityKind,
+			Adapter:      session.Adapter,
+			Agent:        session.Agent,
+			ProcessIDs:   append([]int(nil), session.ProcessIDs...),
+			CWD:          session.CWD,
+			WorktreeRoot: session.WorktreeRoot,
+			StartedAt:    session.StartedAt,
+			EndedAt:      session.EndedAt,
+			Active:       session.Active,
 		})
 	}
 	sort.Slice(sessions, func(i, j int) bool { return sessions[i].ID < sessions[j].ID })

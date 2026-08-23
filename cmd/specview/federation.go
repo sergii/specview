@@ -128,29 +128,39 @@ func pullFederationSnapshot(args []string, destination io.Writer) error {
 }
 
 func parseFederationPullArgs(args []string) (rawURL, expectedHostID string, err error) {
+	const usage = "usage: specview federation pull [--expect-host host:<uuid>] <url>"
+	sawExpectedHost := false
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
 		case arg == "--expect-host":
-			if expectedHostID != "" || i+1 >= len(args) {
-				return "", "", fmt.Errorf("usage: specview federation pull [--expect-host host:<uuid>] <url>")
+			if sawExpectedHost || i+1 >= len(args) {
+				return "", "", errors.New(usage)
 			}
+			sawExpectedHost = true
 			i++
 			expectedHostID = strings.TrimSpace(args[i])
-		case strings.HasPrefix(arg, "--expect-host="):
-			if expectedHostID != "" {
-				return "", "", fmt.Errorf("usage: specview federation pull [--expect-host host:<uuid>] <url>")
+			if expectedHostID == "" {
+				return "", "", errors.New(usage)
 			}
+		case strings.HasPrefix(arg, "--expect-host="):
+			if sawExpectedHost {
+				return "", "", errors.New(usage)
+			}
+			sawExpectedHost = true
 			expectedHostID = strings.TrimSpace(strings.TrimPrefix(arg, "--expect-host="))
+			if expectedHostID == "" {
+				return "", "", errors.New(usage)
+			}
 		default:
 			if strings.HasPrefix(arg, "-") || rawURL != "" {
-				return "", "", fmt.Errorf("usage: specview federation pull [--expect-host host:<uuid>] <url>")
+				return "", "", errors.New(usage)
 			}
 			rawURL = strings.TrimSpace(arg)
 		}
 	}
-	if rawURL == "" || expectedHostID == "" && len(args) > 1 && strings.Contains(strings.Join(args, " "), "--expect-host") {
-		return "", "", fmt.Errorf("usage: specview federation pull [--expect-host host:<uuid>] <url>")
+	if rawURL == "" {
+		return "", "", errors.New(usage)
 	}
 	return rawURL, expectedHostID, nil
 }

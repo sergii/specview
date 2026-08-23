@@ -109,6 +109,7 @@ type Catalog struct {
 	mu              sync.RWMutex
 	repos           map[string]*Repository
 	lastPersistedAt time.Time
+	materialDirty   bool
 	heartbeatDirty  bool
 }
 
@@ -296,36 +297,42 @@ func (c *Catalog) Observe(observations []Observation, now time.Time) (bool, erro
 		}
 	}
 
+	if materialChanged {
+		c.materialDirty = true
+	}
+	if heartbeatChanged {
+		c.heartbeatDirty = true
+	}
+
 	switch {
-	case materialChanged:
+	case c.materialDirty:
+		if err := c.saveLocked(now); err != nil {
+			return false, err
+		}
+		c.materialDirty = false
+		c.heartbeatDirty = false
+	case c.heartbeatDirty && (c.lastPersistedAt.IsZero() || !now.Before(c.lastPersistedAt.Add(heartbeatPersistInterval))):
 		if err := c.saveLocked(now); err != nil {
 			return false, err
 		}
 		c.heartbeatDirty = false
-	case heartbeatChanged:
-		c.heartbeatDirty = true
-		if c.lastPersistedAt.IsZero() || !now.Before(c.lastPersistedAt.Add(heartbeatPersistInterval)) {
-			if err := c.saveLocked(now); err != nil {
-				return false, err
-			}
-			c.heartbeatDirty = false
-		}
 	}
 	return changed, nil
 }
 
-// Flush persists any coalesced heartbeat state. Material lifecycle changes are
-// already persisted synchronously by Observe, so a clean Flush is a no-op.
+// Flush persists pending catalog state. Lifecycle changes normally persist
+// synchronously in Observe; Flush also retries a failed material save.
 func (c *Catalog) Flush() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if !c.heartbeatDirty {
+	if !c.materialDirty && !c.heartbeatDirty {
 		return nil
 	}
 	if err := c.saveLocked(time.Now()); err != nil {
 		return err
 	}
+	c.materialDirty = false
 	c.heartbeatDirty = false
 	return nil
 }

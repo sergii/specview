@@ -17,6 +17,18 @@
     {
       "name": "list_worktrees",
       "arguments": ["repository_id"]
+    },
+    {
+      "name": "get_work_item",
+      "arguments": ["repository_id", "work_item_id"]
+    },
+    {
+      "name": "get_evidence",
+      "arguments": ["repository_id", "work_item_id"]
+    },
+    {
+      "name": "get_acceptance",
+      "arguments": ["repository_id", "work_item_id"]
     }
   ]
 }

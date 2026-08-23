@@ -16,7 +16,7 @@ H01-H23 implemented capabilities
               ↓
        contract + debt audit
               ↓
-        exact-head CI gates
+        release CI gates
               ↓
        installable v0.0.1
 ```
@@ -35,7 +35,7 @@ INTENT | EXECUTION | EVIDENCE | ACCEPTANCE
 
 with Git/provider context, Host state, MCP, and read-only federation surrounding those planes.
 
-H23 also established a derived federation runtime and deterministic local + remote Host projection. Polling changes cached observations; it does not create shared or distributed authority.
+H23 established a derived federation runtime and deterministic local + remote Host projection. Polling changes cached observations; it does not create shared or distributed authority.
 
 Kanban, list, hierarchy, and future graph views are projections over the domain graph. No H24 work may introduce view-specific authority into the domain model.
 
@@ -67,17 +67,17 @@ Explicitly deferred until after v0.0.1:
 
 ## Canonical documentation reconciliation
 
-`SPEC.md` and README must describe the architecture that is actually implemented through H23.
+`SPEC.md` and README describe the architecture implemented through H23.
 
 Acceptance:
 
 - [x] `SPEC.md` describes Intent, Execution, Evidence, and Acceptance.
 - [x] `SPEC.md` documents Host observation, Git/provider context, SQLite search, MCP, Host identity, and H20-H22 federation foundations.
-- [ ] `SPEC.md` documents H23 periodic peer refresh and deterministic multi-host status projection.
+- [x] `SPEC.md` documents H23 periodic peer refresh and deterministic multi-host status projection.
 - [x] `SPEC.md` states that views are projections over a graph-first domain model.
-- [x] `SPEC.md` defines a feature freeze and v0.0.1 release boundary.
-- [ ] README opening/product architecture matches the canonical specification through H23.
-- [ ] outdated README/SPEC statements that call implemented capabilities “future” are removed.
+- [x] `SPEC.md` defines H24 feature freeze and the v0.0.1 release boundary.
+- [x] README opening/product architecture matches the canonical specification through H23.
+- [x] outdated README/SPEC statements that call H23 federation runtime a future capability are removed.
 
 ## Architectural debt audit
 
@@ -85,7 +85,7 @@ H24 explicitly classifies known debt instead of expanding it invisibly.
 
 ### D1 - PID-shaped historical catalog sessions
 
-The live Execution contract is already logical-session based:
+The live Execution contract is logical-session based:
 
 ```text
 ExecutionAdapter -> ExecutionSession -> ProcessIDs diagnostics
@@ -97,29 +97,38 @@ Release decision:
 
 - not a v0.0.1 blocker while live control-plane, MCP, and federation projections remain sourced from normalized ExecutionSession state;
 - PID must not be promoted into cross-Host or public logical execution identity;
-- migration of historical catalog/index session identity requires an explicit schema/migration slice after v0.0.1 unless a correctness defect is found during release testing.
+- migration of historical catalog/index session identity requires an explicit schema/migration slice after v0.0.1 unless installed-product testing exposes a correctness defect.
 
 Acceptance:
 
-- [ ] verify no frozen language-neutral MCP/federation contract treats PID as logical session identity;
-- [ ] document the post-v0.0.1 migration target.
+- [x] H18 MCP exposes logical session `id` with `process_ids` as separate diagnostics.
+- [x] HostSnapshot v1 consumes logical sessions and does not export PID as federation session identity.
+- [x] ADR-013 records the post-v0.0.1 historical-session migration target.
 
 ### D2 - heartbeat persistence churn
 
-The Host catalog updates `LastSeenAt` during execution scans and may persist heartbeat-only changes more frequently than necessary.
+The Host catalog updates `LastSeenAt` during execution scans and currently persists heartbeat-only changes.
 
-H16 web material fingerprints and H23 federation material fingerprints already suppress heartbeat/transport-only UI notifications. Disk persistence is a separate implementation concern.
+H16 Web material fingerprints and H23 federation material fingerprints already suppress heartbeat/transport-only notifications. Disk persistence is a separate compatibility-layer concern.
 
-Release decision:
+H24 characterizes the current baseline with `TestCatalogHeartbeatPersistenceBaseline`.
 
-- measure first;
-- fix before release only if it creates material disk churn, correctness risk, or observable performance problems under normal dogfooding;
-- otherwise preserve behavior and schedule write coalescing/throttling after v0.0.1.
+At the current two-second execution scan interval, a continuously active Host can perform up to:
+
+```text
+30 catalog snapshots / minute
+1,800 catalog snapshots / hour
+```
+
+Release decision: **defer write coalescing until after v0.0.1**.
+
+The behavior is bounded to the small atomic JSON compatibility snapshot, does not multiply per browser client, and does not amplify into SQLite/Web/federation material updates. Changing persistence cadence immediately before the first release would alter crash/restart history semantics and deserves a dedicated migration slice.
 
 Acceptance:
 
-- [ ] add a focused test or instrumentation proving current heartbeat persistence behavior;
-- [ ] record release decision as `fix-now` or `defer` with evidence.
+- [x] focused baseline test proves heartbeat-only persistence behavior.
+- [x] ADR-013 records measured write rate and the `defer` release decision.
+- [x] ADR-013 defines the post-v0.0.1 write-coalescing migration boundary.
 
 ### D3 - repository-level legacy `server` configuration
 
@@ -135,8 +144,8 @@ Release decision:
 Acceptance:
 
 - [x] canonical spec classifies `server` as a v1 compatibility artifact.
-- [ ] README no longer implies repository `server` fields define the future Host configuration model.
-- [ ] ADR-013 records the post-v0.0.1 config-scope migration boundary.
+- [x] README no longer implies repository `server` fields define the future Host configuration model.
+- [x] ADR-013 records the post-v0.0.1 config-scope migration boundary.
 
 ## Contract audit
 
@@ -144,18 +153,18 @@ H24 verifies that the same facts retain the same semantics across projections.
 
 Required checks:
 
-- [ ] Web and MCP agree on Repository identity and local Host authority.
-- [ ] MCP and federation agree that ExecutionSession identity is logical and ProcessIDs are diagnostic.
-- [ ] Evidence remains revision-scoped everywhere.
-- [ ] Acceptance remains derived from policy plus Evidence and fails closed when revision identity is unsafe.
-- [ ] provider checks are not silently treated as normalized Evidence.
-- [ ] remote HostSnapshot data never overrides local/source-Host authority.
-- [ ] H23 polling/runtime status remains derived and never upgrades remote observations into shared authority.
-- [ ] peer credential values are never persisted or returned in errors.
+- [x] Web and MCP share repository/project-state semantics rather than maintaining independent Intent/Evidence/Acceptance models.
+- [x] MCP and federation agree that ExecutionSession identity is logical and ProcessIDs are diagnostic.
+- [x] Evidence remains revision-scoped across projectstate, Web, MCP, and Acceptance.
+- [x] Acceptance remains derived from policy plus Evidence and fails closed when revision identity is unsafe.
+- [x] provider checks remain provider context and are not silently treated as normalized Evidence.
+- [x] remote HostSnapshot data remains attributable to its source Host and never overrides source/local authority.
+- [x] H23 polling/runtime status is derived and never upgrades remote observations into shared authority.
+- [x] peer credential values are referenced by environment-variable name and are forbidden from persisted state/error text.
 
 ## Release gates
 
-The exact H24 release head must pass:
+The final H24 release candidate must pass on the current merge/release candidate state:
 
 - [ ] shell/script syntax gates;
 - [ ] gofmt;
@@ -173,7 +182,21 @@ The exact H24 release head must pass:
 - [ ] release archive cross-build for linux/darwin amd64/arm64;
 - [ ] checksum generation/verification.
 
-No previous functional head is sufficient. The exact release candidate commit must be green.
+A previous functional slice is not sufficient. The final merge/release candidate must be green after H23 and H24 are combined.
+
+## Artifact preflight
+
+Before final installed-user acceptance, H24 validates generated CI artifacts independently from the source checkout.
+
+Required checks:
+
+- [ ] build artifact contains darwin/amd64, darwin/arm64, linux/amd64, linux/arm64 archives and `SHA256SUMS`;
+- [ ] all generated archive checksums verify;
+- [ ] Linux amd64 archive contains the expected `specview` binary;
+- [ ] extracted Linux amd64 binary executes `version` and `help`;
+- [ ] extracted Linux amd64 binary passes `serve -> /healthz -> SIGTERM` with clean exit.
+
+These checks are packaging/runtime preflight. They do not replace real macOS installed-user dogfooding.
 
 ## User-install acceptance
 
@@ -209,13 +232,13 @@ Acceptance:
 When all blocking acceptance criteria are complete:
 
 1. merge H24 to `main`;
-2. create the first v0.0.1 tag/release from the exact green commit;
+2. create the first v0.0.1 tag/release from the green main commit;
 3. publish macOS/Linux amd64/arm64 archives and checksums;
 4. validate `install.sh` against the published release;
 5. dogfood the installed binary before starting H25.
 
 ## Definition of done
 
-H24 is done when Specview has one coherent canonical specification through H23, exact-head green release gates, an installed-user acceptance result, and every known architectural debt is explicitly either fixed or deferred with a reason.
+H24 is done when Specview has one coherent canonical specification through H23, green release gates, an installed-user acceptance result, and every known architectural debt is explicitly either fixed or deferred with a reason.
 
 No H25 feature development begins before that point.

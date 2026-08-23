@@ -5,8 +5,8 @@ import "testing"
 func TestNormalizeRepositoryName(t *testing.T) {
 	cases := map[string]string{
 		" Sergii\\Specview.git ": "sergii/specview",
-		"sergii//specview/":       "sergii/specview",
-		"SPECVIEW":                "specview",
+		"sergii//specview/":      "sergii/specview",
+		"SPECVIEW":               "specview",
 	}
 	for input, want := range cases {
 		if got := NormalizeRepositoryName(input); got != want {
@@ -96,10 +96,10 @@ func TestRepositoryCorrelationContract(t *testing.T) {
 			want: CorrelationConflict,
 		},
 		{
-			name: "name and Git remote corroborate",
-			left: RepositoryFingerprint{Name: "sergii/specview", GitRemote: "git@github.com:sergii/specview.git"},
+			name:  "name and Git remote corroborate",
+			left:  RepositoryFingerprint{Name: "sergii/specview", GitRemote: "git@github.com:sergii/specview.git"},
 			right: RepositoryFingerprint{Name: "SERGII/specview.git", GitRemote: "https://github.com/sergii/specview.git"},
-			want: CorrelationMatch,
+			want:  CorrelationMatch,
 		},
 		{
 			name:  "name only is ambiguous",
@@ -108,10 +108,10 @@ func TestRepositoryCorrelationContract(t *testing.T) {
 			want:  CorrelationAmbiguous,
 		},
 		{
-			name: "same name contradictory Git remote",
-			left: RepositoryFingerprint{Name: "sergii/specview", GitRemote: "git@github.com:sergii/specview.git"},
+			name:  "same name contradictory Git remote",
+			left:  RepositoryFingerprint{Name: "sergii/specview", GitRemote: "git@github.com:sergii/specview.git"},
 			right: RepositoryFingerprint{Name: "sergii/specview", GitRemote: "git@github.com:other/specview.git"},
-			want: CorrelationDistinct,
+			want:  CorrelationDistinct,
 		},
 		{
 			name:  "different names without shared explicit identity",
@@ -120,16 +120,16 @@ func TestRepositoryCorrelationContract(t *testing.T) {
 			want:  CorrelationDistinct,
 		},
 		{
-			name: "forge corroborates name",
-			left: RepositoryFingerprint{Name: "sergii/specview", ForgeProvider: "GitHub", ForgeRepository: "sergii/specview"},
+			name:  "forge corroborates name",
+			left:  RepositoryFingerprint{Name: "sergii/specview", ForgeProvider: "GitHub", ForgeRepository: "sergii/specview"},
 			right: RepositoryFingerprint{Name: "sergii/specview", ForgeProvider: "github", ForgeRepository: "SERGII/specview.git"},
-			want: CorrelationMatch,
+			want:  CorrelationMatch,
 		},
 		{
-			name: "one explicit identity can correlate with matching ordinary evidence",
-			left: RepositoryFingerprint{ExplicitID: "specview:sergii/specview", Name: "sergii/specview", GitRemote: "git@github.com:sergii/specview.git"},
+			name:  "one explicit identity can correlate with matching ordinary evidence",
+			left:  RepositoryFingerprint{ExplicitID: "specview:sergii/specview", Name: "sergii/specview", GitRemote: "git@github.com:sergii/specview.git"},
 			right: RepositoryFingerprint{Name: "sergii/specview", GitRemote: "https://github.com/sergii/specview.git"},
-			want: CorrelationMatch,
+			want:  CorrelationMatch,
 		},
 	}
 

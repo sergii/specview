@@ -7,9 +7,9 @@ They are product contracts, not Go-specific test helpers.
 Current fixtures:
 
 ```text
-config/v1-acceptance.yaml   .specview.yaml version 1
- evidence/v1-passed.json    native Evidence version 1
- catalog/v1.json             host catalog persistence version 1
+config/v1-acceptance.yaml  .specview.yaml version 1
+evidence/v1-passed.json    native Evidence version 1
+catalog/v1.json            host catalog persistence version 1
 ```
 
 The current Go implementation must consume these fixtures in CI. A future Rust implementation must consume the same fixtures before it can replace the Go implementation.

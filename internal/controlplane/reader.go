@@ -2,7 +2,6 @@ package controlplane
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"

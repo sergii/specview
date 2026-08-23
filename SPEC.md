@@ -278,7 +278,7 @@ Repository configuration lives in:
 
 The v1 contract currently supports repository identity, project root, Intent adapter configuration, Acceptance policy, and legacy server fields retained for compatibility.
 
-Example:
+Example with an explicit Acceptance policy:
 
 ```yaml
 version: 1
@@ -294,13 +294,18 @@ specs:
   pattern: "*.md"
 
 acceptance:
-  required: []
-  allow_skipped: []
+  required:
+    - unit-tests
+    - lint
+  allow_skipped:
+    - lint
 
 server:
   host: 127.0.0.1
   port: 7331
 ```
+
+Repositories that do not define Acceptance policy can omit the `acceptance` section.
 
 `project.id` is optional explicit cross-Host project identity. It must not be synthesized from personal or machine identity.
 

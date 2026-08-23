@@ -45,6 +45,31 @@ curl -fsS http://127.0.0.1:7332/v1/federation/snapshot > /dev/null
   --host host:33333333-3333-4333-9333-333333333333 \
   --stale-after 5m
 
+# Freeze the successful state before simulating an outage. H23 status must expose
+# a fresh cached peer and a never-retrieved peer without inventing remote facts.
+"$bin" federation status > "$root/status-fresh.json"
+python3 - "$root/status-fresh.json" "$host_id" <<'PY'
+import json, sys
+status = json.load(open(sys.argv[1]))
+host_id = sys.argv[2]
+
+assert status["schema_version"] == 1, status
+assert status["federation"]["generated_at"] == status["generated_at"], status
+by_peer = {row.get("peer"): row for row in status["hosts"] if row["source"] == "peer"}
+
+cached = by_peer["cached"]
+assert cached["host_id"] == host_id, cached
+assert cached["freshness"] == "fresh", cached
+assert cached["has_snapshot"] is True, cached
+assert cached["observed_at"], cached
+assert cached["retrieved_at"], cached
+
+never = by_peer["never"]
+assert never["freshness"] == "never_retrieved", never
+assert never["has_snapshot"] is False, never
+assert "observed_at" not in never, never
+PY
+
 kill "$server_pid"
 wait "$server_pid" 2>/dev/null || true
 server_pid=""
@@ -96,8 +121,12 @@ assert len(status["federation"]["hosts"]) == 1, status["federation"]
 assert status["federation"]["hosts"][0]["host_id"] == host_id, status["federation"]
 PY
 
-# The real host observer must compose the federation polling runtime and shut down
-# cleanly with the same process context.
+cached_observation="$XDG_STATE_HOME/specview/federation/peers/cached.json"
+before_runtime_attempt=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["last_attempt_at"])' "$cached_observation")
+
+# The real host observer must compose the federation polling runtime. The poller
+# performs an immediate cycle, changing last_attempt_at even though the peer is
+# down, and both runtimes shut down cleanly through the same process context.
 "$bin" serve > "$root/observer.log" 2>&1 &
 observer_pid=$!
 for _ in $(seq 1 50); do
@@ -107,6 +136,21 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 curl -fsS http://127.0.0.1:7331/ > /dev/null
+
+runtime_attempt_changed=false
+for _ in $(seq 1 50); do
+  after_runtime_attempt=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["last_attempt_at"])' "$cached_observation")
+  if [ "$after_runtime_attempt" != "$before_runtime_attempt" ]; then
+    runtime_attempt_changed=true
+    break
+  fi
+  sleep 0.1
+done
+if [ "$runtime_attempt_changed" != true ]; then
+  echo "specview serve did not perform the initial federation peer poll" >&2
+  exit 1
+fi
+
 kill "$observer_pid"
 wait "$observer_pid"
 observer_pid=""

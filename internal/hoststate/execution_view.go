@@ -78,7 +78,7 @@ func (r Repository) ExecutionViewWithGit(gitContext sourcecontrol.GitContext, so
 		if !sameFilesystemPath(session.RepositoryRoot, r.Root) {
 			continue
 		}
-		session.StartedAt = r.startedAtForProcesses(session.Agent, session.ProcessIDs)
+		session.StartedAt = r.startedAtForExecution(session)
 		view.Sessions = append(view.Sessions, session)
 	}
 	sort.Slice(view.Sessions, func(i, j int) bool {
@@ -105,23 +105,36 @@ func (r Repository) ExecutionViewWithGit(gitContext sourcecontrol.GitContext, so
 	return view
 }
 
-func (r Repository) startedAtForProcesses(agent string, processIDs []int) (startedAt time.Time) {
-	pidSet := make(map[int]struct{}, len(processIDs))
-	for _, pid := range processIDs {
-		pidSet[pid] = struct{}{}
-	}
+func (r Repository) startedAtForExecution(live ExecutionSession) (startedAt time.Time) {
+	startedAt = live.StartedAt
 	for _, persisted := range r.Sessions {
-		if !persisted.Active || persisted.Agent != agent {
+		if !persisted.Active {
 			continue
 		}
-		if _, ok := pidSet[persisted.PID]; !ok {
+		if persisted.IdentityKind == SessionIdentityLogical && persisted.ID == live.ID {
+			return earlierNonZero(startedAt, persisted.StartedAt)
+		}
+	}
+
+	// During a v1->v2 cutover the runtime may render a live logical session
+	// before its migrated PID fragments have been collapsed and persisted.
+	for _, persisted := range r.Sessions {
+		if !legacyFragmentMatches(persisted, live) {
 			continue
 		}
-		if startedAt.IsZero() || persisted.StartedAt.Before(startedAt) {
-			startedAt = persisted.StartedAt
-		}
+		startedAt = earlierNonZero(startedAt, persisted.StartedAt)
 	}
 	return startedAt
+}
+
+func earlierNonZero(left, right time.Time) time.Time {
+	if left.IsZero() {
+		return right
+	}
+	if right.IsZero() || left.Before(right) {
+		return left
+	}
+	return right
 }
 
 // Compatibility helpers keep H13 tests focused on the same observable contract

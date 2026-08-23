@@ -4,11 +4,15 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"time"
 
 	"github.com/sergii/specview/internal/config"
+	"github.com/sergii/specview/internal/evidence"
 	"github.com/sergii/specview/internal/hoststate"
 	"github.com/sergii/specview/internal/sourcecontrol"
 	"github.com/sergii/specview/internal/specs"
@@ -34,6 +38,21 @@ type hostMaterialRepository struct {
 	Sessions       []hostMaterialSession
 }
 
+type materialEvidenceRecord struct {
+	Path       string
+	Error      string
+	ID         string
+	WorkItemID string
+	Revision   string
+	Check      string
+	Kind       evidence.Kind
+	Provider   string
+	Result     evidence.Result
+	ObservedAt time.Time
+	Summary    string
+	Metrics    map[string]float64
+}
+
 type projectMaterialState struct {
 	RepositoryID      string
 	RepositoryName    string
@@ -51,6 +70,8 @@ type projectMaterialState struct {
 	Invalid           []specs.Artifact
 	Total             int
 	SpecificationRoot string
+	Acceptance        config.Acceptance
+	Evidence          []materialEvidenceRecord
 }
 
 func (s *HostServer) materialFingerprint(ctx context.Context, scope, projectID string) (string, error) {
@@ -118,6 +139,11 @@ func (s *HostServer) projectMaterialFingerprint(ctx context.Context, projectID s
 		return sourceContext.Provider.PullRequests[i].Number < sourceContext.Provider.PullRequests[j].Number
 	})
 
+	acceptanceConfig, evidenceRecords, err := projectAcceptanceMaterial(repository.Root)
+	if err != nil {
+		return "", err
+	}
+
 	repositoryMaterial := materialRepository(repository)
 	material := projectMaterialState{
 		RepositoryID:      repository.ID,
@@ -136,8 +162,55 @@ func (s *HostServer) projectMaterialFingerprint(ctx context.Context, projectID s
 		Invalid:           stableArtifacts(data.Invalid),
 		Total:             data.Total,
 		SpecificationRoot: data.SpecificationRoot,
+		Acceptance:        acceptanceConfig,
+		Evidence:          evidenceRecords,
 	}
 	return hashMaterial(material)
+}
+
+func projectAcceptanceMaterial(repositoryRoot string) (config.Acceptance, []materialEvidenceRecord, error) {
+	projectRoot := filepath.Clean(repositoryRoot)
+	acceptanceConfig := config.Acceptance{}
+	configPath := filepath.Join(repositoryRoot, config.FileName)
+	if _, err := os.Stat(configPath); err == nil {
+		cfg, err := config.Load(repositoryRoot)
+		if err != nil {
+			return config.Acceptance{}, nil, err
+		}
+		projectRoot = cfg.ResolveProjectRoot(repositoryRoot)
+		acceptanceConfig = cfg.Acceptance
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return config.Acceptance{}, nil, err
+	}
+
+	records, err := evidence.NewNativeAdapter(filepath.Join(projectRoot, ".specview", "evidence")).Scan()
+	if err != nil {
+		return config.Acceptance{}, nil, err
+	}
+	material := make([]materialEvidenceRecord, 0, len(records))
+	for _, record := range records {
+		material = append(material, materialEvidenceRecord{
+			Path:       record.Path,
+			Error:      record.Error,
+			ID:         record.ID,
+			WorkItemID: record.WorkItemID,
+			Revision:   record.Revision,
+			Check:      record.Check,
+			Kind:       record.Kind,
+			Provider:   record.Provider,
+			Result:     record.Result,
+			ObservedAt: record.ObservedAt,
+			Summary:    record.Summary,
+			Metrics:    record.Metrics,
+		})
+	}
+	sort.Slice(material, func(i, j int) bool {
+		if material[i].Path == material[j].Path {
+			return material[i].ID < material[j].ID
+		}
+		return material[i].Path < material[j].Path
+	})
+	return acceptanceConfig, material, nil
 }
 
 func materialRepository(repository hoststate.Repository) hostMaterialRepository {

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/sergii/specview/internal/acceptance"
 )
 
 const FileName = ".specview.yaml"
@@ -19,10 +21,11 @@ const (
 )
 
 type Config struct {
-	Version int
-	Project Project
-	Specs   Specs
-	Server  Server
+	Version    int
+	Project    Project
+	Specs      Specs
+	Acceptance Acceptance
+	Server     Server
 }
 
 type Project struct {
@@ -34,6 +37,11 @@ type Specs struct {
 	Adapter string
 	Path    string
 	Pattern string
+}
+
+type Acceptance struct {
+	Required     []string
+	AllowSkipped []string
 }
 
 type Server struct {
@@ -51,6 +59,7 @@ func Load(root string) (Config, error) {
 
 	cfg := Config{}
 	section := ""
+	subsection := ""
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
 	for scanner.Scan() {
@@ -64,6 +73,37 @@ func Load(root string) (Config, error) {
 		indent := len(raw) - len(strings.TrimLeft(raw, " \t"))
 		if indent == 0 && strings.HasSuffix(trimmed, ":") {
 			section = strings.TrimSuffix(trimmed, ":")
+			subsection = ""
+			continue
+		}
+
+		if section == "acceptance" && indent > 0 && strings.HasSuffix(trimmed, ":") {
+			if indent != 2 {
+				return Config{}, fmt.Errorf("parse %s line %d: acceptance list must be indented by two spaces", FileName, lineNumber)
+			}
+			subsection = strings.TrimSuffix(trimmed, ":")
+			switch subsection {
+			case "required", "allow_skipped":
+				continue
+			default:
+				return Config{}, fmt.Errorf("parse %s line %d: unknown acceptance key %q", FileName, lineNumber, subsection)
+			}
+		}
+
+		if section == "acceptance" && strings.HasPrefix(trimmed, "- ") {
+			if indent < 4 || subsection == "" {
+				return Config{}, fmt.Errorf("parse %s line %d: acceptance list item outside a known list", FileName, lineNumber)
+			}
+			item := unquote(strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
+			if item == "" {
+				return Config{}, fmt.Errorf("parse %s line %d: acceptance check cannot be empty", FileName, lineNumber)
+			}
+			switch subsection {
+			case "required":
+				cfg.Acceptance.Required = append(cfg.Acceptance.Required, item)
+			case "allow_skipped":
+				cfg.Acceptance.AllowSkipped = append(cfg.Acceptance.AllowSkipped, item)
+			}
 			continue
 		}
 
@@ -75,6 +115,7 @@ func Load(root string) (Config, error) {
 
 		if indent == 0 {
 			section = ""
+			subsection = ""
 			switch key {
 			case "version":
 				n, err := strconv.Atoi(value)
@@ -109,6 +150,8 @@ func Load(root string) (Config, error) {
 			default:
 				return Config{}, fmt.Errorf("parse %s line %d: unknown specs key %q", FileName, lineNumber, key)
 			}
+		case "acceptance":
+			return Config{}, fmt.Errorf("parse %s line %d: acceptance values must use a list", FileName, lineNumber)
 		case "server":
 			switch key {
 			case "host":
@@ -182,6 +225,9 @@ func (c Config) Validate() error {
 	if _, err := filepath.Match(c.Specs.Pattern, "example.md"); err != nil {
 		return fmt.Errorf("invalid specs.pattern: %w", err)
 	}
+	if err := validateAcceptance(c.Acceptance); err != nil {
+		return err
+	}
 	if c.Server.Host == "" {
 		return errors.New("server.host is required")
 	}
@@ -189,6 +235,50 @@ func (c Config) Validate() error {
 		return errors.New("server.port must be between 1 and 65535")
 	}
 	return nil
+}
+
+func validateAcceptance(cfg Acceptance) error {
+	required := make(map[string]struct{}, len(cfg.Required))
+	for _, check := range cfg.Required {
+		check = strings.TrimSpace(check)
+		if check == "" {
+			return errors.New("acceptance.required contains an empty check")
+		}
+		if _, exists := required[check]; exists {
+			return fmt.Errorf("acceptance.required contains duplicate check %q", check)
+		}
+		required[check] = struct{}{}
+	}
+
+	allowed := make(map[string]struct{}, len(cfg.AllowSkipped))
+	for _, check := range cfg.AllowSkipped {
+		check = strings.TrimSpace(check)
+		if _, exists := required[check]; !exists {
+			return fmt.Errorf("acceptance.allow_skipped check %q must also be required", check)
+		}
+		if _, exists := allowed[check]; exists {
+			return fmt.Errorf("acceptance.allow_skipped contains duplicate check %q", check)
+		}
+		allowed[check] = struct{}{}
+	}
+	return nil
+}
+
+func (c Config) AcceptancePolicy() acceptance.Policy {
+	allowed := make(map[string]struct{}, len(c.Acceptance.AllowSkipped))
+	for _, check := range c.Acceptance.AllowSkipped {
+		allowed[check] = struct{}{}
+	}
+
+	policy := acceptance.Policy{Required: make([]acceptance.Requirement, 0, len(c.Acceptance.Required))}
+	for _, check := range c.Acceptance.Required {
+		_, allowSkipped := allowed[check]
+		policy.Required = append(policy.Required, acceptance.Requirement{
+			Check:        check,
+			AllowSkipped: allowSkipped,
+		})
+	}
+	return policy
 }
 
 func (c Config) ResolveProjectRoot(configRoot string) string {

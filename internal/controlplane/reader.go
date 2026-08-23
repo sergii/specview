@@ -109,14 +109,9 @@ func (r *Reader) ListRepositories(ctx context.Context) (ListRepositoriesResult, 
 }
 
 func (r *Reader) GetRepository(ctx context.Context, repositoryID string) (GetRepositoryResult, error) {
-	catalog, err := hoststate.OpenCatalog(r.statePath)
+	catalog, repository, err := r.repository(repositoryID)
 	if err != nil {
 		return GetRepositoryResult{}, err
-	}
-
-	repository, ok := catalog.Find(strings.TrimSpace(repositoryID))
-	if !ok {
-		return GetRepositoryResult{}, fmt.Errorf("repository %q not found", repositoryID)
 	}
 
 	result := GetRepositoryResult{
@@ -206,13 +201,9 @@ func (r *Reader) ListActiveSessions(ctx context.Context) (ListActiveSessionsResu
 }
 
 func (r *Reader) ListWorktrees(ctx context.Context, repositoryID string) (ListWorktreesResult, error) {
-	catalog, err := hoststate.OpenCatalog(r.statePath)
+	catalog, repository, err := r.repository(repositoryID)
 	if err != nil {
 		return ListWorktreesResult{}, err
-	}
-	repository, ok := catalog.Find(strings.TrimSpace(repositoryID))
-	if !ok {
-		return ListWorktreesResult{}, fmt.Errorf("repository %q not found", repositoryID)
 	}
 
 	result := ListWorktreesResult{

@@ -22,6 +22,7 @@ mcp/v1-get-acceptance.json                    MCP Acceptance structured content
 federation/v1-laptop.json                     HostSnapshot v1 from a laptop
 federation/v1-devbox.json                     HostSnapshot v1 from a DevBox
 federation/v1-projection.json                 derived two-host federation projection v1
+federation/v1-aggregation-cases.json          ambiguous/conflict/transitive grouping safety cases
 ```
 
 The current Go implementation must consume these fixtures in CI. A future Rust implementation must consume the same fixtures before it can replace the Go implementation.
@@ -35,6 +36,7 @@ Rules:
 - Repository correlation fixtures are safety contracts: an implementation must never upgrade `ambiguous`, `distinct`, or `conflict` to `match` merely to make federation more convenient.
 - Federation snapshots preserve source Host identity and observation time. A projection may correlate snapshots, but it must not erase source attribution.
 - When several snapshots from one Host are supplied for a current projection, the newest `observed_at` wins. Equal timestamps with conflicting content are invalid rather than order-dependent.
+- A RepositoryInstance may join a federation group only when it is a pairwise `match` with every existing member. Transitive graph connectivity is not sufficient.
 - A federation `group_id` is derived projection state for an exact member set, not a durable global Repository identity.
 
 These fixtures intentionally do not freeze HTML, CSS, Go structs, package names, SQLite schema internals, or a future federation transport that has not yet been designed.

@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-23T20:00:10Z",
+  "hosts": [
+    {
+      "host_id": "host:11111111-1111-4111-9111-111111111111",
+      "hostname": "sergii-macbook",
+      "observed_at": "2026-08-23T20:00:00Z"
+    },
+    {
+      "host_id": "host:22222222-2222-4222-9222-222222222222",
+      "hostname": "devbox-01",
+      "observed_at": "2026-08-23T20:00:05Z"
+    }
+  ],
+  "repositories": [
+    {
+      "group_id": "group:2e6d01826730f1f2f02cea63d0e4f12b",
+      "name": "sergii/specview",
+      "active": true,
+      "agents": ["Claude Code", "Codex"],
+      "instances": [
+        {
+          "host_id": "host:11111111-1111-4111-9111-111111111111",
+          "hostname": "sergii-macbook",
+          "observed_at": "2026-08-23T20:00:00Z",
+          "instance_id": "instance:f9d10a79ca22b2a0d8f228a3b4f0e4cf",
+          "source_repository_id": "repo-laptop-specview",
+          "name": "sergii/specview",
+          "root": "/Users/sergii/repos/sergii/specview",
+          "fingerprint": {
+            "explicit_id": "specview:sergii/specview",
+            "name": "sergii/specview",
+            "git_remote": "git@github.com:sergii/specview.git",
+            "forge_provider": "github",
+            "forge_repository": "sergii/specview"
+          },
+          "active": true,
+          "agents": ["Codex"],
+          "sessions": [
+            {
+              "id": "codex-laptop-1",
+              "adapter": "codex",
+              "agent": "Codex",
+              "worktree_root": "/Users/sergii/repos/sergii/specview",
+              "cwd": "/Users/sergii/repos/sergii/specview",
+              "started_at": "2026-08-23T19:30:00Z"
+            }
+          ],
+          "worktrees": [
+            {
+              "path": "/Users/sergii/repos/sergii/specview",
+              "branch": "main",
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "detached": false,
+              "dirty_count": 0,
+              "upstream": "origin/main",
+              "ahead": 0,
+              "behind": 0,
+              "last_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        },
+        {
+          "host_id": "host:22222222-2222-4222-9222-222222222222",
+          "hostname": "devbox-01",
+          "observed_at": "2026-08-23T20:00:05Z",
+          "instance_id": "instance:18bdda6e039c54af7052414c4417a2f9",
+          "source_repository_id": "repo-devbox-specview",
+          "name": "sergii/specview",
+          "root": "/home/sergii/repos/sergii/specview",
+          "fingerprint": {
+            "explicit_id": "specview:sergii/specview",
+            "name": "sergii/specview",
+            "git_remote": "https://github.com/sergii/specview.git",
+            "forge_provider": "github",
+            "forge_repository": "sergii/specview"
+          },
+          "active": true,
+          "agents": ["Claude Code", "Codex"],
+          "sessions": [
+            {
+              "id": "claude-devbox-1",
+              "adapter": "claude-code",
+              "agent": "Claude Code",
+              "worktree_root": "/home/sergii/repos/sergii/specview/.worktrees/h20",
+              "cwd": "/home/sergii/repos/sergii/specview/.worktrees/h20",
+              "started_at": "2026-08-23T19:35:00Z"
+            },
+            {
+              "id": "codex-devbox-1",
+              "adapter": "codex",
+              "agent": "Codex",
+              "worktree_root": "/home/sergii/repos/sergii/specview",
+              "cwd": "/home/sergii/repos/sergii/specview",
+              "started_at": "2026-08-23T19:20:00Z"
+            }
+          ],
+          "worktrees": [
+            {
+              "path": "/home/sergii/repos/sergii/specview",
+              "branch": "main",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "detached": false,
+              "dirty_count": 0,
+              "upstream": "origin/main",
+              "ahead": 0,
+              "behind": 0,
+              "last_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            {
+              "path": "/home/sergii/repos/sergii/specview/.worktrees/h20",
+              "branch": "h20-federation-snapshots",
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "detached": false,
+              "dirty_count": 2,
+              "upstream": "origin/h20-federation-snapshots",
+              "ahead": 3,
+              "behind": 0,
+              "last_commit": "cccccccccccccccccccccccccccccccccccccccc"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

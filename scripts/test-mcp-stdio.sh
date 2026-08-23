@@ -187,3 +187,29 @@ if acceptance_value.get("revision", {}).get("revision") != revision:
 if acceptance_value.get("decision", {}).get("state") != "accepted":
     raise SystemExit(f"unexpected Acceptance decision: {acceptance_value!r}")
 PY
+
+host_file="$state_home/specview/host.json"
+if [ ! -f "$host_file" ]; then
+  echo "specview mcp did not create persistent host identity" >&2
+  exit 1
+fi
+
+HOST_FILE="$host_file" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+value = json.loads(Path(os.environ["HOST_FILE"]).read_text(encoding="utf-8"))
+if value.get("version") != 1:
+    raise SystemExit(f"unexpected host identity version: {value!r}")
+if not str(value.get("id", "")).startswith("host:"):
+    raise SystemExit(f"unexpected host identity id: {value!r}")
+if not value.get("created_at"):
+    raise SystemExit(f"host identity created_at missing: {value!r}")
+PY
+
+cp "$host_file" "$state_home/host-before.json"
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"binary-smoke-reopen","version":"1.0.0"}}}' \
+  | XDG_STATE_HOME="$state_home" "$binary" mcp >/dev/null
+cmp "$state_home/host-before.json" "$host_file"

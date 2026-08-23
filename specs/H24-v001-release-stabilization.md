@@ -1,6 +1,6 @@
 ---
 specview:
-  status: in_progress
+  status: done
 ---
 
 # H24 - v0.0.1 Release Stabilization
@@ -182,19 +182,18 @@ The combined H23 + H24 merge candidate passed:
 - [x] release archive cross-build for linux/darwin amd64/arm64;
 - [x] checksum generation.
 
-Verification baseline before this checklist-only update:
+Functional verification baseline before this acceptance-closure update:
 
 ```text
-GitHub Actions CI #1014
-PR merge candidate: 67efbb9b0bca1be583493b0f48baecd33de17408
-branch head: 5868575565c8b31a8d4652f090238642dc01c58e
+GitHub Actions CI #1029
+branch head: 8bd676acf63369c1a8a6cd13c004878f04d4231b
 ```
 
-The checklist update itself is documentation-only. Its resulting PR merge candidate must still pass the required CI before H24 is considered ready for installed-user acceptance.
+That exact head also contains the two correctness fixes found only by physical Mac dogfooding: macOS filesystem path canonicalization and live transient repository read consistency. The acceptance-closure commit is documentation-only and must still pass required CI before merge.
 
 ## Artifact preflight
 
-The CI #1014 build artifact for merge candidate `67efbb9` was downloaded and inspected independently from the source checkout.
+The CI-built release artifact was inspected independently from the source checkout.
 
 Acceptance:
 
@@ -210,14 +209,14 @@ These checks are packaging/runtime preflight. They do not replace real macOS ins
 
 ## User-install acceptance
 
-The release candidate must be tested as an installed product rather than only inside the source checkout.
+The release candidate was tested as an installed product rather than only inside the source checkout.
 
 Required flow:
 
 ```text
-publish/use candidate release artifacts
+use candidate release artifacts
         ↓
-install with install.sh
+install CI-built darwin binary into user binary directory
         ↓
 run specview outside repo checkout
         ↓
@@ -228,18 +227,31 @@ restart and verify Host state
 
 Acceptance:
 
-- [ ] install to the default user binary directory succeeds on macOS;
-- [ ] installed binary starts Host dashboard without requiring `.specview.yaml` in cwd;
-- [ ] Codex/Claude observation works on a real Host where available;
-- [ ] repository page shows Git/worktree/provider context without mutating the repository;
-- [ ] MCP read-only smoke works against installed binary;
-- [ ] one federation peer lifecycle works with secrets supplied only by reference;
-- [ ] H23 `federation status` works from the installed binary;
-- [ ] restart preserves intended Host history and peer cache state.
+- [x] install to the default user binary directory succeeds on macOS;
+- [x] installed binary starts Host dashboard without requiring `.specview.yaml` in cwd;
+- [x] Codex/Claude observation works on a real Host where available;
+- [x] repository page shows Git/worktree/provider context without mutating the repository;
+- [x] MCP read-only smoke works against installed binary;
+- [x] one federation peer lifecycle works with secrets supplied only by reference;
+- [x] H23 `federation status` works from the installed binary;
+- [x] restart preserves intended Host history and peer cache state.
+
+### Physical macOS acceptance evidence
+
+The final CI-built darwin release candidate passed `bin/accept-macos` on a real Apple Silicon Mac. Automated acceptance verified checksums, MCP, federation peer/cache behavior, empty-cwd Host startup, clean SIGTERM, restart persistence, and real execution diagnostics.
+
+The real Host dashboard then showed:
+
+- `teplotec/website` with an active Codex session and three matched Codex processes;
+- the `main` worktree with Git HEAD/upstream state and local change count;
+- Git remote `git@github.com:teplotec/website.git` and GitHub provider projection;
+- `spotwo/wms` independently observed with Claude and two worktrees.
+
+The manual UI gate therefore passed without mutating either observed repository.
 
 ## Release output
 
-When all blocking acceptance criteria are complete:
+When the final docs-only CI is green:
 
 1. merge H24 to `main`;
 2. create the first v0.0.1 tag/release from the green main commit;
@@ -251,4 +263,6 @@ When all blocking acceptance criteria are complete:
 
 H24 is done when Specview has one coherent canonical specification through H23, green release gates, an installed-user acceptance result, and every known architectural debt is explicitly either fixed or deferred with a reason.
 
-No H25 feature development begins before that point.
+All H24 functional and installed-user criteria are complete. The only remaining procedural gate is the final docs-only CI for this closure commit before merge.
+
+No H25 feature development begins before v0.0.1 is cut.

@@ -1,6 +1,6 @@
 ---
 specview:
-  status: in_progress
+  status: done
 ---
 
 # H17 - Acceptance Policy
@@ -85,7 +85,8 @@ Examples:
 - missing evidence;
 - evidence exists only for an older revision;
 - check is queued;
-- check is running.
+- check is running;
+- the current workspace revision cannot be trusted.
 
 ### blocked
 
@@ -184,15 +185,26 @@ The domain conversion preserves required-check order and maps `allow_skipped` in
 
 Acceptance is a projection, not a workflow column.
 
-Repository/work-item views may later show:
+The first H17 projection lives on WorkItem detail rather than inside a particular repository visualization. It exposes stable semantic attributes for browser clients and tests:
+
+```text
+data-specview="acceptance"
+data-acceptance-state="accepted"
+data-check="unit-tests"
+data-check-state="passed"
+```
+
+This keeps Kanban, list, graph, timeline, and future views free to project the same facts differently.
+
+The read-only detail includes:
 
 ```text
 ACCEPTANCE
-unit-tests       PASS
-lint             PASS
-security         FAIL
+revision git:<sha>
+unit-tests       passed     rspec
+lint             passed     rubocop
 
-BLOCKED
+accepted
 ```
 
 No drag-and-drop, status mutation, merge button, or automatic workflow advancement is introduced by H17.
@@ -207,9 +219,34 @@ A clean Git worktree may use:
 git:<head-sha>
 ```
 
-A dirty worktree requires a workspace revision/fingerprint or must remain unevaluable. Existing evidence for the clean HEAD must never be reused to mark modified local files as accepted.
+A dirty worktree requires a workspace revision/fingerprint or remains unevaluable. Existing evidence for the clean HEAD is never reused to mark modified local files as accepted.
 
-This fail-closed revision resolver is part of the repository-integration sub-slice.
+The H17 projection therefore returns `waiting` with an unavailable revision when the containing worktree is dirty or its revision cannot be proven.
+
+## Live projection
+
+Project-scoped material fingerprints include Acceptance configuration and normalized Evidence facts in addition to repository, Git, provider, and Intent state.
+
+A material Evidence or policy change therefore produces a project change event. WorkItem detail listens to the project scope rather than the host scope, so Acceptance updates without depending on unrelated host activity.
+
+Heartbeat-only runtime changes remain filtered out by the existing material-fingerprint rules.
+
+## Browser conformance
+
+H17 introduces the first Playwright semantic browser gate.
+
+A deterministic fixture server starts a real Specview HTTP server and Chromium walks:
+
+```text
+Host
+  -> Repository
+    -> WorkItem
+      -> Acceptance
+```
+
+The browser asserts the stable semantic state, exact revision, required logical checks, and Evidence provider projection. A full-page screenshot is retained as a CI artifact for the canonical H17 detail state.
+
+This screenshot is not yet a normative pixel baseline. Canonical visual-regression baselines should be introduced when the first multi-view surfaces stabilize, while semantic browser behavior remains the compatibility gate.
 
 ## Implementation status
 
@@ -226,15 +263,17 @@ Completed:
 - unit tests for evaluator semantics;
 - durable `.specview.yaml` Acceptance configuration;
 - config compatibility and validation tests;
-- conversion from config to normalized Acceptance policy.
-
-Still to complete in H17:
-
+- conversion from config to normalized Acceptance policy;
 - safe current-revision resolution for clean vs dirty worktrees;
-- repository projection integration;
-- minimal Acceptance UI;
-- end-to-end Evidence -> Acceptance acceptance test;
-- full CI/release gate on the completed slice.
+- WorkItem Evidence -> Acceptance repository projection;
+- read-only WorkItem Acceptance UI with stable semantic selectors;
+- project material fingerprint coverage for Acceptance config and Evidence;
+- end-to-end clean/dirty Evidence -> Acceptance tests;
+- Playwright Chromium semantic browser flow;
+- browser screenshot artifact;
+- language-neutral compatibility fixtures for existing v1 contracts;
+- production Go statement-coverage gate;
+- full Go race/build and release cross-build gates.
 
 ## Acceptance criteria
 
@@ -249,10 +288,12 @@ Still to complete in H17:
 - [x] no configured requirements produce `unconfigured`, not `accepted`.
 - [x] malformed policy fails explicitly.
 - [x] project configuration can declare acceptance requirements.
-- [ ] dirty worktrees cannot inherit Acceptance from clean HEAD evidence.
-- [ ] repository projection can evaluate the current revision against Evidence.
-- [ ] UI exposes the decision without becoming a workflow editor.
-- [ ] gofmt, module verification, go vet, race tests, build, and release cross-build pass on the completed slice.
+- [x] dirty worktrees cannot inherit Acceptance from clean HEAD evidence.
+- [x] repository projection can evaluate the current revision against Evidence.
+- [x] UI exposes the decision without becoming a workflow editor.
+- [x] material Evidence/policy changes invalidate the project live fingerprint.
+- [x] a real browser can navigate to a WorkItem and observe deterministic Acceptance semantics.
+- [x] gofmt, module verification, go vet, race tests, coverage gate, build, and release cross-build pass on the completed slice.
 
 ## Out of scope
 
@@ -265,4 +306,5 @@ Still to complete in H17:
 - policy authoring UI;
 - organization-wide policy distribution;
 - cross-host policy federation;
+- normative pixel snapshots for unstable views;
 - LLM-based acceptance decisions.

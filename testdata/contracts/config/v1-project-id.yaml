@@ -1,0 +1,12 @@
+version: 1
+project:
+  id: specview:sergii/specview
+  name: Specview
+  root: .
+specs:
+  adapter: specview
+  path: specs
+  pattern: "*.md"
+server:
+  host: 127.0.0.1
+  port: 7331

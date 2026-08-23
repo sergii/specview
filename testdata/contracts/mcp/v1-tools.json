@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "protocol_version": "2025-11-25",
+  "tools": [
+    {
+      "name": "list_repositories",
+      "arguments": []
+    },
+    {
+      "name": "get_repository",
+      "arguments": ["repository_id"]
+    },
+    {
+      "name": "list_active_sessions",
+      "arguments": []
+    },
+    {
+      "name": "list_worktrees",
+      "arguments": ["repository_id"]
+    }
+  ]
+}

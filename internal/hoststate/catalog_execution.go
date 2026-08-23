@@ -90,16 +90,16 @@ func (c *Catalog) ObserveExecutions(executions []ExecutionSession, now time.Time
 			if !session.Active {
 				continue
 			}
-		if session.IdentityKind == SessionIdentityLogical {
-			if _, ok := activeIDs[logicalSessionKey(repoID, session.ID)]; ok {
-				continue
+			if session.IdentityKind == SessionIdentityLogical {
+				if _, ok := activeIDs[logicalSessionKey(repoID, session.ID)]; ok {
+					continue
+				}
 			}
-		}
-		ended := now
-		session.Active = false
-		session.EndedAt = &ended
-		changed = true
-		materialChanged = true
+			ended := now
+			session.Active = false
+			session.EndedAt = &ended
+			changed = true
+			materialChanged = true
 		}
 	}
 

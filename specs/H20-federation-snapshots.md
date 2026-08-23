@@ -1,6 +1,6 @@
 ---
 specview:
-  status: in_progress
+  status: done
 ---
 
 # H20 - Federation Snapshot POC
@@ -74,7 +74,7 @@ This makes H20 usable between two real machines through a manual copy or `scp` w
 
 ## Contract fixtures
 
-Add language-neutral fixtures for:
+Language-neutral fixtures cover:
 
 1. laptop HostSnapshot v1;
 2. DevBox HostSnapshot v1;
@@ -83,30 +83,41 @@ Add language-neutral fixtures for:
 5. contradictory explicit identity that remains a conflict;
 6. a transitive bridge case that must not collapse explicitly distinct groups.
 
-These fixtures must be consumable by a future Rust implementation.
+These fixtures are consumable by a future Rust implementation.
 
 ## Acceptance criteria
 
-- [ ] HostSnapshot v1 model is versioned and strictly validated;
-- [ ] snapshot includes stable source Host ID and `observed_at`;
-- [ ] RepositoryInstance IDs use the H19 deterministic contract;
-- [ ] snapshot builder reuses `controlplane.Reader` facts;
-- [ ] optional `project.id` participates in snapshot fingerprints;
-- [ ] sessions stay attached to the correct source RepositoryInstance;
-- [ ] Git worktrees stay attached to the correct source RepositoryInstance;
-- [ ] multiple snapshots from one Host resolve to the newest snapshot for current projection;
-- [ ] same-time conflicting Host snapshots fail explicitly;
-- [ ] laptop + DevBox matching instances group into one derived logical repository;
-- [ ] the grouped projection still exposes both Host IDs and both local roots;
-- [ ] same-name-only repositories remain separate/ambiguous;
-- [ ] contradictory evidence never silently merges instances;
-- [ ] transitive correlation cannot bridge already-distinct groups;
-- [ ] language-neutral snapshot and aggregation fixtures are tested;
-- [ ] `specview federation snapshot` emits valid HostSnapshot v1 JSON;
-- [ ] `specview federation aggregate` consumes snapshot files and emits the derived projection;
-- [ ] existing H18 MCP v1 contract remains unchanged;
-- [ ] existing catalog v1 and Host identity v1 contracts remain unchanged;
-- [ ] gofmt, module, vet, race, coverage, MCP binary, federation binary, browser, and release gates pass.
+- [x] HostSnapshot v1 model is versioned and strictly validated;
+- [x] snapshot includes stable source Host ID and `observed_at`;
+- [x] RepositoryInstance IDs use the H19 deterministic contract;
+- [x] snapshot builder reuses `controlplane.Reader` facts;
+- [x] optional `project.id` participates in snapshot fingerprints;
+- [x] sessions stay attached to the correct source RepositoryInstance;
+- [x] Git worktrees stay attached to the correct source RepositoryInstance;
+- [x] multiple snapshots from one Host resolve to the newest snapshot for current projection;
+- [x] same-time conflicting Host snapshots fail explicitly;
+- [x] laptop + DevBox matching instances group into one derived logical repository;
+- [x] the grouped projection still exposes both Host IDs and both local roots;
+- [x] same-name-only repositories remain separate/ambiguous;
+- [x] contradictory evidence never silently merges instances;
+- [x] transitive correlation cannot bridge already-distinct groups;
+- [x] language-neutral snapshot and aggregation fixtures are tested;
+- [x] `specview federation snapshot` emits valid HostSnapshot v1 JSON;
+- [x] `specview federation aggregate` consumes snapshot files and emits the derived projection;
+- [x] existing H18 MCP v1 contract remains unchanged;
+- [x] existing catalog v1 and Host identity v1 contracts remain unchanged;
+- [x] gofmt, module, vet, race, coverage, MCP binary, federation binary, browser, and release gates pass.
+
+## Verification baseline
+
+Completed functional H20 head:
+
+- total production statement coverage: **65.5%**;
+- `internal/federation`: **81.8%**;
+- MCP built-binary smoke: PASS;
+- federation built-binary smoke: PASS;
+- Chromium semantic E2E: PASS;
+- Linux/macOS release artifacts: PASS.
 
 ## Out of scope
 
@@ -123,4 +134,4 @@ These fixtures must be consumable by a future Rust implementation.
 
 ## Next
 
-After the snapshot POC is proven, the next federation slice can transport the same contract between laptop and DevBox over an authenticated local/private network channel without changing identity semantics.
+The next federation slice can transport the same contract between laptop and DevBox over an authenticated local/private network channel without changing identity semantics.

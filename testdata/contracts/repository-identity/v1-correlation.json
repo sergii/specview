@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "repository_instance": {
+    "host_id": "host:550e8400-e29b-41d4-a716-446655440000",
+    "root": "/home/sergii/repos/specview",
+    "expected_id": "instance:7786699323d4615c6026d78481c5cd30"
+  },
+  "normalization": {
+    "repository_name": {
+      "input": " Sergii\\Specview.git ",
+      "expected": "sergii/specview"
+    },
+    "git_remotes": [
+      "git@github.com:sergii/specview.git",
+      "https://github.com/sergii/specview.git",
+      "ssh://git@github.com/sergii/specview.git"
+    ],
+    "expected_git_remote": "github.com/sergii/specview"
+  },
+  "cases": [
+    {
+      "name": "matching explicit project id",
+      "left": {
+        "explicit_id": "specview:sergii/specview",
+        "name": "sergii/specview"
+      },
+      "right": {
+        "explicit_id": "specview:sergii/specview",
+        "name": "local/specview"
+      },
+      "expected": "match"
+    },
+    {
+      "name": "different explicit project id",
+      "left": {
+        "explicit_id": "specview:a",
+        "name": "sergii/specview"
+      },
+      "right": {
+        "explicit_id": "specview:b",
+        "name": "sergii/specview"
+      },
+      "expected": "distinct"
+    },
+    {
+      "name": "explicit identity contradicts forge",
+      "left": {
+        "explicit_id": "specview:sergii/specview",
+        "name": "sergii/specview",
+        "forge_provider": "github",
+        "forge_repository": "sergii/specview"
+      },
+      "right": {
+        "explicit_id": "specview:sergii/specview",
+        "name": "sergii/specview",
+        "forge_provider": "github",
+        "forge_repository": "other/specview"
+      },
+      "expected": "conflict"
+    },
+    {
+      "name": "name and git corroborate",
+      "left": {
+        "name": "sergii/specview",
+        "git_remote": "git@github.com:sergii/specview.git"
+      },
+      "right": {
+        "name": "SERGII/specview.git",
+        "git_remote": "https://github.com/sergii/specview.git"
+      },
+      "expected": "match"
+    },
+    {
+      "name": "name only remains ambiguous",
+      "left": {
+        "name": "sergii/specview"
+      },
+      "right": {
+        "name": "sergii/specview"
+      },
+      "expected": "ambiguous"
+    },
+    {
+      "name": "same name contradictory git",
+      "left": {
+        "name": "sergii/specview",
+        "git_remote": "git@github.com:sergii/specview.git"
+      },
+      "right": {
+        "name": "sergii/specview",
+        "git_remote": "git@github.com:other/specview.git"
+      },
+      "expected": "distinct"
+    },
+    {
+      "name": "different names are distinct",
+      "left": {
+        "name": "sergii/specview",
+        "git_remote": "git@github.com:sergii/specview.git"
+      },
+      "right": {
+        "name": "local/specview",
+        "git_remote": "git@github.com:sergii/specview.git"
+      },
+      "expected": "distinct"
+    },
+    {
+      "name": "forge corroborates name",
+      "left": {
+        "name": "sergii/specview",
+        "forge_provider": "GitHub",
+        "forge_repository": "sergii/specview"
+      },
+      "right": {
+        "name": "sergii/specview",
+        "forge_provider": "github",
+        "forge_repository": "SERGII/specview.git"
+      },
+      "expected": "match"
+    },
+    {
+      "name": "one explicit id plus ordinary corroboration",
+      "left": {
+        "explicit_id": "specview:sergii/specview",
+        "name": "sergii/specview",
+        "git_remote": "git@github.com:sergii/specview.git"
+      },
+      "right": {
+        "name": "sergii/specview",
+        "git_remote": "https://github.com/sergii/specview.git"
+      },
+      "expected": "match"
+    }
+  ]
+}

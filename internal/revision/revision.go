@@ -10,7 +10,7 @@ import (
 const (
 	ReasonWorktreeNotFound = "worktree_not_found"
 	ReasonDirtyWorktree    = "dirty_worktree"
-	ReasonHeadUnavailable = "head_unavailable"
+	ReasonHeadUnavailable  = "head_unavailable"
 )
 
 type Resolution struct {

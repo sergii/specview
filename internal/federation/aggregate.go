@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -68,16 +69,13 @@ func (a *Aggregator) Aggregate(snapshots ...HostSnapshot) (Projection, error) {
 		GeneratedAt:   a.now().UTC(),
 	}
 
-	seenHosts := make(map[string]struct{}, len(snapshots))
+	current, err := currentSnapshots(snapshots)
+	if err != nil {
+		return Projection{}, err
+	}
+
 	var instances []SourcedInstance
-	for _, snapshot := range snapshots {
-		if err := snapshot.Validate(); err != nil {
-			return Projection{}, err
-		}
-		if _, exists := seenHosts[snapshot.HostID]; exists {
-			return Projection{}, fmt.Errorf("duplicate federation snapshot for Host %q", snapshot.HostID)
-		}
-		seenHosts[snapshot.HostID] = struct{}{}
+	for _, snapshot := range current {
 		projection.Hosts = append(projection.Hosts, HostProjection{
 			HostID:     snapshot.HostID,
 			Hostname:   snapshot.Hostname,
@@ -93,9 +91,6 @@ func (a *Aggregator) Aggregate(snapshots ...HostSnapshot) (Projection, error) {
 		}
 	}
 
-	sort.Slice(projection.Hosts, func(i, j int) bool {
-		return projection.Hosts[i].HostID < projection.Hosts[j].HostID
-	})
 	sort.Slice(instances, func(i, j int) bool {
 		if instances[i].HostID != instances[j].HostID {
 			return instances[i].HostID < instances[j].HostID
@@ -166,6 +161,32 @@ func (a *Aggregator) Aggregate(snapshots ...HostSnapshot) (Projection, error) {
 		return left.Outcome < right.Outcome
 	})
 	return projection, nil
+}
+
+func currentSnapshots(snapshots []HostSnapshot) ([]HostSnapshot, error) {
+	latest := make(map[string]HostSnapshot, len(snapshots))
+	for _, snapshot := range snapshots {
+		if err := snapshot.Validate(); err != nil {
+			return nil, err
+		}
+		existing, ok := latest[snapshot.HostID]
+		if !ok || snapshot.ObservedAt.After(existing.ObservedAt) {
+			latest[snapshot.HostID] = snapshot
+			continue
+		}
+		if snapshot.ObservedAt.Equal(existing.ObservedAt) && !reflect.DeepEqual(snapshot, existing) {
+			return nil, fmt.Errorf("conflicting federation snapshots for Host %q at %s", snapshot.HostID, snapshot.ObservedAt.UTC().Format(time.RFC3339Nano))
+		}
+	}
+
+	current := make([]HostSnapshot, 0, len(latest))
+	for _, snapshot := range latest {
+		current = append(current, snapshot)
+	}
+	sort.Slice(current, func(i, j int) bool {
+		return current[i].HostID < current[j].HostID
+	})
+	return current, nil
 }
 
 func buildRepositoryGroup(instances []SourcedInstance) RepositoryGroup {

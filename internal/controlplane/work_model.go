@@ -1,5 +1,24 @@
 package controlplane
 
+type ListWorkItemsResult struct {
+	SchemaVersion  int                 `json:"schema_version"`
+	Host           string              `json:"host"`
+	RepositoryID   string              `json:"repository_id"`
+	RepositoryName string              `json:"repository_name"`
+	WorkItems      []WorkItemListEntry `json:"work_items"`
+	Warnings       []string            `json:"warnings,omitempty"`
+}
+
+type WorkItemListEntry struct {
+	WorkItemID string `json:"work_item_id"`
+	Kind       string `json:"kind"`
+	Path       string `json:"path"`
+	Title      string `json:"title"`
+	Status     string `json:"status"`
+	ModifiedAt string `json:"modified_at,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
 type GetWorkItemResult struct {
 	SchemaVersion  int             `json:"schema_version"`
 	Host           string          `json:"host"`

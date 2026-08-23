@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "repositories": [
+    {
+      "id": "repo-contract-v1",
+      "name": "sergii/specview",
+      "root": "/work/sergii/specview",
+      "first_seen_at": "2026-08-23T10:00:00Z",
+      "last_seen_at": "2026-08-23T12:00:00Z",
+      "convention": {
+        "adapter": "specview",
+        "label": "Specview",
+        "path": "specs",
+        "recognized": true,
+        "supported": true
+      },
+      "sessions": [
+        {
+          "id": "session-contract-v1",
+          "agent": "Codex",
+          "pid": 4242,
+          "started_at": "2026-08-23T11:30:00Z",
+          "last_seen_at": "2026-08-23T12:00:00Z",
+          "active": true
+        }
+      ]
+    }
+  ]
+}

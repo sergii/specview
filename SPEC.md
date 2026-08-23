@@ -12,9 +12,9 @@ The core model is:
 INTENT | EXECUTION | EVIDENCE | ACCEPTANCE
 ```
 
-Source-control and host context connect those planes without becoming their authority.
+Source-control, Host, and federation context connect those planes without becoming their authority.
 
-The product must remain useful when individual optional integrations are unavailable. A GitHub failure must not hide local Git state. An Evidence failure must not hide Intent. A host index failure must not stop repository observation.
+The product must remain useful when individual optional integrations are unavailable. A GitHub failure must not hide local Git state. An Evidence failure must not hide Intent. A Host index failure must not stop repository observation. An unreachable federation peer must not erase its last valid source snapshot or invent fresh facts.
 
 ## Product thesis
 
@@ -24,6 +24,8 @@ Specview answers four questions:
 2. What is actively executing against it?
 3. What evidence exists for the current revision?
 4. Is that revision acceptable under the repository policy?
+
+It can answer those questions for one Host and project a conservative read-only view across known Hosts.
 
 The UI is a projection of this normalized model. Kanban, list, hierarchy, and future graph views are representations, not domain models.
 
@@ -40,7 +42,9 @@ Evidence adapters      -> verification observations
 Acceptance policy      -> repository acceptance rules
 Host catalog           -> local observation/history compatibility state
 SQLite host index      -> rebuildable search projection
-Federation snapshots   -> read-only remote Host observations
+HostSnapshot           -> immutable source-Host observation
+Federation peer cache  -> last-known remote observation
+Federation runtime     -> derived polling/freshness/projection behavior
 ```
 
 Rules:
@@ -52,7 +56,8 @@ Rules:
 - Evidence is revision-scoped and never silently promoted into Acceptance;
 - Acceptance is derived from policy plus Evidence for one revision;
 - SQLite is disposable and rebuildable;
-- federation never creates shared authority between Hosts;
+- every remote HostSnapshot remains attributable to its source Host;
+- federation correlation and polling create derived views, not shared authority;
 - Specview does not write tasks, branches, pull requests, specifications, Evidence, or remote Host state in v0.0.1.
 
 ## Domain graph
@@ -72,10 +77,11 @@ Host
 │       ├── Git
 │       └── Provider
 └── FederationPeer
+    ├── RemoteObservation
     └── HostSnapshot
 ```
 
-Relationships matter more than any one visualization. A repository may have multiple worktrees and execution sessions. A WorkItem may have multiple supporting artifacts and Evidence records. Remote Hosts remain separately authoritative even when repository instances correlate.
+Relationships matter more than any one visualization. A repository may have multiple worktrees and execution sessions. A WorkItem may have multiple supporting artifacts and Evidence records. Remote Hosts remain separately authoritative even when repository instances correlate into one derived group.
 
 ## Intent
 
@@ -130,7 +136,7 @@ ExecutionRegistry
 ExecutionSession
 ```
 
-A logical execution session is not an operating-system process. One session may contain multiple helper process IDs. Process IDs are diagnostics, not durable cross-host identity.
+A logical execution session is not an operating-system process. One session may contain multiple helper process IDs. Process IDs are diagnostics, not durable cross-Host identity.
 
 The first automatic adapters observe Codex and Claude Code on supported macOS/Linux hosts. Adapter failures are isolated so one unavailable agent adapter does not erase sessions produced by another.
 
@@ -206,7 +212,7 @@ The Host page answers:
 
 Observed history is kept outside repositories in the Specview Host state directory.
 
-The JSON host catalog remains a compatibility/history snapshot in v0.0.1. SQLite is a derived, rebuildable index used for search. Deleting the SQLite index must be safe.
+The JSON Host catalog remains a compatibility/history snapshot in v0.0.1. SQLite is a derived, rebuildable index used for search. Deleting the SQLite index must be safe.
 
 Search can match repository identity/context without making SQLite the authority for rendered live state.
 
@@ -232,11 +238,13 @@ The current slice intentionally uses browser-native EventSource, fetch, AbortCon
 
 ## Read-only MCP
 
-Specview exposes the same normalized local control-plane facts through a read-only MCP stdio interface.
+Specview exposes normalized local control-plane facts through a read-only MCP stdio interface.
 
 The MCP layer is an adapter over the same domain contracts used by the web projection. It must not create a second source of truth or gain write authority in v0.0.1.
 
 Language-neutral fixtures protect the observable contracts so the implementation can be replaced without redefining product semantics.
+
+The public execution shape uses a logical session `id`; `process_ids` remain optional diagnostics.
 
 ## Host identity and federation
 
@@ -246,11 +254,13 @@ Federation is conservative and read-only:
 
 ```text
 Host A snapshot ─┐
-Host B snapshot ─┼─> multi-host projection
+Host B snapshot ─┼─> derived multi-host projection
 Host C snapshot ─┘
 ```
 
 Remote observations never override the source Host's authority.
+
+### Snapshot and correlation contract
 
 v0.0.1 federation includes:
 
@@ -259,14 +269,54 @@ v0.0.1 federation includes:
 - conservative repository correlation;
 - explicit optional project identity;
 - HostSnapshot v1;
-- localhost-first HTTP pull transport;
-- peer registry;
+- deterministic aggregation of source snapshots.
+
+When several snapshots exist for one Host, the newest source `observed_at` wins. Equal-time conflicting snapshots fail explicitly. Repository groups are derived projection state and must not become canonical global repository identity.
+
+### Transport and peers
+
+The first network transport is localhost-first HTTP pull.
+
+Host-level peer state supports:
+
+- required expected Host ID pinning;
+- source URL validation;
 - credential references without persisted secret values;
-- manual peer refresh;
-- last-known valid remote snapshot preservation;
+- manual refresh;
+- last-known valid snapshot preservation;
+- source `observed_at` separate from local `retrieved_at`;
 - freshness states: `fresh`, `stale`, `unreachable`, `never_retrieved`.
 
-v0.0.1 does not include automatic peer discovery, background federation polling, push synchronization, remote execution, remote writes, or a shared database.
+Credential values are resolved at request time and must not be persisted or exposed in error text.
+
+### Federation runtime
+
+`specview serve` starts a derived federation polling runtime alongside local execution observation.
+
+The runtime:
+
+- re-opens the Host-level peer registry each cycle so peer add/remove is observed without restart;
+- refreshes configured peers through the existing H22 refresher and security rules;
+- isolates peer failures;
+- changes cached observations, not remote authority;
+- notifies observers only when peer material changes, not for transport-only attempt timestamps.
+
+The deterministic current multi-host projection is available through:
+
+```text
+specview federation status
+```
+
+Projection rules:
+
+- the local HostSnapshot is freshly built for each projection read;
+- `fresh`, `stale`, and `unreachable` peers with a cached valid snapshot contribute that snapshot to unchanged H20 aggregation;
+- `never_retrieved` peers remain visible as Hosts but contribute no invented repository facts;
+- unreachable never means inactive or zero sessions;
+- remote freshness metadata never rewrites source HostSnapshot fields;
+- H20 conservative correlation semantics remain unchanged.
+
+v0.0.1 does not include automatic peer discovery, push synchronization, remote execution, remote writes, per-peer polling schedules, or a shared database.
 
 ## Configuration
 
@@ -309,26 +359,33 @@ Repositories that do not define Acceptance policy can omit the `acceptance` sect
 
 `project.id` is optional explicit cross-Host project identity. It must not be synthesized from personal or machine identity.
 
-Host-level federation peer configuration and Host identity are stored outside repositories.
+Host identity, federation peers, remote observation cache, and other Host-level federation state live outside repositories.
 
 The repository-level `server` section is a compatibility artifact in v1, not a precedent for putting future Host settings in repository configuration. Its cleanup or migration requires an explicit configuration-contract change rather than an incidental removal.
 
 ## CLI surface
 
-The product includes the local observer plus explicit read-only/control-plane utilities introduced through H01-H22.
+The product includes the Host observer plus explicit read-only/control-plane utilities introduced through H01-H23.
 
 Core commands include:
 
 ```text
 specview
 specview serve
+specview mcp
 specview init
 specview doctor
+specview federation snapshot
+specview federation aggregate
+specview federation serve
+specview federation pull
+specview federation peer ...
+specview federation status
 specview version
 specview help
 ```
 
-Additional MCP and federation commands must preserve the same authority boundaries. Peer mutation changes only local peer configuration/cache; it does not mutate a remote Host.
+Peer mutation changes only local peer configuration/cache; it does not mutate a remote Host.
 
 ## Security and privacy
 
@@ -338,7 +395,7 @@ Secrets must not be persisted in federation peer files or error text. Peer crede
 
 Host state directories and sensitive local indexes use private filesystem permissions.
 
-Repository observation must not write product state into unrelated repositories. Specview-owned ephemeral/runtime files under `.specview/` must remain clearly separated from durable repository intent.
+Repository observation must not write product state into unrelated repositories. Specview-owned ephemeral/runtime files under `.specview/` must remain clearly separated from durable repository Intent.
 
 ## Distribution
 
@@ -368,16 +425,16 @@ curl -fsSL https://specview.sh/install | sh
 
 v0.0.1 is a proof of the observation/control-plane architecture, not a promise to complete every possible agentic-development feature.
 
-Included product capabilities are those already defined and accepted by H01-H22, plus release stabilization work that does not expand the product surface.
+Included product capabilities are those already defined and accepted by H01-H23, plus H24 release-stabilization work that does not expand the product surface.
 
-Before v0.0.1, development is frozen against new feature planes. Release work may:
+Before v0.0.1, development is frozen against new feature planes. H24 may:
 
 - correct contract/documentation drift;
 - fix correctness, safety, portability, performance, or packaging defects;
 - improve tests and acceptance gates;
 - remove accidental coupling when it can be done without destabilizing frozen public contracts.
 
-Release work must not add a new workflow, provider, agent family, federation mode, UI paradigm, remote-write capability, or orchestration responsibility.
+H24 must not add a new workflow, provider, agent family, federation transport/mode, UI paradigm, remote-write capability, or orchestration responsibility.
 
 ## Explicit non-goals for v0.0.1
 
@@ -388,8 +445,9 @@ Release work must not add a new workflow, provider, agent family, federation mod
 - remote execution;
 - remote repository writes;
 - GitHub write operations;
-- background federation daemon/polling;
-- automatic peer discovery;
+- automatic federation peer discovery;
+- push federation synchronization;
+- per-peer polling schedules;
 - shared multi-host database;
 - semantic/vector search as a required dependency;
 - coupling the domain model to Kanban, list, hierarchy, or graph presentation;
@@ -399,9 +457,9 @@ Release work must not add a new workflow, provider, agent family, federation mod
 
 v0.0.1 is release-ready when:
 
-1. canonical product documentation describes the architecture that is actually implemented;
-2. H01-H22 accepted contracts remain green;
-3. formatting, module verification, vet, race tests, build, binary smoke tests, browser semantic E2E, and release cross-build pass on the exact release head;
+1. canonical product documentation describes the architecture actually implemented through H23;
+2. H01-H23 accepted contracts remain green;
+3. formatting, module verification, vet, race tests, coverage, build, MCP/federation built-binary smoke tests, federation runtime/status smoke, browser semantic E2E, and release cross-build pass on the release candidate;
 4. macOS and Linux release artifacts are reproducible from the release workflow;
 5. installation from a GitHub Release works as a user installation, not only from a development checkout;
 6. Host observation survives restart and does not require a repository-local Specview config to start;

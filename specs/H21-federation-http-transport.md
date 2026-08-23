@@ -38,7 +38,7 @@ H20 aggregator
 - rejects unsupported methods;
 - fails without returning partial snapshot JSON when local collection fails.
 
-H21 intentionally has no option to bind this server to a non-loopback address.
+H21 intentionally has no option to bind this server to a non-loopback address. Tests freeze both the loopback default address and rejection of a positional bind-address argument.
 
 ## Pull client
 
@@ -51,8 +51,9 @@ H21 intentionally has no option to bind this server to a non-loopback address.
 - uses a bounded timeout;
 - limits response size;
 - requires a successful HTTP response;
+- requires JSON content type;
 - strict-decodes HostSnapshot v1;
-- prints canonical validated snapshot JSON to stdout.
+- prints validated snapshot JSON to stdout.
 
 Optional peer pinning:
 
@@ -60,38 +61,45 @@ Optional peer pinning:
 specview federation pull --expect-host host:<uuid> <url>
 ```
 
-A different returned Host ID must fail.
+A different returned Host ID must fail. The pull CLI grammar is covered by table-driven tests for missing, duplicate, unknown, and extra arguments.
 
 ## Private ingress
 
 H21 does not configure the private network itself.
 
-Supported deployment patterns include:
+The supported ready-now deployment path is:
 
-- Tailscale Serve -> localhost federation server;
-- Cloudflare Tunnel + Access -> localhost federation server;
-- another authenticated TLS reverse proxy -> localhost federation server.
+- Tailscale Serve -> localhost federation server.
 
-The transport core remains vendor-neutral.
+Tailscale can terminate HTTPS inside the tailnet and proxy the loopback HTTP listener without requiring extra application headers from the Specview client.
+
+Other authenticated TLS reverse proxies can be used only when their authentication mechanism is already satisfied outside `specview federation pull`.
+
+Cloudflare Tunnel can route a public hostname to the localhost listener, but Cloudflare Access service-token authentication requires client request headers. H21 deliberately does not yet provide peer credential or arbitrary request-header configuration, so Cloudflare Access service-token support is not treated as turnkey in this slice.
+
+See `docs/federation-private-ingress.md` for the executable Tailscale flow.
 
 ## Acceptance criteria
 
-- [ ] localhost-only federation server exists;
-- [ ] GET snapshot endpoint returns valid HostSnapshot v1;
-- [ ] endpoint emits no-store JSON responses;
-- [ ] unsupported methods are rejected;
-- [ ] snapshot builder errors do not return partial snapshot JSON;
-- [ ] pull client accepts remote HTTPS;
-- [ ] pull client allows HTTP only for loopback development/test URLs;
-- [ ] remote cleartext HTTP is rejected before request;
-- [ ] redirects are rejected;
-- [ ] response size is bounded;
-- [ ] strict H20 snapshot validation is reused;
-- [ ] expected Host ID pinning works;
-- [ ] built-binary localhost serve/pull flow is tested;
-- [ ] H20 aggregation accepts a pulled snapshot unchanged;
-- [ ] H18 MCP, H19 identity, and H20 federation fixtures remain unchanged;
-- [ ] gofmt, module, vet, race, coverage, MCP binary, federation binary, browser, and release gates pass.
+- [x] localhost-only federation server exists;
+- [x] GET snapshot endpoint returns valid HostSnapshot v1;
+- [x] endpoint emits no-store JSON responses;
+- [x] unsupported methods are rejected;
+- [x] snapshot builder errors do not return partial snapshot JSON;
+- [x] pull client accepts remote HTTPS;
+- [x] pull client allows HTTP only for loopback development/test URLs;
+- [x] remote cleartext HTTP is rejected before request;
+- [x] redirects are rejected;
+- [x] response size is bounded;
+- [x] strict H20 snapshot validation is reused;
+- [x] expected Host ID pinning works;
+- [x] pull CLI grammar edge cases are tested;
+- [x] loopback-only listener address is an executable safety contract;
+- [x] built-binary localhost serve/pull flow is tested;
+- [x] H20 aggregation accepts a pulled snapshot unchanged;
+- [x] Tailscale Serve deployment path is documented;
+- [x] H18 MCP, H19 identity, and H20 federation fixtures remain unchanged;
+- [ ] final exact-head gofmt, module, vet, race, coverage, MCP binary, federation binary, browser, and release gates pass.
 
 ## Out of scope
 
@@ -100,6 +108,8 @@ The transport core remains vendor-neutral.
 - persistence of remote snapshots;
 - UI for remote Hosts;
 - application-level user login;
+- peer credential storage;
+- Cloudflare Access service-token headers;
 - automatic Tailscale/Cloudflare setup;
 - push sync;
 - remote writes/execution;
@@ -109,4 +119,4 @@ The transport core remains vendor-neutral.
 
 ## Next
 
-After H21, Specview can add explicit peer configuration and freshness-aware polling while continuing to aggregate immutable HostSnapshot v1 documents locally.
+After H21, Specview can add explicit peer configuration, credential providers, and freshness-aware polling while continuing to aggregate immutable HostSnapshot v1 documents locally.

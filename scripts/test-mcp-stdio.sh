@@ -30,9 +30,24 @@ if initialize.get("result", {}).get("protocolVersion") != "2025-11-25":
     raise SystemExit(f"unexpected MCP protocol version: {initialize!r}")
 
 names = [tool.get("name") for tool in tools.get("result", {}).get("tools", [])]
-expected = ["list_repositories", "get_repository", "list_active_sessions", "list_worktrees"]
+expected = [
+    "list_repositories",
+    "get_repository",
+    "list_active_sessions",
+    "list_worktrees",
+    "get_work_item",
+    "get_evidence",
+    "get_acceptance",
+]
 if names != expected:
     raise SystemExit(f"unexpected MCP tools: {names!r}")
+
+for tool in tools.get("result", {}).get("tools", []):
+    annotations = tool.get("annotations", {})
+    if annotations.get("readOnlyHint") is not True:
+        raise SystemExit(f"tool is not read-only: {tool!r}")
+    if annotations.get("destructiveHint") is not False:
+        raise SystemExit(f"tool is destructive: {tool!r}")
 
 result = repositories.get("result", {})
 if result.get("isError"):

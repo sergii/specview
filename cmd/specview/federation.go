@@ -13,17 +13,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sergii/specview/internal/controlplane"
 	"github.com/sergii/specview/internal/federation"
 	"github.com/sergii/specview/internal/federationhttp"
 	"github.com/sergii/specview/internal/hoststate"
 	"github.com/sergii/specview/internal/identity"
-	"github.com/sergii/specview/internal/sourcecontrol"
 )
 
 func runFederation(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("federation command requires snapshot, aggregate, serve, pull, or peer")
+		return fmt.Errorf("federation command requires snapshot, aggregate, status, serve, pull, or peer")
 	}
 
 	switch args[0] {
@@ -37,6 +35,11 @@ func runFederation(args []string) error {
 			return fmt.Errorf("usage: specview federation aggregate <snapshot.json>...")
 		}
 		return writeFederationProjection(args[1:], os.Stdout)
+	case "status":
+		if len(args) != 1 {
+			return fmt.Errorf("usage: specview federation status")
+		}
+		return writeFederationStatus(context.Background(), os.Stdout)
 	case "serve":
 		if len(args) != 1 {
 			return fmt.Errorf("usage: specview federation serve")
@@ -60,12 +63,7 @@ func localFederationBuilder() (*federation.Builder, error) {
 	if err != nil {
 		return nil, err
 	}
-	reader := controlplane.NewReader(
-		statePath,
-		hoststate.DefaultExecutionRegistry(),
-		sourcecontrol.DefaultService(),
-	)
-	return federation.NewBuilder(hostIdentity.ID, reader), nil
+	return newLocalFederationBuilder(statePath, hostIdentity.ID, hoststate.DefaultExecutionRegistry()), nil
 }
 
 func writeFederationSnapshot(ctx context.Context, destination io.Writer) error {
@@ -78,6 +76,26 @@ func writeFederationSnapshot(ctx context.Context, destination io.Writer) error {
 		return err
 	}
 	return writeFederationJSON(destination, snapshot)
+}
+
+func writeFederationStatus(ctx context.Context, destination io.Writer) error {
+	statePath, err := hoststate.DefaultStatePath()
+	if err != nil {
+		return err
+	}
+	hostIdentity, err := identity.LoadOrCreateHostForCatalog(statePath)
+	if err != nil {
+		return err
+	}
+	builder, err := newFederationProjectionBuilder(statePath, hostIdentity.ID, hoststate.DefaultExecutionRegistry())
+	if err != nil {
+		return err
+	}
+	projection, err := builder.Build(ctx)
+	if err != nil {
+		return err
+	}
+	return writeFederationJSON(destination, projection)
 }
 
 func serveFederationHTTP() error {

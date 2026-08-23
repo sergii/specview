@@ -25,6 +25,7 @@ federation/v1-projection.json                 derived two-host federation projec
 federation/v1-aggregation-cases.json          ambiguous/conflict/transitive grouping safety cases
 peers/v1.json                                 Host-level federation peer registry v1
 remote-observation/v1.json                    cached remote HostSnapshot observation v1
+federation-runtime/v1-status.json             multi-host freshness + aggregation projection v1
 ```
 
 The current Go implementation must consume these fixtures in CI. A future Rust implementation must consume the same fixtures before it can replace the Go implementation.
@@ -43,5 +44,6 @@ Rules:
 - Peer registry files contain Host identity pins, URLs, stale thresholds, and credential references only. Secret values must never be serialized into them.
 - Remote observation files preserve the source `snapshot.observed_at` unchanged. `retrieved_at` and attempt timestamps are local transport metadata.
 - A failed remote retrieval may update attempt metadata but must not erase the last valid cached HostSnapshot.
+- Multi-host runtime projections keep Host freshness outside immutable HostSnapshot documents. `unreachable` with a cached snapshot must preserve those source-attributed repository/session facts; `never_retrieved` must invent none.
 
 These fixtures intentionally do not freeze HTML, CSS, Go structs, package names, SQLite schema internals, polling cadence, or a future federation UI.

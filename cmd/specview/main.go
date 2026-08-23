@@ -255,6 +255,9 @@ func serve() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if err := startFederationPeerRuntime(ctx, statePath, hub.Broadcast); err != nil {
+		return err
+	}
 	go runtime.Run(ctx)
 
 	const host = "127.0.0.1"
@@ -292,6 +295,7 @@ Usage:
   specview mcp [options]                                  Run the read-only MCP server over stdin/stdout
   specview federation snapshot                            Write this Host's federation snapshot JSON to stdout
   specview federation aggregate <snapshot>...             Aggregate HostSnapshot JSON files into a read-only projection
+  specview federation status                              Show local + configured remote Hosts and aggregated repository facts
   specview federation serve                               Serve HostSnapshot on 127.0.0.1:7332 only
   specview federation pull <url>                          Pull and validate a remote HostSnapshot over HTTPS
   specview federation pull --expect-host <host:id> <url> Pin the expected remote Host identity
@@ -336,12 +340,14 @@ Examples:
   specview federation serve
   specview federation peer add devbox --url https://devbox.example.ts.net --host host:550e8400-e29b-41d4-a716-446655440000 --stale-after 5m
   specview federation peer refresh devbox
+  specview federation status
   specview federation peer list
   specview federation aggregate laptop.json devbox.json
   SPECVIEW_LOG_LEVEL=debug specview
 
 Federation HTTP serving is loopback-only. Tailscale Serve can publish that endpoint privately.
 Peer credential values are read from environment variables at request time and are never stored in peer state.
+While the host dashboard runs, configured peers are refreshed periodically and last-known snapshots remain visible during outages.
 
 The host dashboard does not require .specview.yaml. Project configuration remains
 an optional repository-level override.

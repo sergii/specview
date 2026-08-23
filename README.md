@@ -16,7 +16,7 @@ INTENT | EXECUTION | EVIDENCE | ACCEPTANCE
 
 It also projects the Git, forge/provider, Host, and federation context that connects those planes.
 
-Specview does not own tasks, edit specifications, run your tests, orchestrate agents, or write remote repositories. It observes authoritative systems and renders a live read-only view of their state.
+Specview does not own tasks, edit specifications, run your tests, orchestrate agents, or write remote repositories. It observes authoritative systems and renders read-only human and agent views of their state.
 
 A simplified model:
 
@@ -55,7 +55,9 @@ Kanban, list, hierarchy, and future graph views are projections over this model.
 - persistent Host identity
 - HostSnapshot v1 federation contract
 - localhost-first federation HTTP pull transport
-- federation peer registry, manual refresh, cached last-known snapshot, and freshness states
+- Host-level federation peer registry with freshness and cached last-known observations
+- periodic peer refresh while `specview serve` is running
+- deterministic local + remote federation status projection
 - language-neutral contract fixtures and built-binary smoke gates
 
 ## Authority model
@@ -72,9 +74,10 @@ Acceptance policy      -> acceptance rules
 Host catalog           -> local history/compatibility snapshot
 SQLite                  -> rebuildable search projection
 Remote HostSnapshot     -> read-only remote Host observation
+Federation runtime      -> derived refresh/projection behavior
 ```
 
-If an optional source fails, unrelated facts should remain visible. For example, GitHub failure must not hide local Git state.
+If an optional source fails, unrelated facts should remain visible. GitHub failure, for example, must not hide local Git state. Federation polling changes cached remote observations but never upgrades them into shared authority.
 
 ## Install
 
@@ -132,12 +135,13 @@ With no stronger supported convention, Specview creates:
 specs/
 ```
 
-The current v1 native configuration is:
+The current v1 configuration contract supports repository identity, Intent configuration, Acceptance policy, and legacy repository-level server fields:
 
 ```yaml
 version: 1
 
 project:
+  id: ""
   name: ""
   root: "."
 
@@ -146,14 +150,18 @@ specs:
   path: specs
   pattern: "*.md"
 
+acceptance:
+  required: []
+  allow_skipped: []
+
 server:
   host: 127.0.0.1
   port: 7331
 ```
 
-`project.id` can also be supplied as an explicit cross-Host project identity when federation correlation needs a stronger identity than repository fingerprints.
+`project.id` is optional explicit cross-Host project identity. It must not be synthesized from personal or machine identity.
 
-The repository-level `server` section is retained as a v1 compatibility field. Future Host-level settings should not be added to repository configuration by default.
+The repository-level `server` section is retained as a v1 compatibility field. Future Host-level settings belong in Host-level configuration or explicit CLI/environment configuration, not in repository Intent configuration by default.
 
 ## Native specification status
 
@@ -230,6 +238,8 @@ Specview does not implicitly `git fetch` just to render a page.
 
 GitHub integration uses the locally authenticated `gh` CLI, so Specview does not need to store separate GitHub credentials.
 
+Provider checks remain provider context. They are not silently promoted into normalized Evidence.
+
 ## Evidence
 
 The native Evidence bridge observes strict JSON records under:
@@ -259,7 +269,7 @@ acceptance:
 
 Every `allow_skipped` check must also appear in `required`.
 
-Dirty worktrees fail closed where a trustworthy revision cannot be established.
+Dirty worktrees fail closed where a trustworthy revision cannot be established. Evidence for an older or clean revision cannot make modified local work accepted.
 
 ## Read-only MCP
 
@@ -269,7 +279,9 @@ Run the MCP server over stdin/stdout:
 specview mcp
 ```
 
-The MCP interface exposes the same normalized control-plane facts used by the web UI. It is read-only in v0.0.1.
+The MCP interface exposes the same normalized control-plane facts used by the web projection. It is read-only in v0.0.1.
+
+The public execution shape exposes a logical session `id` and keeps `process_ids` as diagnostics.
 
 ## Federation
 
@@ -341,7 +353,19 @@ never_retrieved
 
 A failed refresh preserves the last valid remote HostSnapshot.
 
-Federation remains read-only. There is no automatic peer discovery, push sync, remote execution, remote write path, or shared database in v0.0.1.
+### Federation runtime
+
+When `specview serve` runs, Specview periodically re-opens the Host-level peer registry and refreshes currently configured peers. Peer failures are isolated and transport-only timestamps do not create material Host notifications.
+
+Read the deterministic current local + remote projection with:
+
+```bash
+specview federation status
+```
+
+The status projection includes the freshly built local Host plus configured remote Hosts and their freshness. Cached snapshots from unreachable peers remain attributable to their source Host. `never_retrieved` peers are visible without invented repository facts.
+
+Federation remains read-only. There is no automatic peer discovery, push sync, remote execution, remote write path, per-peer scheduling, or shared database in v0.0.1.
 
 ## Live UI
 
@@ -387,19 +411,21 @@ Diagnostics:
 bin/doctor
 ```
 
-The current release gate includes formatting, module verification, vet, race tests, build, built-binary MCP/federation smoke tests, Chromium semantic E2E, and release cross-builds.
+The current release gate includes formatting, module verification, vet, race tests, coverage, build, built-binary MCP/federation smoke tests, federation runtime/status smoke, Chromium semantic E2E, and release cross-builds.
 
 Logging is documented in `docs/observability/logging.md`.
 
 ## v0.0.1 feature freeze
 
-After H22, the project is in release stabilization. H23 may fix correctness, safety, portability, performance, documentation, packaging, and test gaps, but it must not add another product plane or major feature family before the first release.
+H23 completed the first federation runtime and deterministic multi-host status projection. H24 is the release-stabilization slice.
+
+H24 may fix correctness, safety, portability, performance, documentation, packaging, and test gaps, but it must not add another product plane or major feature family before the first release.
 
 See:
 
 ```text
 SPEC.md
-specs/H23-v001-release-stabilization.md
+specs/H24-v001-release-stabilization.md
 ```
 
-The next feature slice starts only after the exact v0.0.1 release head is green and the installed binary has passed real-user dogfooding.
+The next feature slice starts only after the v0.0.1 release head is green and the installed binary has passed real-user dogfooding.

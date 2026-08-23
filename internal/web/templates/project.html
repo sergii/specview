@@ -23,7 +23,7 @@ main{max-width:1120px;margin:0 auto;padding:30px var(--gutter) 54px}.context{mar
 </head>
 <body>
 <div class="shell">
-<header class="topbar"><a class="brand" id="host-nav" href="/" aria-label="Back to Specview host" onclick="window.location.assign('/'); return false;"><span class="back-arrow" aria-hidden="true">←</span><span>Specview</span></a><div class="top-status" id="top-status"><span class="top-status-dot" aria-hidden="true"></span><span id="top-status-label">Live</span></div></header>
+<header class="topbar"><a class="brand" href="/" aria-label="Back to Specview host"><span class="back-arrow" aria-hidden="true">←</span><span>Specview</span></a><div class="top-status" id="top-status"><span class="top-status-dot" aria-hidden="true"></span><span id="top-status-label">Live</span></div></header>
 <main>{{template "project-live" .}}</main>
 </div>
 <script>
@@ -75,6 +75,10 @@ main{max-width:1120px;margin:0 auto;padding:30px var(--gutter) 54px}.context{mar
     topStatus.classList.add('reconnecting');
     topStatusLabel.textContent = 'Reconnecting';
   };
+  window.addEventListener('pagehide', () => {
+    if (requestController) requestController.abort();
+    events.close();
+  });
 })();
 </script>
 </body>

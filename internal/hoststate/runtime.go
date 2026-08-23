@@ -60,7 +60,12 @@ func (r *Runtime) Run(ctx context.Context) {
 	slog.Info("host activity runtime started", "interval", r.interval)
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
-	defer slog.Info("host activity runtime stopped")
+	defer func() {
+		if err := r.catalog.Flush(); err != nil {
+			slog.Warn("flush host catalog on shutdown", "error", err)
+		}
+		slog.Info("host activity runtime stopped")
+	}()
 	for {
 		select {
 		case <-ctx.Done():

@@ -1,6 +1,6 @@
 ---
 specview:
-  status: in_progress
+  status: done
 ---
 
 # H21 - Federation HTTP Pull Transport
@@ -99,7 +99,18 @@ See `docs/federation-private-ingress.md` for the executable Tailscale flow.
 - [x] H20 aggregation accepts a pulled snapshot unchanged;
 - [x] Tailscale Serve deployment path is documented;
 - [x] H18 MCP, H19 identity, and H20 federation fixtures remain unchanged;
-- [ ] final exact-head gofmt, module, vet, race, coverage, MCP binary, federation binary, browser, and release gates pass.
+- [x] final exact-head gofmt, module, vet, race, coverage, MCP binary, federation binary, browser, and release gates pass.
+
+## Coverage baseline
+
+Completed H21 functional head:
+
+- total production statement coverage: 65.5%;
+- `internal/federationhttp`: 76.9%;
+- `internal/federation`: 81.8%;
+- `internal/identity`: 82.3%;
+- `internal/controlplane`: 76.4%;
+- `internal/mcpserver`: 75.2%.
 
 ## Out of scope
 

@@ -158,6 +158,11 @@
   events.addEventListener('changed', () => refresh());
   events.onopen = () => { live.classList.remove('reconnecting'); liveLabel.textContent = 'Live'; };
   events.onerror = () => { live.classList.add('reconnecting'); liveLabel.textContent = 'Reconnecting'; };
+  window.addEventListener('pagehide', () => {
+    clearTimeout(debounceTimer);
+    if (requestController) requestController.abort();
+    events.close();
+  });
 })();
 </script>
 </body></html>

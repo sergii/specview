@@ -1,12 +1,14 @@
 package compat_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/sergii/specview/internal/config"
+	"github.com/sergii/specview/internal/controlplane"
 	"github.com/sergii/specview/internal/evidence"
 	"github.com/sergii/specview/internal/hoststate"
 )
@@ -98,12 +100,112 @@ func TestCatalogV1ContractFixture(t *testing.T) {
 	}
 }
 
-func copyFixture(t *testing.T, relative, destination string) {
+func TestMCPV1ToolContractFixture(t *testing.T) {
+	data := readFixture(t, "mcp/v1-tools.json")
+	var fixture struct {
+		SchemaVersion   int    `json:"schema_version"`
+		ProtocolVersion string `json:"protocol_version"`
+		Tools           []struct {
+			Name      string   `json:"name"`
+			Arguments []string `json:"arguments"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		t.Fatalf("decode MCP tool contract fixture: %v", err)
+	}
+	if fixture.SchemaVersion != 1 || fixture.ProtocolVersion != "2025-11-25" {
+		t.Fatalf("unexpected MCP contract metadata: %#v", fixture)
+	}
+	wantNames := []string{
+		"list_repositories",
+		"get_repository",
+		"list_active_sessions",
+		"list_worktrees",
+		"get_work_item",
+		"get_evidence",
+		"get_acceptance",
+	}
+	if len(fixture.Tools) != len(wantNames) {
+		t.Fatalf("MCP tools = %d, want %d", len(fixture.Tools), len(wantNames))
+	}
+	for i, want := range wantNames {
+		if fixture.Tools[i].Name != want {
+			t.Fatalf("tool %d = %q, want %q", i, fixture.Tools[i].Name, want)
+		}
+	}
+	for _, index := range []int{4, 5, 6} {
+		arguments := fixture.Tools[index].Arguments
+		if len(arguments) != 2 || arguments[0] != "repository_id" || arguments[1] != "work_item_id" {
+			t.Fatalf("unexpected work-item arguments for %s: %#v", fixture.Tools[index].Name, arguments)
+		}
+	}
+}
+
+func TestMCPV1WorkItemContractFixture(t *testing.T) {
+	var result controlplane.GetWorkItemResult
+	decodeFixture(t, "mcp/v1-get-work-item.json", &result)
+	if result.SchemaVersion != controlplane.SchemaVersion || result.RepositoryID != "repo-contract-v1" {
+		t.Fatalf("unexpected WorkItem result metadata: %#v", result)
+	}
+	if result.WorkItem.WorkItemID != "H18" || result.WorkItem.Kind != "spec" || result.WorkItem.Status != "in_progress" {
+		t.Fatalf("unexpected WorkItem contract: %#v", result.WorkItem)
+	}
+	if len(result.WorkItem.Relations) != 1 || result.WorkItem.Relations[0].Target != "H17" {
+		t.Fatalf("unexpected WorkItem relations: %#v", result.WorkItem.Relations)
+	}
+}
+
+func TestMCPV1EvidenceContractFixture(t *testing.T) {
+	var result controlplane.GetEvidenceResult
+	decodeFixture(t, "mcp/v1-get-evidence.json", &result)
+	if result.SchemaVersion != controlplane.SchemaVersion || result.WorkItemID != "H18" || len(result.Records) != 1 {
+		t.Fatalf("unexpected Evidence result: %#v", result)
+	}
+	record := result.Records[0]
+	if record.ID != "H18-tests-20260823T180000Z" || record.Revision != "git:abcdef1234567890" {
+		t.Fatalf("unexpected Evidence identity: %#v", record)
+	}
+	if record.Check != "unit-tests" || record.Provider != "go-test" || record.Result != "passed" {
+		t.Fatalf("unexpected Evidence semantics: %#v", record)
+	}
+}
+
+func TestMCPV1AcceptanceContractFixture(t *testing.T) {
+	var result controlplane.GetAcceptanceResult
+	decodeFixture(t, "mcp/v1-get-acceptance.json", &result)
+	if result.SchemaVersion != controlplane.SchemaVersion || result.WorkItemID != "H18" {
+		t.Fatalf("unexpected Acceptance result metadata: %#v", result)
+	}
+	if !result.Revision.Available || result.Revision.Revision != "git:abcdef1234567890" {
+		t.Fatalf("unexpected Acceptance revision: %#v", result.Revision)
+	}
+	if result.Decision.State != "accepted" || len(result.Decision.Checks) != 1 {
+		t.Fatalf("unexpected Acceptance decision: %#v", result.Decision)
+	}
+	if result.Decision.Checks[0].EvidenceID != "H18-tests-20260823T180000Z" {
+		t.Fatalf("unexpected Acceptance evidence link: %#v", result.Decision.Checks[0])
+	}
+}
+
+func decodeFixture(t *testing.T, relative string, destination any) {
+	t.Helper()
+	if err := json.Unmarshal(readFixture(t, relative), destination); err != nil {
+		t.Fatalf("decode contract fixture %s: %v", relative, err)
+	}
+}
+
+func readFixture(t *testing.T, relative string) []byte {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(repositoryRoot(t), "testdata", "contracts", relative))
 	if err != nil {
 		t.Fatalf("read contract fixture %s: %v", relative, err)
 	}
+	return data
+}
+
+func copyFixture(t *testing.T, relative, destination string) {
+	t.Helper()
+	data := readFixture(t, relative)
 	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		t.Fatalf("create fixture destination: %v", err)
 	}

@@ -103,7 +103,7 @@ func TestGetRepositoryProjectsGitAndForgeWithoutOwningThem(t *testing.T) {
 			RepositoryRoot: root,
 			WorktreeRoot:   root,
 			CWD:            root,
-		}},
+		}}},
 		stubSourceControl{contexts: map[string]sourcecontrol.RepositoryContext{
 			filepath.Clean(root): {
 				Git: sourcecontrol.GitContext{

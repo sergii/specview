@@ -19,6 +19,7 @@ type stubReader struct {
 	repository   controlplane.GetRepositoryResult
 	sessions     controlplane.ListActiveSessionsResult
 	worktrees    controlplane.ListWorktreesResult
+	workItems    controlplane.ListWorkItemsResult
 	workItem     controlplane.GetWorkItemResult
 	evidence     controlplane.GetEvidenceResult
 	acceptance   controlplane.GetAcceptanceResult
@@ -39,6 +40,10 @@ func (s stubReader) ListActiveSessions(context.Context) (controlplane.ListActive
 
 func (s stubReader) ListWorktrees(context.Context, string) (controlplane.ListWorktreesResult, error) {
 	return s.worktrees, s.err
+}
+
+func (s stubReader) ListWorkItems(context.Context, string) (controlplane.ListWorkItemsResult, error) {
+	return s.workItems, s.err
 }
 
 func (s stubReader) GetWorkItem(context.Context, string, string) (controlplane.GetWorkItemResult, error) {
@@ -72,10 +77,10 @@ func TestLegacyStdioInitializeToolsAndRepositoryContract(t *testing.T) {
 	server := New(reader, "v0.0.2-test")
 
 	input := strings.Join([]string{
-		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{"roots":{"listChanged":true}},"clientInfo":{"name":"contract-client","version":"1.0.0","title":"Contract Client"},"_meta":{"trace":"fixture"}}}`,
 		`{"jsonrpc":"2.0","method":"notifications/initialized"}`,
 		`{"jsonrpc":"2.0","id":"tools","method":"tools/list"}`,
-		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_repositories","arguments":{}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_repositories","arguments":{},"_meta":{"progressToken":"repo-list"}}}`,
 	}, "\n") + "\n"
 
 	var output bytes.Buffer
@@ -116,6 +121,7 @@ func TestLegacyStdioInitializeToolsAndRepositoryContract(t *testing.T) {
 		"get_repository",
 		"list_active_sessions",
 		"list_worktrees",
+		"list_work_items",
 		"get_work_item",
 		"get_evidence",
 		"get_acceptance",
@@ -133,8 +139,21 @@ func TestLegacyStdioInitializeToolsAndRepositoryContract(t *testing.T) {
 	assertJSONEquivalent(t, []byte(call.Content[0].Text), mustJSON(t, fixture))
 }
 
-func TestWorkItemEvidenceAndAcceptanceToolsReturnStructuredContracts(t *testing.T) {
+func TestWorkItemDiscoveryDetailEvidenceAndAcceptanceToolsReturnStructuredContracts(t *testing.T) {
 	reader := stubReader{
+		workItems: controlplane.ListWorkItemsResult{
+			SchemaVersion:  1,
+			Host:           "devbox",
+			RepositoryID:   "repo-1",
+			RepositoryName: "sergii/specview",
+			WorkItems: []controlplane.WorkItemListEntry{{
+				WorkItemID: "H18",
+				Kind:       "spec",
+				Path:       "H18.md",
+				Title:      "H18 MCP",
+				Status:     "in_progress",
+			}},
+		},
 		workItem: controlplane.GetWorkItemResult{
 			SchemaVersion:  1,
 			Host:           "devbox",
@@ -196,9 +215,10 @@ func TestWorkItemEvidenceAndAcceptanceToolsReturnStructuredContracts(t *testing.
 	}
 	server := New(reader, "test")
 	input := strings.Join([]string{
-		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_work_item","arguments":{"repository_id":"repo-1","work_item_id":"H18"}}}`,
-		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_evidence","arguments":{"repository_id":"repo-1","work_item_id":"H18"}}}`,
-		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_acceptance","arguments":{"repository_id":"repo-1","work_item_id":"H18"}}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_work_items","arguments":{"repository_id":"repo-1"}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_work_item","arguments":{"repository_id":"repo-1","work_item_id":"H18"}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_evidence","arguments":{"repository_id":"repo-1","work_item_id":"H18"}}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_acceptance","arguments":{"repository_id":"repo-1","work_item_id":"H18"}}}`,
 	}, "\n") + "\n"
 
 	var output bytes.Buffer
@@ -206,10 +226,10 @@ func TestWorkItemEvidenceAndAcceptanceToolsReturnStructuredContracts(t *testing.
 		t.Fatal(err)
 	}
 	responses := decodeResponses(t, output.String())
-	if len(responses) != 3 {
+	if len(responses) != 4 {
 		t.Fatalf("responses = %#v", responses)
 	}
-	want := []any{reader.workItem, reader.evidence, reader.acceptance}
+	want := []any{reader.workItems, reader.workItem, reader.evidence, reader.acceptance}
 	for i, response := range responses {
 		var call decodedToolResult
 		decodeResult(t, response, &call)

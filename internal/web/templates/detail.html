@@ -56,7 +56,11 @@ article{border-top:1px solid var(--line);padding-top:28px;color:var(--muted);lin
 (() => {
   const live = document.getElementById('detail-live');
   const label = document.getElementById('detail-live-label');
-  const events = new EventSource('/events');
+  const projectID = new URL(window.location.href).searchParams.get('id');
+  const eventsURL = new URL('/events', window.location.origin);
+  eventsURL.searchParams.set('scope', 'project');
+  eventsURL.searchParams.set('id', projectID);
+  const events = new EventSource(eventsURL.toString());
   events.addEventListener('changed', () => window.location.reload());
   events.onopen = () => { live.classList.remove('reconnecting'); label.textContent = 'Live'; };
   events.onerror = () => { live.classList.add('reconnecting'); label.textContent = 'Reconnecting'; };

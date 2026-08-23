@@ -11,18 +11,18 @@ import (
 )
 
 type persistedCatalogV1 struct {
-	Version      int                  `json:"version"`
-	Repositories []persistedRepoV1    `json:"repositories"`
+	Version      int               `json:"version"`
+	Repositories []persistedRepoV1 `json:"repositories"`
 }
 
 type persistedRepoV1 struct {
-	ID             string            `json:"id"`
-	Name           string            `json:"name"`
-	Root           string            `json:"root"`
-	FirstSeenAt    time.Time         `json:"first_seen_at"`
-	LastSeenAt     time.Time         `json:"last_seen_at"`
-	Convention     config.Convention `json:"convention"`
-	DetectionError string            `json:"detection_error,omitempty"`
+	ID             string               `json:"id"`
+	Name           string               `json:"name"`
+	Root           string               `json:"root"`
+	FirstSeenAt    time.Time            `json:"first_seen_at"`
+	LastSeenAt     time.Time            `json:"last_seen_at"`
+	Convention     config.Convention    `json:"convention"`
+	DetectionError string               `json:"detection_error,omitempty"`
 	Sessions       []persistedSessionV1 `json:"sessions"`
 }
 

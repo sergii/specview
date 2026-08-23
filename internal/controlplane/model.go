@@ -10,17 +10,17 @@ type ListRepositoriesResult struct {
 }
 
 type RepositorySummary struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Root         string   `json:"root"`
-	Active       bool     `json:"active"`
-	Agents       []string `json:"agents,omitempty"`
-	FirstSeenAt  string   `json:"first_seen_at,omitempty"`
-	LastSeenAt   string   `json:"last_seen_at,omitempty"`
-	SpecAdapter  string   `json:"spec_adapter,omitempty"`
-	SpecLabel    string   `json:"spec_label,omitempty"`
-	SpecDetected bool     `json:"spec_detected"`
-	SpecSupported bool    `json:"spec_supported"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Root          string   `json:"root"`
+	Active        bool     `json:"active"`
+	Agents        []string `json:"agents,omitempty"`
+	FirstSeenAt   string   `json:"first_seen_at,omitempty"`
+	LastSeenAt    string   `json:"last_seen_at,omitempty"`
+	SpecAdapter   string   `json:"spec_adapter,omitempty"`
+	SpecLabel     string   `json:"spec_label,omitempty"`
+	SpecDetected  bool     `json:"spec_detected"`
+	SpecSupported bool     `json:"spec_supported"`
 }
 
 type GetRepositoryResult struct {
@@ -42,24 +42,24 @@ type GitSummary struct {
 }
 
 type ForgeSummary struct {
-	Provider   string               `json:"provider"`
-	Matched    bool                 `json:"matched"`
-	Available  bool                 `json:"available"`
-	Repository string               `json:"repository,omitempty"`
-	WebURL     string               `json:"web_url,omitempty"`
-	Error      string               `json:"error,omitempty"`
+	Provider     string               `json:"provider"`
+	Matched      bool                 `json:"matched"`
+	Available    bool                 `json:"available"`
+	Repository   string               `json:"repository,omitempty"`
+	WebURL       string               `json:"web_url,omitempty"`
+	Error        string               `json:"error,omitempty"`
 	PullRequests []PullRequestSummary `json:"pull_requests,omitempty"`
 }
 
 type PullRequestSummary struct {
-	Number  int          `json:"number"`
-	Title   string       `json:"title"`
-	URL     string       `json:"url"`
-	State   string       `json:"state"`
-	Draft   bool         `json:"draft"`
-	Base    string       `json:"base"`
-	Head    string       `json:"head"`
-	Checks  CheckSummary `json:"checks"`
+	Number int          `json:"number"`
+	Title  string       `json:"title"`
+	URL    string       `json:"url"`
+	State  string       `json:"state"`
+	Draft  bool         `json:"draft"`
+	Base   string       `json:"base"`
+	Head   string       `json:"head"`
+	Checks CheckSummary `json:"checks"`
 }
 
 type CheckSummary struct {
@@ -90,12 +90,12 @@ type SessionSummary struct {
 }
 
 type ListWorktreesResult struct {
-	SchemaVersion int               `json:"schema_version"`
-	Host          string            `json:"host"`
-	RepositoryID  string            `json:"repository_id"`
-	RepositoryName string           `json:"repository_name"`
-	Worktrees     []WorktreeSummary `json:"worktrees"`
-	Warnings      []string          `json:"warnings,omitempty"`
+	SchemaVersion  int               `json:"schema_version"`
+	Host           string            `json:"host"`
+	RepositoryID   string            `json:"repository_id"`
+	RepositoryName string            `json:"repository_name"`
+	Worktrees      []WorktreeSummary `json:"worktrees"`
+	Warnings       []string          `json:"warnings,omitempty"`
 }
 
 type WorktreeSummary struct {

@@ -4,7 +4,12 @@ set -euo pipefail
 bin=${1:-./specview}
 root=$(mktemp -d)
 server_pid=""
+observer_pid=""
 cleanup() {
+  if [ -n "$observer_pid" ]; then
+    kill "$observer_pid" 2>/dev/null || true
+    wait "$observer_pid" 2>/dev/null || true
+  fi
   if [ -n "$server_pid" ]; then
     kill "$server_pid" 2>/dev/null || true
     wait "$server_pid" 2>/dev/null || true
@@ -90,3 +95,18 @@ assert "observed_at" not in never, never
 assert len(status["federation"]["hosts"]) == 1, status["federation"]
 assert status["federation"]["hosts"][0]["host_id"] == host_id, status["federation"]
 PY
+
+# The real host observer must compose the federation polling runtime and shut down
+# cleanly with the same process context.
+"$bin" serve > "$root/observer.log" 2>&1 &
+observer_pid=$!
+for _ in $(seq 1 50); do
+  if curl -fsS http://127.0.0.1:7331/ > /dev/null; then
+    break
+  fi
+  sleep 0.1
+done
+curl -fsS http://127.0.0.1:7331/ > /dev/null
+kill "$observer_pid"
+wait "$observer_pid"
+observer_pid=""

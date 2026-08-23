@@ -42,12 +42,12 @@ func ResolveGit(projectRoot string, git sourcecontrol.GitContext) Resolution {
 }
 
 func containingWorktree(projectRoot string, worktrees []sourcecontrol.Worktree) (sourcecontrol.Worktree, bool) {
-	root := filepath.Clean(projectRoot)
+	root := canonicalPath(projectRoot)
 	var best sourcecontrol.Worktree
 	bestLength := -1
 
 	for _, worktree := range worktrees {
-		path := filepath.Clean(worktree.Path)
+		path := canonicalPath(worktree.Path)
 		if !contains(path, root) {
 			continue
 		}
@@ -57,6 +57,15 @@ func containingWorktree(projectRoot string, worktrees []sourcecontrol.Worktree) 
 		}
 	}
 	return best, bestLength >= 0
+}
+
+func canonicalPath(path string) string {
+	cleaned := filepath.Clean(path)
+	resolved, err := filepath.EvalSymlinks(cleaned)
+	if err != nil {
+		return cleaned
+	}
+	return filepath.Clean(resolved)
 }
 
 func contains(parent, child string) bool {

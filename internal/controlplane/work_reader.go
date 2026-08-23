@@ -12,6 +12,7 @@ import (
 	"github.com/sergii/specview/internal/hoststate"
 	"github.com/sergii/specview/internal/projectstate"
 	"github.com/sergii/specview/internal/revision"
+	"github.com/sergii/specview/internal/sourcecontrol"
 	"github.com/sergii/specview/internal/specs"
 )
 
@@ -83,15 +84,15 @@ func (r *Reader) GetAcceptance(ctx context.Context, repositoryID, workItemID str
 		return GetAcceptanceResult{}, err
 	}
 
-	var gitContext revisionInput
+	var gitContext sourcecontrol.GitContext
 	if len(project.Policy.Required) > 0 {
 		sourceContext, inspectErr := r.sourceControl.Inspect(ctx, repository.Root)
 		if inspectErr != nil {
 			return GetAcceptanceResult{}, fmt.Errorf("source-control context unavailable: %w", inspectErr)
 		}
-		gitContext.Git = sourceContext.Git
+		gitContext = sourceContext.Git
 	}
-	acceptanceResult, err := project.EvaluateAcceptance(item.WorkItemID, gitContext.Git)
+	acceptanceResult, err := project.EvaluateAcceptance(item.WorkItemID, gitContext)
 	if err != nil {
 		return GetAcceptanceResult{}, err
 	}
@@ -108,27 +109,6 @@ func (r *Reader) GetAcceptance(ctx context.Context, repositoryID, workItemID str
 		EvidenceCount:     acceptanceResult.EvidenceCount,
 		EvaluationPending: acceptanceResult.EvaluationPending,
 	}, nil
-}
-
-type revisionInput struct {
-	Git interfaceGitContext
-}
-
-type interfaceGitContext = struct {
-	Remote    string
-	Worktrees []structWorktree
-}
-
-type structWorktree = struct {
-	Path       string
-	Branch     string
-	Head       string
-	Detached   bool
-	DirtyCount int
-	Upstream   string
-	Ahead      int
-	Behind     int
-	LastCommit string
 }
 
 func (r *Reader) repository(repositoryID string) (*hoststate.Catalog, hoststate.Repository, error) {

@@ -276,17 +276,27 @@ func (s *HostServer) projectSpec(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+
+	repositoryContext, err := s.sourceControl.Inspect(r.Context(), repo.Root)
+	if err != nil {
+		http.Error(w, "load repository source context: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	acceptanceData := loadWorkItemAcceptance(repo.Root, item, repositoryContext.Git)
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "detail.html", struct {
 		Hostname    string
 		ProjectName string
 		ProjectID   string
 		Spec        specs.Spec
+		Acceptance  workItemAcceptanceData
 	}{
 		Hostname:    data.Hostname,
 		ProjectName: data.Repo.Name,
 		ProjectID:   data.Repo.ID,
 		Spec:        item,
+		Acceptance:  acceptanceData,
 	}); err != nil {
 		http.Error(w, "render specification", http.StatusInternalServerError)
 	}

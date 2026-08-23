@@ -121,6 +121,7 @@ func TestMCPV1ToolContractFixture(t *testing.T) {
 		"get_repository",
 		"list_active_sessions",
 		"list_worktrees",
+		"list_work_items",
 		"get_work_item",
 		"get_evidence",
 		"get_acceptance",
@@ -133,11 +134,28 @@ func TestMCPV1ToolContractFixture(t *testing.T) {
 			t.Fatalf("tool %d = %q, want %q", i, fixture.Tools[i].Name, want)
 		}
 	}
-	for _, index := range []int{4, 5, 6} {
+	if arguments := fixture.Tools[4].Arguments; len(arguments) != 1 || arguments[0] != "repository_id" {
+		t.Fatalf("unexpected list_work_items arguments: %#v", arguments)
+	}
+	for _, index := range []int{5, 6, 7} {
 		arguments := fixture.Tools[index].Arguments
 		if len(arguments) != 2 || arguments[0] != "repository_id" || arguments[1] != "work_item_id" {
 			t.Fatalf("unexpected work-item arguments for %s: %#v", fixture.Tools[index].Name, arguments)
 		}
+	}
+}
+
+func TestMCPV1WorkItemListContractFixture(t *testing.T) {
+	var result controlplane.ListWorkItemsResult
+	decodeFixture(t, "mcp/v1-list-work-items.json", &result)
+	if result.SchemaVersion != controlplane.SchemaVersion || result.RepositoryID != "repo-contract-v1" {
+		t.Fatalf("unexpected WorkItem list metadata: %#v", result)
+	}
+	if len(result.WorkItems) != 1 || result.WorkItems[0].WorkItemID != "H18" {
+		t.Fatalf("unexpected WorkItem list: %#v", result.WorkItems)
+	}
+	if result.WorkItems[0].Title != "H18 - MCP Server" || result.WorkItems[0].Status != "in_progress" {
+		t.Fatalf("unexpected WorkItem discovery semantics: %#v", result.WorkItems[0])
 	}
 }
 

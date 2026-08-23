@@ -19,6 +19,10 @@
       "arguments": ["repository_id"]
     },
     {
+      "name": "list_work_items",
+      "arguments": ["repository_id"]
+    },
+    {
       "name": "get_work_item",
       "arguments": ["repository_id", "work_item_id"]
     },

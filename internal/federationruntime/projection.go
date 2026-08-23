@@ -3,6 +3,7 @@ package federationruntime
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -45,7 +46,7 @@ type HostStatus struct {
 	LastAttemptAt    *time.Time                `json:"last_attempt_at,omitempty"`
 	LastSuccessAt    *time.Time                `json:"last_success_at,omitempty"`
 	LastError        string                    `json:"last_error,omitempty"`
-	SourceAgeSeconds int64                     `json:"source_age_seconds,omitempty"`
+	SourceAgeSeconds *int64                    `json:"source_age_seconds,omitempty"`
 }
 
 type ProjectionBuilder struct {
@@ -79,12 +80,15 @@ func (b *ProjectionBuilder) Build(ctx context.Context) (Projection, error) {
 
 	localSnapshot, err := b.local.Build(ctx)
 	if err != nil {
-		return Projection{}, err
+		return Projection{}, fmt.Errorf("build local federation snapshot: %w", err)
+	}
+	if err := localSnapshot.Validate(); err != nil {
+		return Projection{}, fmt.Errorf("validate local federation snapshot: %w", err)
 	}
 
 	registry, err := federationpeers.OpenRegistry(b.registryPath)
 	if err != nil {
-		return Projection{}, err
+		return Projection{}, fmt.Errorf("open federation peer registry: %w", err)
 	}
 
 	now := b.now().UTC()
@@ -94,7 +98,7 @@ func (b *ProjectionBuilder) Build(ctx context.Context) (Projection, error) {
 	for _, peer := range registry.List() {
 		observation, err := b.store.Load(peer.Name)
 		if err != nil {
-			return Projection{}, err
+			return Projection{}, fmt.Errorf("load federation peer %s observation: %w", peer.Name, err)
 		}
 		status := federationpeers.ProjectStatus(peer, observation, now)
 		hosts = append(hosts, peerHostStatus(status))
@@ -105,8 +109,11 @@ func (b *ProjectionBuilder) Build(ctx context.Context) (Projection, error) {
 
 	aggregated, err := b.aggregator.Aggregate(snapshots...)
 	if err != nil {
-		return Projection{}, err
+		return Projection{}, fmt.Errorf("aggregate multi-host federation projection: %w", err)
 	}
+	// H23 owns the outer read-model clock. Align the nested derived projection to
+	// the same instant without changing any H20 snapshot/correlation semantics.
+	aggregated.GeneratedAt = now
 
 	sort.SliceStable(hosts, func(i, j int) bool {
 		if hosts[i].Source != hosts[j].Source {
@@ -120,14 +127,14 @@ func (b *ProjectionBuilder) Build(ctx context.Context) (Projection, error) {
 
 	return Projection{
 		SchemaVersion: ProjectionSchemaVersion,
-		GeneratedAt:   aggregated.GeneratedAt,
+		GeneratedAt:   now,
 		Hosts:         hosts,
 		Federation:    aggregated,
 	}, nil
 }
 
 func localHostStatus(snapshot federation.HostSnapshot) HostStatus {
-	observedAt := snapshot.ObservedAt
+	observedAt := snapshot.ObservedAt.UTC()
 	return HostStatus{
 		Source:      HostSourceLocal,
 		HostID:      snapshot.HostID,
@@ -148,14 +155,13 @@ func peerHostStatus(status federationpeers.PeerStatus) HostStatus {
 		LastSuccessAt: cloneTime(status.LastSuccessAt),
 		LastError:     status.LastError,
 	}
-	if status.SourceAge > 0 {
-		host.SourceAgeSeconds = int64(status.SourceAge / time.Second)
-	}
 	if status.Snapshot != nil {
 		host.HasSnapshot = true
 		host.Hostname = status.Snapshot.Hostname
-		observedAt := status.Snapshot.ObservedAt
+		observedAt := status.Snapshot.ObservedAt.UTC()
 		host.ObservedAt = &observedAt
+		age := int64(status.SourceAge / time.Second)
+		host.SourceAgeSeconds = &age
 	}
 	return host
 }
@@ -164,6 +170,6 @@ func cloneTime(value *time.Time) *time.Time {
 	if value == nil {
 		return nil
 	}
-	copyValue := *value
+	copyValue := value.UTC()
 	return &copyValue
 }

@@ -80,10 +80,13 @@ func TestRepositoryExecutionViewUsesInjectedExecutionSource(t *testing.T) {
 	repo := Repository{
 		Root: root,
 		Sessions: []Session{{
-			Agent:     "FutureAgent",
-			PID:       777,
-			StartedAt: started,
-			Active:    true,
+			ID:           "execution-future",
+			IdentityKind: SessionIdentityLogical,
+			Adapter:      "future",
+			Agent:        "FutureAgent",
+			ProcessIDs:   []int{777},
+			StartedAt:    started,
+			Active:       true,
 		}},
 	}
 	registry := NewExecutionRegistry(fakeExecutionAdapter{

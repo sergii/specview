@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+mkdir -p bin
+version="dev-$(git rev-parse --short HEAD)"
+printf '\033[1;36m==>\033[0m Building Specview %s for doctor\n' "$version"
+go build -trimpath -ldflags "-X main.version=${version}" -o ./bin/specview ./cmd/specview
+
+exec env \
+  SPECVIEW_LOG_FORMAT="${SPECVIEW_LOG_FORMAT:-console}" \
+  SPECVIEW_LOG_LEVEL="${SPECVIEW_LOG_LEVEL:-debug}" \
+  SPECVIEW_LOG_SOURCE="${SPECVIEW_LOG_SOURCE:-true}" \
+  ./bin/specview doctor "$@"

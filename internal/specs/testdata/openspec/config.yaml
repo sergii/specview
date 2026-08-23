@@ -1,0 +1,9 @@
+schema: spec-driven
+context: |
+  Tech stack: Go
+  Specifications describe observable behavior.
+rules:
+  specs:
+    - Include acceptance scenarios for user-visible behavior.
+  design:
+    - Keep implementation details out of behavioral specs.

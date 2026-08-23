@@ -1,0 +1,241 @@
+package web
+
+import (
+	"context"
+	"embed"
+	"errors"
+	"fmt"
+	"html/template"
+	"log/slog"
+	"net"
+	"net/http"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/sergii/specview/internal/config"
+	"github.com/sergii/specview/internal/specs"
+)
+
+//go:embed templates/*
+var templateFS embed.FS
+
+type Hub struct {
+	mu      sync.Mutex
+	clients map[chan struct{}]struct{}
+}
+
+func NewHub() *Hub { return &Hub{clients: make(map[chan struct{}]struct{})} }
+func (h *Hub) Subscribe() (<-chan struct{}, func()) {
+	ch := make(chan struct{}, 1)
+	h.mu.Lock()
+	h.clients[ch] = struct{}{}
+	clients := len(h.clients)
+	h.mu.Unlock()
+	slog.Debug("SSE client subscribed", "clients", clients)
+	return ch, func() {
+		h.mu.Lock()
+		delete(h.clients, ch)
+		close(ch)
+		clients := len(h.clients)
+		h.mu.Unlock()
+		slog.Debug("SSE client unsubscribed", "clients", clients)
+	}
+}
+func (h *Hub) Broadcast() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delivered := 0
+	for ch := range h.clients {
+		select {
+		case ch <- struct{}{}:
+			delivered++
+		default:
+		}
+	}
+	slog.Debug("SSE change broadcast", "clients", len(h.clients), "delivered", delivered)
+}
+
+type Server struct {
+	root  string
+	cfg   config.Config
+	store *specs.Store
+	hub   *Hub
+	tmpl  *template.Template
+}
+
+func NewServer(root string, cfg config.Config, store *specs.Store, hub *Hub) *Server {
+	funcs := template.FuncMap{"since": func(t time.Time) string { return since(t) }}
+	tmpl := template.Must(template.New("index.html").Funcs(funcs).ParseFS(templateFS, "templates/*.html"))
+	return &Server{root: root, cfg: cfg, store: store, hub: hub, tmpl: tmpl}
+}
+
+func (s *Server) ListenAndServe(ctx context.Context) error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /", s.index)
+	mux.HandleFunc("GET /spec", s.detail)
+	mux.HandleFunc("GET /events", s.events)
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("ok\n"))
+	})
+	server := &http.Server{
+		Addr:    fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.Port),
+		Handler: securityHeaders(mux),
+		BaseContext: func(net.Listener) context.Context {
+			return ctx
+		},
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	slog.Info("project web server starting", "address", server.Addr, "root", s.root)
+	errCh := make(chan error, 1)
+	go func() { errCh <- server.ListenAndServe() }()
+	select {
+	case <-ctx.Done():
+		slog.Info("project web server shutting down", "address", server.Addr)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return server.Shutdown(shutdownCtx)
+	case err := <-errCh:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	}
+}
+
+type boardData struct {
+	ProjectName, SpecsPath         string
+	New, InProgress, Done, Invalid []specs.Spec
+	Total                          int
+}
+
+func (s *Server) projectName() string {
+	if name := strings.TrimSpace(s.cfg.Project.Name); name != "" {
+		return name
+	}
+	return filepath.Base(s.root)
+}
+
+func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
+	items := s.store.All()
+	data := boardData{ProjectName: s.projectName(), SpecsPath: s.cfg.Specs.Path}
+	for _, item := range items {
+		// The store contains durable knowledge and supporting artifacts as well
+		// as active work. The current board projects only primary work items.
+		if !item.IsBoardItem() {
+			continue
+		}
+		data.Total++
+		if item.Error != "" {
+			data.Invalid = append(data.Invalid, item)
+			continue
+		}
+		switch item.Status {
+		case specs.StatusNew:
+			data.New = append(data.New, item)
+		case specs.StatusInProgress:
+			data.InProgress = append(data.InProgress, item)
+		case specs.StatusDone:
+			data.Done = append(data.Done, item)
+		}
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
+		slog.Error("render project dashboard failed", "error", err, "project", data.ProjectName)
+		http.Error(w, "render dashboard", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	item, ok := s.store.Find(path)
+	if !ok || !item.IsBoardItem() {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmpl.ExecuteTemplate(w, "detail.html", struct {
+		ProjectName string
+		Spec        specs.Spec
+	}{s.projectName(), item}); err != nil {
+		slog.Error("render specification failed", "error", err, "path", path)
+		http.Error(w, "render specification", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) events(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	ch, unsubscribe := s.hub.Subscribe()
+	defer unsubscribe()
+	_, _ = fmt.Fprint(w, ": connected\n\n")
+	flusher.Flush()
+	keepAlive := time.NewTicker(20 * time.Second)
+	defer keepAlive.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case _, ok := <-ch:
+			if !ok {
+				return
+			}
+			_, _ = fmt.Fprint(w, "event: changed\ndata: refresh\n\n")
+			flusher.Flush()
+		case <-keepAlive.C:
+			_, _ = fmt.Fprint(w, ": keepalive\n\n")
+			flusher.Flush()
+		}
+	}
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		slog.Debug("http request started",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"has_query", r.URL.RawQuery != "",
+			"remote", r.RemoteAddr,
+		)
+		defer func() {
+			slog.Debug("http request completed",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"duration", time.Since(started),
+			)
+		}()
+
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func since(t time.Time) string {
+	d := time.Since(t)
+	if d < 0 {
+		return "just now"
+	}
+	if d < time.Minute {
+		return "just now"
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	}
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	}
+	return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+}

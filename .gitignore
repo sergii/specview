@@ -1,0 +1,5 @@
+/specview
+/bin/specview
+/dist/
+/.specview/
+.DS_Store

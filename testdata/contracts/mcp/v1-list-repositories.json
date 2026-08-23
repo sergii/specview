@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "host": "devbox-01",
+  "repositories": [
+    {
+      "id": "repo-contract-v1",
+      "name": "sergii/specview",
+      "root": "/work/sergii/specview",
+      "active": true,
+      "agents": [
+        "Codex"
+      ],
+      "first_seen_at": "2026-08-23T10:00:00Z",
+      "last_seen_at": "2026-08-23T12:00:00Z",
+      "spec_adapter": "specview",
+      "spec_label": "Specview",
+      "spec_detected": true,
+      "spec_supported": true
+    }
+  ]
+}

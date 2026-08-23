@@ -164,37 +164,47 @@ Required checks:
 
 ## Release gates
 
-The final H24 release candidate must pass on the current merge/release candidate state:
+The combined H23 + H24 merge candidate passed:
 
-- [ ] shell/script syntax gates;
-- [ ] gofmt;
-- [ ] module verification;
-- [ ] `go vet ./...`;
-- [ ] `go test -race ./...`;
-- [ ] production statement coverage gate;
-- [ ] Go build;
-- [ ] MCP built-binary stdio smoke;
-- [ ] federation CLI built-binary smoke;
-- [ ] federation HTTP built-binary smoke;
-- [ ] federation peer lifecycle built-binary smoke;
-- [ ] federation runtime/status built-binary smoke;
-- [ ] Chromium semantic E2E;
-- [ ] release archive cross-build for linux/darwin amd64/arm64;
-- [ ] checksum generation/verification.
+- [x] shell/script syntax gates;
+- [x] gofmt;
+- [x] module verification;
+- [x] `go vet ./...`;
+- [x] `go test -race ./...`;
+- [x] production statement coverage gate;
+- [x] Go build;
+- [x] MCP built-binary stdio smoke;
+- [x] federation CLI built-binary smoke;
+- [x] federation HTTP built-binary smoke;
+- [x] federation peer lifecycle built-binary smoke;
+- [x] federation runtime/status built-binary smoke;
+- [x] Chromium semantic E2E;
+- [x] release archive cross-build for linux/darwin amd64/arm64;
+- [x] checksum generation.
 
-A previous functional slice is not sufficient. The final merge/release candidate must be green after H23 and H24 are combined.
+Verification baseline before this checklist-only update:
+
+```text
+GitHub Actions CI #1014
+PR merge candidate: 67efbb9b0bca1be583493b0f48baecd33de17408
+branch head: 5868575565c8b31a8d4652f090238642dc01c58e
+```
+
+The checklist update itself is documentation-only. Its resulting PR merge candidate must still pass the required CI before H24 is considered ready for installed-user acceptance.
 
 ## Artifact preflight
 
-Before final installed-user acceptance, H24 validates generated CI artifacts independently from the source checkout.
+The CI #1014 build artifact for merge candidate `67efbb9` was downloaded and inspected independently from the source checkout.
 
-Required checks:
+Acceptance:
 
-- [ ] build artifact contains darwin/amd64, darwin/arm64, linux/amd64, linux/arm64 archives and `SHA256SUMS`;
-- [ ] all generated archive checksums verify;
-- [ ] Linux amd64 archive contains the expected `specview` binary;
-- [ ] extracted Linux amd64 binary executes `version` and `help`;
-- [ ] extracted Linux amd64 binary passes `serve -> /healthz -> SIGTERM` with clean exit.
+- [x] build artifact contains darwin/amd64, darwin/arm64, linux/amd64, linux/arm64 archives and `SHA256SUMS`;
+- [x] all generated archive checksums verify;
+- [x] every archive contains exactly the expected `specview` binary payload;
+- [x] extracted Linux amd64 binary executes `version` and `help`;
+- [x] extracted Linux amd64 binary exposes H23 `federation status`;
+- [x] extracted Linux amd64 binary passes `serve -> /healthz -> SIGTERM` with clean exit code 0;
+- [x] extracted Linux amd64 binary emits valid schema-version-1 local `federation status` JSON from isolated Host state.
 
 These checks are packaging/runtime preflight. They do not replace real macOS installed-user dogfooding.
 

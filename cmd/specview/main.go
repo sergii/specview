@@ -295,10 +295,21 @@ Usage:
   specview federation serve                               Serve HostSnapshot on 127.0.0.1:7332 only
   specview federation pull <url>                          Pull and validate a remote HostSnapshot over HTTPS
   specview federation pull --expect-host <host:id> <url> Pin the expected remote Host identity
+  specview federation peer add <name> ...                 Persist a Host-pinned federation peer
+  specview federation peer list                           List peers with current freshness state
+  specview federation peer show <name>                    Show peer state and last valid snapshot
+  specview federation peer refresh <name>                 Pull and cache a peer snapshot now
+  specview federation peer remove <name>                  Remove peer config and cached observation
   specview init [options]                                 Detect the current repository convention and create .specview.yaml
   specview doctor [options]                               Diagnose the registered Codex execution adapter
   specview version                                        Print the version
   specview help                                           Show this help
+
+Peer add options:
+  --url <url>                     HTTPS peer URL, or loopback HTTP for local testing
+  --host <host:id>                Required expected remote Host identity
+  --stale-after <duration>        Source freshness threshold; default 5m
+  --header-env <Header=ENV>       Resolve one credential header from an environment variable
 
 Options:
   --verbose                      Enable informational runtime logs
@@ -323,12 +334,14 @@ Examples:
   specview mcp
   specview federation snapshot > laptop.json
   specview federation serve
-  specview federation pull --expect-host host:550e8400-e29b-41d4-a716-446655440000 https://devbox.example.ts.net > devbox.json
+  specview federation peer add devbox --url https://devbox.example.ts.net --host host:550e8400-e29b-41d4-a716-446655440000 --stale-after 5m
+  specview federation peer refresh devbox
+  specview federation peer list
   specview federation aggregate laptop.json devbox.json
   SPECVIEW_LOG_LEVEL=debug specview
 
-Federation HTTP serving is loopback-only. Tailscale Serve is a supported H21 private ingress.
-Other authenticated proxies may require client credentials that federation pull does not yet send.
+Federation HTTP serving is loopback-only. Tailscale Serve can publish that endpoint privately.
+Peer credential values are read from environment variables at request time and are never stored in peer state.
 
 The host dashboard does not require .specview.yaml. Project configuration remains
 an optional repository-level override.

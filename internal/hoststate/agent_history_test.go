@@ -32,3 +32,26 @@ func TestRepositoryAgentHistoryGroupsSessionsByAgentAndKeepsLastSeen(t *testing.
 		t.Fatalf("only final entry should be marked last: %#v", history)
 	}
 }
+
+func TestRepositoryActiveAgentHistoryDropsEndedAgents(t *testing.T) {
+	now := time.Date(2026, time.August, 23, 13, 0, 0, 0, time.FixedZone("EEST", 3*60*60))
+	repo := Repository{Sessions: []Session{
+		{Agent: "Claude", Active: true, LastSeenAt: now.Add(-2 * time.Second)},
+		{Agent: "Codex", Active: false, LastSeenAt: now.Add(-10 * time.Second)},
+		{Agent: "Claude", Active: true, LastSeenAt: now.Add(-1 * time.Second)},
+	}}
+
+	active := repo.ActiveAgentHistory()
+	if len(active) != 1 {
+		t.Fatalf("active hierarchy length = %d, want 1: %#v", len(active), active)
+	}
+	if active[0].Label != "Claude" || !active[0].Active {
+		t.Fatalf("active entry = %#v, want Claude", active[0])
+	}
+	if !active[0].LastSeenAt.Equal(now.Add(-1 * time.Second)) {
+		t.Fatalf("last seen = %v, want latest active Claude observation", active[0].LastSeenAt)
+	}
+	if !active[0].Last {
+		t.Fatalf("single active entry should be marked last: %#v", active[0])
+	}
+}

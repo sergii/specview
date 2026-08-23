@@ -2,12 +2,16 @@ package federationruntime
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/sergii/specview/internal/federation"
 	"github.com/sergii/specview/internal/federationpeers"
 )
 
@@ -37,8 +41,8 @@ type Poller struct {
 	onChange     func()
 
 	mu              sync.Mutex
-	lastRegistryKey string
-	seenRegistry    bool
+	lastMaterialKey string
+	seenMaterial    bool
 }
 
 func NewPoller(registryPath string, refresher PeerRefresher, interval time.Duration, onChange func()) (*Poller, error) {
@@ -69,6 +73,7 @@ func (p *Poller) Refresh(ctx context.Context) (RefreshSummary, error) {
 		Peers:   len(peers),
 		Results: make([]RefreshResult, 0, len(peers)),
 	}
+	materials := make([]peerMaterial, 0, len(peers))
 
 	for _, peer := range peers {
 		if err := ctx.Err(); err != nil {
@@ -86,10 +91,16 @@ func (p *Poller) Refresh(ctx context.Context) (RefreshSummary, error) {
 			summary.Succeeded++
 		}
 		summary.Results = append(summary.Results, result)
+		materials = append(materials, peerMaterial{
+			Peer:      peer,
+			Freshness: status.Freshness,
+			LastError: status.LastError,
+			Error:     result.Error,
+			Snapshot:  status.Snapshot,
+		})
 	}
 
-	registryChanged := p.updateRegistryKey(registryKey(peers))
-	if p.onChange != nil && (registryChanged || len(peers) > 0) {
+	if p.onChange != nil && p.updateMaterialKey(materialKey(materials)) {
 		p.onChange()
 	}
 	return summary, nil
@@ -128,26 +139,30 @@ func (p *Poller) Run(ctx context.Context) {
 	}
 }
 
-func (p *Poller) updateRegistryKey(key string) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	changed := !p.seenRegistry || p.lastRegistryKey != key
-	p.seenRegistry = true
-	p.lastRegistryKey = key
-	return changed
+type peerMaterial struct {
+	Peer      federationpeers.Peer      `json:"peer"`
+	Freshness federationpeers.Freshness `json:"freshness"`
+	LastError string                    `json:"last_error,omitempty"`
+	Error     string                    `json:"error,omitempty"`
+	Snapshot  *federation.HostSnapshot  `json:"snapshot,omitempty"`
 }
 
-func registryKey(peers []federationpeers.Peer) string {
-	var builder strings.Builder
-	for _, peer := range peers {
-		builder.WriteString(peer.Name)
-		builder.WriteByte('\x00')
-		builder.WriteString(peer.URL)
-		builder.WriteByte('\x00')
-		builder.WriteString(peer.ExpectedHostID)
-		builder.WriteByte('\n')
+func materialKey(materials []peerMaterial) string {
+	data, err := json.Marshal(materials)
+	if err != nil {
+		return "material-encode-error"
 	}
-	return builder.String()
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+func (p *Poller) updateMaterialKey(key string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	changed := !p.seenMaterial || p.lastMaterialKey != key
+	p.seenMaterial = true
+	p.lastMaterialKey = key
+	return changed
 }
 
 func logRefreshSummary(kind string, summary RefreshSummary) {

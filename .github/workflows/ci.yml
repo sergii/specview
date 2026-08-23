@@ -36,6 +36,33 @@ jobs:
       - name: Build
         run: go build ./cmd/specview
 
+  browser-e2e:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install browser test dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser semantic tests
+        run: npm run test:e2e
+      - name: Upload browser test artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: specview-browser-${{ github.sha }}
+          path: test-results/
+          if-no-files-found: ignore
+
   build-artifacts:
     runs-on: ubuntu-latest
     needs: test

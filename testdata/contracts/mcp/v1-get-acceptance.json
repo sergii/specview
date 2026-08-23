@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "host": "DEVBOX-01",
+  "repository_id": "repo-contract-v1",
+  "repository_name": "sergii/specview",
+  "work_item_id": "H18",
+  "policy": {
+    "required": [
+      {
+        "check": "unit-tests",
+        "allow_skipped": false
+      }
+    ]
+  },
+  "revision": {
+    "revision": "git:abcdef1234567890",
+    "worktree_path": "/work/sergii/specview",
+    "available": true
+  },
+  "decision": {
+    "work_item_id": "H18",
+    "revision": "git:abcdef1234567890",
+    "state": "accepted",
+    "checks": [
+      {
+        "check": "unit-tests",
+        "state": "passed",
+        "provider": "go-test",
+        "evidence_id": "H18-tests-20260823T180000Z",
+        "summary": "All tests passed."
+      }
+    ]
+  },
+  "evidence_count": 1,
+  "evaluation_pending": false
+}

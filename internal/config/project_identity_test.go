@@ -38,8 +38,8 @@ func TestProjectIdentityRejectsWhitespace(t *testing.T) {
 	cfg := Config{
 		Version: 1,
 		Project: Project{ID: "specview:two projects", Root: "."},
-		Specs: Specs{Adapter: "specview", Path: "specs", Pattern: "*.md"},
-		Server: Server{Host: "127.0.0.1", Port: 7331},
+		Specs:   Specs{Adapter: "specview", Path: "specs", Pattern: "*.md"},
+		Server:  Server{Host: "127.0.0.1", Port: 7331},
 	}
 	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "project.id") {
 		t.Fatalf("expected project.id validation error, got %v", err)

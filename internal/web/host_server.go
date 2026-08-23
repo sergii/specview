@@ -205,6 +205,7 @@ type projectItemData struct {
 }
 
 type projectData struct {
+	Hostname          string
 	Repo              hoststate.Repository
 	Execution         hoststate.RepositoryExecutionView
 	SourceControl     sourcecontrol.RepositoryContext
@@ -277,10 +278,14 @@ func (s *HostServer) projectSpec(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "detail.html", struct {
+		Hostname    string
 		ProjectName string
+		ProjectID   string
 		Spec        specs.Spec
 	}{
+		Hostname:    data.Hostname,
 		ProjectName: data.Repo.Name,
+		ProjectID:   data.Repo.ID,
 		Spec:        item,
 	}); err != nil {
 		http.Error(w, "render specification", http.StatusInternalServerError)
@@ -327,6 +332,7 @@ func (s *HostServer) loadProject(ctx context.Context, repo hoststate.Repository)
 func (s *HostServer) projectStore(repo hoststate.Repository) (projectData, *specs.Store, error) {
 	convention, detectErr := config.DetectConvention(repo.Root)
 	data := projectData{
+		Hostname:       s.catalog.Hostname(),
 		Repo:           repo,
 		Convention:     convention,
 		DetectionError: "",

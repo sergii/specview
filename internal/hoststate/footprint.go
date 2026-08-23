@@ -132,7 +132,7 @@ func walkFootprint(root, skipPath string) (int64, error) {
 		if walkErr != nil {
 			return walkErr
 		}
-		if skipPath != "" && sameFilesystemPath(path, skipPath) {
+		if skipPath != "" && filepath.Clean(path) == skipPath {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}

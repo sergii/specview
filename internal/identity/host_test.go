@@ -36,9 +36,9 @@ func TestHostIdentityPersistsAcrossReopen(t *testing.T) {
 }
 
 func TestHostIdentityRejectsCorruptOrUnsupportedState(t *testing.T) {
-	for name, body, want := range map[string]string{
-		"invalid-json": `not-json`,
-		"unknown-field": `{"version":1,"id":"host:11111111-1111-4111-9111-111111111111","created_at":"2026-08-23T19:00:00Z","extra":true}`,
+	for name, body := range map[string]string{
+		"invalid-json":        `not-json`,
+		"unknown-field":       `{"version":1,"id":"host:11111111-1111-4111-9111-111111111111","created_at":"2026-08-23T19:00:00Z","extra":true}`,
 		"unsupported-version": `{"version":2,"id":"host:11111111-1111-4111-9111-111111111111","created_at":"2026-08-23T19:00:00Z"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -50,7 +50,6 @@ func TestHostIdentityRejectsCorruptOrUnsupportedState(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected invalid persisted identity to fail")
 			}
-			_ = want
 		})
 	}
 }

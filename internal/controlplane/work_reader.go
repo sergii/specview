@@ -143,11 +143,32 @@ func (r *Reader) repository(repositoryID string) (*hoststate.Catalog, hoststate.
 	if err != nil {
 		return nil, hoststate.Repository{}, err
 	}
-	repository, ok := catalog.Find(strings.TrimSpace(repositoryID))
-	if !ok {
-		return nil, hoststate.Repository{}, fmt.Errorf("repository %q not found", repositoryID)
+
+	id := strings.TrimSpace(repositoryID)
+	if repository, ok := catalog.Find(id); ok {
+		return catalog, repository, nil
 	}
-	return catalog, repository, nil
+
+	// ListRepositories intentionally projects repositories that exist only in
+	// current live Execution state, even before the Host runtime has persisted
+	// them into the compatibility catalog. Every listed repository ID must remain
+	// directly readable by the same control-plane Reader.
+	sessions, sessionErr := r.executionSource.Sessions()
+	if sessionErr == nil {
+		for _, session := range sessions {
+			root := normalizeRoot(session.RepositoryRoot)
+			if root == "" || hoststate.RepositoryIDForRoot(root) != id {
+				continue
+			}
+			return catalog, hoststate.Repository{
+				ID:   id,
+				Name: hoststate.RepositoryDisplayNameForRoot(root),
+				Root: root,
+			}, nil
+		}
+	}
+
+	return nil, hoststate.Repository{}, fmt.Errorf("repository %q not found", repositoryID)
 }
 
 func workItemListEntry(item specs.Artifact) WorkItemListEntry {

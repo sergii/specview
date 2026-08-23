@@ -1,6 +1,7 @@
 package revision
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -52,6 +53,26 @@ func TestResolveGitChoosesDeepestContainingWorktree(t *testing.T) {
 	}
 	if resolution.WorktreePath != linked {
 		t.Fatalf("WorktreePath = %q, want %q", resolution.WorktreePath, linked)
+	}
+}
+
+func TestResolveGitCanonicalizesSymlinkedProjectRoot(t *testing.T) {
+	realRoot := filepath.Join(t.TempDir(), "real", "specview")
+	if err := os.MkdirAll(realRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	aliasRoot := filepath.Join(t.TempDir(), "specview")
+	if err := os.Symlink(realRoot, aliasRoot); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	git := sourcecontrol.GitContext{Worktrees: []sourcecontrol.Worktree{{Path: realRoot, Head: "abc"}}}
+	resolution := ResolveGit(aliasRoot, git)
+	if !resolution.Available || resolution.Revision != "git:abc" {
+		t.Fatalf("unexpected resolution through symlinked root: %#v", resolution)
+	}
+	if resolution.WorktreePath != realRoot {
+		t.Fatalf("WorktreePath = %q, want %q", resolution.WorktreePath, realRoot)
 	}
 }
 

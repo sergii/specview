@@ -1,0 +1,270 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="sergii/specview"
+target="${HOME}/.local/bin/specview-h24-rc"
+root=""
+tmp=""
+server_pid=""
+federation_pid=""
+
+fail() {
+  echo "specview macOS acceptance: $*" >&2
+  exit 1
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
+}
+
+cleanup() {
+  if [ -n "$server_pid" ]; then
+    kill "$server_pid" 2>/dev/null || true
+    wait "$server_pid" 2>/dev/null || true
+  fi
+  if [ -n "$federation_pid" ]; then
+    kill "$federation_pid" 2>/dev/null || true
+    wait "$federation_pid" 2>/dev/null || true
+  fi
+  if [ -n "$tmp" ] && [ -d "$tmp" ]; then
+    rm -rf "$tmp"
+  fi
+}
+trap cleanup EXIT
+
+[ "$(uname -s)" = "Darwin" ] || fail "this acceptance gate must run on macOS"
+for command in git gh curl shasum tar python3; do
+  need "$command"
+done
+
+gh auth status >/dev/null 2>&1 || fail "GitHub CLI is not authenticated; run: gh auth login"
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || fail "run this from a Specview checkout"
+cd "$root"
+
+origin=$(git config --get remote.origin.url || true)
+case "$origin" in
+  *github.com/sergii/specview*|git@github.com:sergii/specview.git) ;;
+  *) fail "this checkout does not point at sergii/specview (origin: ${origin:-missing})" ;;
+esac
+
+branch=$(git branch --show-current)
+[ -n "$branch" ] || fail "detached HEAD is not supported; checkout the H24 branch first"
+head=$(git rev-parse HEAD)
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  fail "tracked files are modified; commit/stash them and run git pull before release acceptance"
+fi
+remote_head=$(git ls-remote origin "refs/heads/$branch" | awk 'NR == 1 {print $1}')
+[ -n "$remote_head" ] || fail "remote branch origin/$branch was not found"
+[ "$head" = "$remote_head" ] || fail "local HEAD is not the pushed branch head; run git pull first"
+
+if curl -fsS http://127.0.0.1:7331/healthz >/dev/null 2>&1; then
+  fail "port 7331 already has a healthy Specview server; stop it before acceptance"
+fi
+if curl -fsS http://127.0.0.1:7332/v1/federation/snapshot >/dev/null 2>&1; then
+  fail "port 7332 already has a federation server; stop it before acceptance"
+fi
+
+run_id=$(gh api \
+  -H 'Accept: application/vnd.github+json' \
+  "/repos/$repo/actions/runs?head_sha=$head&event=pull_request&status=success&per_page=100" \
+  --jq '.workflow_runs | map(select(.name == "CI" and .conclusion == "success")) | sort_by(.run_number) | last | .id // empty')
+[ -n "$run_id" ] || fail "no successful pull-request CI found for HEAD $head; wait for CI and retry"
+
+run_head=$(gh api "/repos/$repo/actions/runs/$run_id" --jq '.head_sha')
+[ "$run_head" = "$head" ] || fail "resolved CI run does not match local HEAD"
+
+artifact_name=$(gh api \
+  "/repos/$repo/actions/runs/$run_id/artifacts?per_page=100" \
+  --jq '.artifacts | map(select(.expired == false and (.name | startswith("specview-build-")))) | first | .name // empty')
+[ -n "$artifact_name" ] || fail "successful CI run $run_id has no non-expired specview-build artifact"
+
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/specview-h24-accept.XXXXXX")
+artifact_dir="$tmp/artifact"
+extract_dir="$tmp/extract"
+state_home="$tmp/state"
+empty_cwd="$tmp/empty-cwd"
+mkdir -p "$artifact_dir" "$extract_dir" "$state_home" "$empty_cwd"
+
+echo "==> Using HEAD: $head"
+echo "==> Using CI run: $run_id"
+echo "==> Downloading artifact: $artifact_name"
+gh run download "$run_id" --repo "$repo" --name "$artifact_name" --dir "$artifact_dir"
+
+[ -f "$artifact_dir/SHA256SUMS" ] || fail "artifact is missing SHA256SUMS"
+echo "==> Verifying release checksums"
+(
+  cd "$artifact_dir"
+  shasum -a 256 -c SHA256SUMS
+)
+
+case "$(uname -m)" in
+  arm64) archive="specview_darwin_arm64.tar.gz" ;;
+  x86_64) archive="specview_darwin_amd64.tar.gz" ;;
+  *) fail "unsupported macOS architecture: $(uname -m)" ;;
+esac
+[ -f "$artifact_dir/$archive" ] || fail "artifact is missing $archive"
+
+tar -xzf "$artifact_dir/$archive" -C "$extract_dir"
+[ -x "$extract_dir/specview" ] || fail "release archive does not contain executable specview"
+
+mkdir -p "$(dirname "$target")"
+install -m 0755 "$extract_dir/specview" "$target"
+echo "==> Installed release candidate: $target"
+"$target" version
+"$target" help >/dev/null
+
+echo "==> MCP read-only smoke"
+bash "$root/scripts/test-mcp-stdio.sh" "$target"
+
+export XDG_STATE_HOME="$state_home"
+"$target" federation snapshot > "$tmp/source.json"
+host_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["host_id"])' "$tmp/source.json")
+cp "$state_home/specview/host.json" "$tmp/host-before.json"
+
+echo "==> Federation peer/cache persistence smoke"
+"$target" federation serve > "$tmp/federation.log" 2>&1 &
+federation_pid=$!
+for _ in $(seq 1 50); do
+  if ! kill -0 "$federation_pid" 2>/dev/null; then
+    cat "$tmp/federation.log" >&2 || true
+    fail "federation server exited before becoming healthy"
+  fi
+  if curl -fsS http://127.0.0.1:7332/v1/federation/snapshot >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.1
+done
+curl -fsS http://127.0.0.1:7332/v1/federation/snapshot >/dev/null
+
+export SPECVIEW_H24_ACCEPT_TOKEN='h24-accept-secret-must-not-persist'
+"$target" federation peer add mac-accept-self \
+  --url http://127.0.0.1:7332 \
+  --host "$host_id" \
+  --stale-after 5m \
+  --header-env Authorization=SPECVIEW_H24_ACCEPT_TOKEN >/dev/null
+"$target" federation peer refresh mac-accept-self > "$tmp/peer-refresh.json"
+
+if grep -R -F "$SPECVIEW_H24_ACCEPT_TOKEN" "$state_home" >/dev/null 2>&1; then
+  fail "credential secret leaked into persisted Specview state"
+fi
+
+kill "$federation_pid"
+wait "$federation_pid"
+federation_pid=""
+
+"$target" federation peer show mac-accept-self > "$tmp/peer-before-restart.json"
+python3 - "$tmp/peer-before-restart.json" "$host_id" <<'PY'
+import json, sys
+row = json.load(open(sys.argv[1]))
+assert row["snapshot"]["host_id"] == sys.argv[2], row
+assert row["retrieved_at"], row
+PY
+
+"$target" federation status > "$tmp/status.json"
+python3 - "$tmp/status.json" "$host_id" <<'PY'
+import json, sys
+value = json.load(open(sys.argv[1]))
+assert value["schema_version"] == 1, value
+assert any(h.get("host_id") == sys.argv[2] for h in value["hosts"]), value
+PY
+
+start_isolated_server() {
+  (
+    cd "$empty_cwd"
+    export XDG_STATE_HOME="$state_home"
+    exec "$target" serve
+  ) > "$tmp/serve.log" 2>&1 &
+  server_pid=$!
+
+  for _ in $(seq 1 50); do
+    if ! kill -0 "$server_pid" 2>/dev/null; then
+      cat "$tmp/serve.log" >&2 || true
+      fail "Host dashboard exited before becoming healthy"
+    fi
+    if curl -fsS http://127.0.0.1:7331/healthz >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  cat "$tmp/serve.log" >&2 || true
+  fail "Host dashboard did not become healthy"
+}
+
+stop_isolated_server() {
+  kill -TERM "$server_pid"
+  if ! wait "$server_pid"; then
+    server_pid=""
+    fail "Host dashboard did not exit cleanly after SIGTERM"
+  fi
+  server_pid=""
+}
+
+echo "==> Host dashboard from empty cwd + clean SIGTERM"
+start_isolated_server
+stop_isolated_server
+
+echo "==> Restart persistence"
+start_isolated_server
+stop_isolated_server
+cmp "$tmp/host-before.json" "$state_home/specview/host.json" >/dev/null || fail "Host identity changed across restart"
+"$target" federation peer show mac-accept-self > "$tmp/peer-after-restart.json"
+python3 - "$tmp/peer-after-restart.json" "$host_id" <<'PY'
+import json, sys
+row = json.load(open(sys.argv[1]))
+assert row["snapshot"]["host_id"] == sys.argv[2], row
+assert row["retrieved_at"], row
+PY
+
+unset XDG_STATE_HOME
+
+echo "==> Real Host execution diagnostics"
+"$target" doctor || true
+
+if curl -fsS http://127.0.0.1:7331/healthz >/dev/null 2>&1; then
+  fail "port 7331 already has a healthy Specview server; stop it and rerun this acceptance command"
+fi
+
+dogfood_dir=$(mktemp -d "${TMPDIR:-/tmp}/specview-h24-dogfood.XXXXXX")
+dogfood_log="${TMPDIR:-/tmp}/specview-h24-rc-dashboard.log"
+(
+  cd "$dogfood_dir"
+  exec "$target" serve
+) > "$dogfood_log" 2>&1 &
+dogfood_pid=$!
+
+for _ in $(seq 1 50); do
+  if ! kill -0 "$dogfood_pid" 2>/dev/null; then
+    cat "$dogfood_log" >&2 || true
+    fail "real Host dashboard failed to start"
+  fi
+  if curl -fsS http://127.0.0.1:7331/healthz >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.1
+done
+curl -fsS http://127.0.0.1:7331/healthz >/dev/null || fail "real Host dashboard did not become healthy"
+
+server_pid=""
+
+cat <<EOF2
+
+AUTOMATED macOS INSTALLED-USER ACCEPTANCE: PASS
+
+Manual real-Host dogfood is now running from an empty directory:
+  binary:    $target
+  dashboard: http://127.0.0.1:7331
+  pid:       $dogfood_pid
+  log:       $dogfood_log
+
+Keep Codex or Claude Code active in a real Git repository, then verify the dashboard shows:
+  - the real repository
+  - its worktree
+  - the active agent/session
+  - Git/provider context on the repository page
+
+When finished:
+  kill $dogfood_pid
+
+Send PASS (or a screenshot/error) back to the Specview roadmap chat.
+EOF2

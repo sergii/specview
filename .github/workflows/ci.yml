@@ -18,7 +18,7 @@ jobs:
           go-version: '1.26.5'
           cache: false
       - name: Check developer scripts
-        run: bash -n bin/dev bin/install bin/doctor scripts/test-mcp-stdio.sh scripts/test-federation-cli.sh scripts/test-federation-http.sh scripts/test-federation-peers.sh
+        run: bash -n bin/dev bin/install bin/doctor bin/accept-macos scripts/test-mcp-stdio.sh scripts/test-federation-cli.sh scripts/test-federation-http.sh scripts/test-federation-peers.sh scripts/test-federation-runtime.sh
       - name: Check formatting
         shell: bash
         run: |
@@ -50,6 +50,8 @@ jobs:
         run: bash scripts/test-federation-http.sh ./specview
       - name: Federation peer lifecycle binary smoke
         run: bash scripts/test-federation-peers.sh ./specview
+      - name: Federation runtime status binary smoke
+        run: bash scripts/test-federation-runtime.sh ./specview
 
   browser-e2e:
     runs-on: ubuntu-latest

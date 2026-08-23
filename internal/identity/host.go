@@ -21,6 +21,18 @@ type HostIdentity struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+func HostPathForCatalog(catalogPath string) string {
+	catalogPath = strings.TrimSpace(catalogPath)
+	if catalogPath == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(catalogPath), "host.json")
+}
+
+func LoadOrCreateHostForCatalog(catalogPath string) (HostIdentity, error) {
+	return LoadOrCreateHost(HostPathForCatalog(catalogPath))
+}
+
 func LoadOrCreateHost(path string) (HostIdentity, error) {
 	return loadOrCreateHost(path, time.Now, rand.Reader)
 }

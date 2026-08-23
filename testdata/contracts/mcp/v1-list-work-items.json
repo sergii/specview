@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "host": "DEVBOX-01",
+  "repository_id": "repo-contract-v1",
+  "repository_name": "sergii/specview",
+  "work_items": [
+    {
+      "work_item_id": "H18",
+      "kind": "spec",
+      "path": "H18-mcp-server.md",
+      "title": "H18 - MCP Server",
+      "status": "in_progress",
+      "modified_at": "2026-08-23T18:00:00Z"
+    }
+  ]
+}

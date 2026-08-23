@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "host": "DEVBOX-01",
+  "repository_id": "repo-contract-v1",
+  "repository_name": "sergii/specview",
+  "work_item": {
+    "id": "H18",
+    "kind": "spec",
+    "plane": "work",
+    "role": "primary",
+    "work_item_id": "H18",
+    "path": "H18-mcp-server.md",
+    "title": "H18 - MCP Server",
+    "status": "in_progress",
+    "modified_at": "2026-08-23T18:00:00Z",
+    "body": "Expose Specview facts through a read-only MCP adapter.",
+    "relations": [
+      {
+        "type": "depends_on",
+        "target": "H17"
+      }
+    ]
+  }
+}

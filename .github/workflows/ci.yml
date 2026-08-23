@@ -18,9 +18,16 @@ jobs:
           go-version: '1.26.5'
           cache: false
       - name: Check developer scripts
-        run: bash -n bin/dev bin/install bin/doctor
+        run: bash -n bin/dev bin/install bin/doctor scripts/test-mcp-stdio.sh
       - name: Check formatting
-        run: test -z "$(gofmt -l .)"
+        shell: bash
+        run: |
+          files=$(gofmt -l .)
+          if [ -n "$files" ]; then
+            echo "The following Go files need gofmt:"
+            echo "$files"
+            exit 1
+          fi
       - name: Verify modules
         run: go mod tidy && git diff --exit-code -- go.mod go.sum
       - name: Vet
@@ -35,6 +42,8 @@ jobs:
           awk -v total="$total" 'BEGIN { if (total + 0 < 60.0) exit 1 }'
       - name: Build
         run: go build ./cmd/specview
+      - name: MCP binary stdio smoke
+        run: bash scripts/test-mcp-stdio.sh ./specview
 
   browser-e2e:
     runs-on: ubuntu-latest

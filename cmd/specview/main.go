@@ -99,6 +99,8 @@ func run(args []string) error {
 	switch command {
 	case "serve":
 		return serve()
+	case "mcp":
+		return serveMCP()
 	case "init":
 		return initProject()
 	case "doctor":
@@ -278,6 +280,7 @@ func printHelp() {
 Usage:
   specview [options]             Start the host dashboard and observe active repositories
   specview serve [options]       Start the host dashboard and observe active repositories
+  specview mcp [options]         Run the read-only MCP server over stdin/stdout
   specview init [options]        Detect the current repository convention and create .specview.yaml
   specview doctor [options]      Diagnose the registered Codex execution adapter
   specview version               Print the version
@@ -303,6 +306,7 @@ Examples:
   specview --verbose
   specview --debug
   specview serve --log-level=warn
+  specview mcp
   SPECVIEW_LOG_LEVEL=debug specview
 
 The host dashboard does not require .specview.yaml. Project configuration remains

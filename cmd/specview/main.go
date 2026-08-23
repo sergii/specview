@@ -102,6 +102,8 @@ func run(args []string) error {
 		return serve()
 	case "mcp":
 		return serveMCP()
+	case "federation":
+		return runFederation(args[1:])
 	case "init":
 		return initProject()
 	case "doctor":
@@ -285,13 +287,15 @@ func printHelp() {
 	fmt.Printf(`Specview - local-first observation for repo-native, spec-driven software work.
 
 Usage:
-  specview [options]             Start the host dashboard and observe active repositories
-  specview serve [options]       Start the host dashboard and observe active repositories
-  specview mcp [options]         Run the read-only MCP server over stdin/stdout
-  specview init [options]        Detect the current repository convention and create .specview.yaml
-  specview doctor [options]      Diagnose the registered Codex execution adapter
-  specview version               Print the version
-  specview help                  Show this help
+  specview [options]                              Start the host dashboard and observe active repositories
+  specview serve [options]                        Start the host dashboard and observe active repositories
+  specview mcp [options]                          Run the read-only MCP server over stdin/stdout
+  specview federation snapshot                    Write this Host's federation snapshot JSON to stdout
+  specview federation aggregate <snapshot>...     Aggregate HostSnapshot JSON files into a read-only projection
+  specview init [options]                         Detect the current repository convention and create .specview.yaml
+  specview doctor [options]                       Diagnose the registered Codex execution adapter
+  specview version                                Print the version
+  specview help                                   Show this help
 
 Options:
   --verbose                      Enable informational runtime logs
@@ -314,6 +318,8 @@ Examples:
   specview --debug
   specview serve --log-level=warn
   specview mcp
+  specview federation snapshot > laptop.json
+  specview federation aggregate laptop.json devbox.json
   SPECVIEW_LOG_LEVEL=debug specview
 
 The host dashboard does not require .specview.yaml. Project configuration remains

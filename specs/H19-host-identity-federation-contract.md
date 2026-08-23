@@ -1,6 +1,6 @@
 ---
 specview:
-  status: in_progress
+  status: done
 ---
 
 # H19 - Host Identity and Federation Contract
@@ -9,7 +9,7 @@ specview:
 
 Define the stable identity semantics required for multi-host Specview before implementing any federation transport.
 
-H19 must let Specview distinguish:
+H19 lets Specview distinguish:
 
 ```text
 Host
@@ -36,7 +36,7 @@ Repository: sergii/specview
     Sessions: ...
 ```
 
-The two instances may be active concurrently and must remain separately observable while correlating to one logical Repository only when evidence is sufficient.
+The two instances may be active concurrently and remain separately observable while correlating to one logical Repository only when evidence is sufficient.
 
 ## Host identity
 
@@ -46,16 +46,9 @@ Each Specview installation gets one persistent opaque ID:
 host:<uuid>
 ```
 
-Requirements:
+The identity is generated with cryptographically secure randomness and persisted in versioned `host.json` state next to, but independently from, `catalog.json`. It contains no hostname, so changing the OS hostname does not change Host identity.
 
-- generated once with cryptographically secure randomness;
-- persisted independently from `catalog.json`;
-- stable across restarts;
-- stable when hostname changes;
-- versioned language-neutral JSON representation;
-- invalid/corrupt identity files fail explicitly rather than being silently replaced.
-
-Hostname remains a mutable runtime label.
+Invalid, corrupt, unknown-field, or unsupported-version identity state fails explicitly rather than being silently replaced.
 
 ## RepositoryInstance identity
 
@@ -76,18 +69,18 @@ project:
   id: specview:sergii/specview
 ```
 
-The value is opaque to Specview. It is a strong user-controlled identity hint and must remain backward compatible with existing version-1 configs that omit it.
+The value is a strong user-controlled identity hint and remains backward compatible with existing version-1 configs that omit it.
 
 ## Repository correlation
 
-Normalize and compare:
+Correlation normalizes and compares:
 
 - explicit project ID;
 - repository name;
 - Git remote;
 - forge provider + forge repository.
 
-Correlation result:
+Possible results are:
 
 ```text
 match
@@ -98,30 +91,56 @@ conflict
 
 No caller may treat `ambiguous` or `conflict` as `match`.
 
+Repository-name-only equality remains ambiguous. Matching normalized Git or forge identity can corroborate matching names. Contradictory strong evidence remains distinct, or conflict when it contradicts a shared explicit project ID.
+
+## Federation authority
+
+Host-local facts stay authoritative at their source Host. Federation may cache, correlate, and project those facts, but it must preserve source Host and observation time rather than presenting cached remote state as local observation.
+
+Logical Repository grouping is derived and recomputable. Source RepositoryInstance facts remain intact if correlation changes later.
+
+A disconnected remote Host is stale/unavailable, not evidence of zero activity.
+
 ## Contract fixtures
 
-Add language-neutral fixtures for:
+Language-neutral fixtures now cover:
 
-- host identity v1;
-- repository correlation cases;
-- config with explicit project ID.
+- Host identity v1;
+- config v1 with explicit project ID;
+- RepositoryInstance deterministic identity;
+- repository-name and Git-remote normalization;
+- repository correlation outcomes and contradictions.
 
-The fixtures are part of the future Go/Rust parity gate.
+These fixtures are part of the future Go/Rust parity gate.
 
 ## Acceptance criteria
 
-- [ ] separate versioned Host identity persistence exists;
-- [ ] Host identity survives reopen and hostname changes;
-- [ ] corrupt/unsupported Host identity fails explicitly;
-- [ ] RepositoryInstance ID is deterministic from Host ID + canonical root;
-- [ ] `project.id` is supported as an optional backward-compatible config field;
-- [ ] repository name normalization is deterministic;
-- [ ] common Git SSH/HTTPS remote forms normalize consistently;
-- [ ] correlation returns `match`, `ambiguous`, `distinct`, or `conflict` according to ADR-008;
-- [ ] contradictory evidence never silently merges repositories;
-- [ ] language-neutral Host/config/correlation fixtures are tested;
-- [ ] existing catalog v1 contract remains unchanged;
-- [ ] gofmt, module, vet, race, coverage, browser, and release gates pass.
+- [x] separate versioned Host identity persistence exists;
+- [x] Host identity survives reopen and is independent of hostname;
+- [x] corrupt/unsupported Host identity fails explicitly;
+- [x] RepositoryInstance ID is deterministic from Host ID + canonical root;
+- [x] `project.id` is supported as an optional backward-compatible config field;
+- [x] repository name normalization is deterministic;
+- [x] common Git SSH/HTTPS remote forms normalize consistently;
+- [x] correlation returns `match`, `ambiguous`, `distinct`, or `conflict` according to ADR-008;
+- [x] contradictory evidence never silently merges repositories;
+- [x] language-neutral Host/config/correlation fixtures are tested;
+- [x] existing catalog v1 contract remains unchanged;
+- [x] gofmt, module, vet, race, coverage, browser, MCP binary, and release gates pass.
+
+## Verification
+
+Functional H19 head passed:
+
+```text
+production statement coverage: 65.5%
+internal/identity:             84.2%
+internal/config:               80.7%
+internal/controlplane:         76.4%
+internal/mcpserver:            75.2%
+```
+
+The real MCP binary creates `host.json`, reopens the same state in a second process, and verifies that the persisted Host identity does not change.
 
 ## Out of scope
 

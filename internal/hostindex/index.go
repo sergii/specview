@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,7 +17,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 // RepositorySearcher is the read side consumed by the host UI.
 type RepositorySearcher interface {
@@ -99,11 +100,39 @@ func (i *Index) migrate(ctx context.Context) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS meta (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL
+	)`); err != nil {
+		return fmt.Errorf("migrate SQLite host index metadata: %w", err)
+	}
+
+	var version string
+	err = tx.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&version)
+	switch {
+	case err == sql.ErrNoRows:
+		if _, err := tx.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES('schema_version', ?)`, fmt.Sprint(schemaVersion)); err != nil {
+			return err
+		}
+	case err != nil:
+		return err
+	case version == "1":
+		// The index is a rebuildable projection. Discard the PID-shaped v1
+		// projection transactionally rather than pretending it is authority.
+		if _, err := tx.ExecContext(ctx, `DROP TABLE IF EXISTS sessions`); err != nil {
+			return fmt.Errorf("drop SQLite v1 sessions: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `DROP TABLE IF EXISTS repositories`); err != nil {
+			return fmt.Errorf("drop SQLite v1 repositories: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE meta SET value = ? WHERE key = 'schema_version'`, fmt.Sprint(schemaVersion)); err != nil {
+			return err
+		}
+	case version != fmt.Sprint(schemaVersion):
+		return fmt.Errorf("unsupported SQLite host index schema version %s", version)
+	}
+
 	statements := []string{
-		`CREATE TABLE IF NOT EXISTS meta (
-			key TEXT PRIMARY KEY,
-			value TEXT NOT NULL
-		)`,
 		`CREATE TABLE IF NOT EXISTS repositories (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
@@ -116,8 +145,12 @@ func (i *Index) migrate(ctx context.Context) error {
 		`CREATE TABLE IF NOT EXISTS sessions (
 			id TEXT PRIMARY KEY,
 			repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+			identity_kind TEXT NOT NULL,
+			adapter TEXT NOT NULL,
 			agent TEXT NOT NULL,
-			pid INTEGER NOT NULL,
+			process_ids TEXT NOT NULL,
+			cwd TEXT NOT NULL,
+			worktree_root TEXT NOT NULL,
 			started_at INTEGER NOT NULL,
 			last_seen_at INTEGER NOT NULL,
 			ended_at INTEGER,
@@ -127,24 +160,12 @@ func (i *Index) migrate(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS repositories_root_idx ON repositories(root)`,
 		`CREATE INDEX IF NOT EXISTS sessions_repository_idx ON sessions(repository_id)`,
 		`CREATE INDEX IF NOT EXISTS sessions_agent_idx ON sessions(agent)`,
+		`CREATE INDEX IF NOT EXISTS sessions_adapter_idx ON sessions(adapter)`,
 	}
 	for _, statement := range statements {
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
-			return fmt.Errorf("migrate SQLite host index: %w", err)
+			return fmt.Errorf("migrate SQLite host index v2: %w", err)
 		}
-	}
-
-	var version string
-	err = tx.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&version)
-	switch {
-	case err == sql.ErrNoRows:
-		if _, err := tx.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES('schema_version', ?)`, fmt.Sprint(schemaVersion)); err != nil {
-			return err
-		}
-	case err != nil:
-		return err
-	case version != fmt.Sprint(schemaVersion):
-		return fmt.Errorf("unsupported SQLite host index schema version %s", version)
 	}
 	return tx.Commit()
 }
@@ -192,8 +213,8 @@ func (i *Index) syncSnapshot(ctx context.Context, repositories []hoststate.Repos
 	defer repoStatement.Close()
 
 	sessionStatement, err := tx.PrepareContext(ctx, `
-		INSERT INTO sessions(id, repository_id, agent, pid, started_at, last_seen_at, ended_at, active)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?)`)
+		INSERT INTO sessions(id, repository_id, identity_kind, adapter, agent, process_ids, cwd, worktree_root, started_at, last_seen_at, ended_at, active)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -222,12 +243,20 @@ func (i *Index) syncSnapshot(ctx context.Context, repositories []hoststate.Repos
 			if session.Active {
 				active = 1
 			}
+			processIDs, err := json.Marshal(session.ProcessIDs)
+			if err != nil {
+				return fmt.Errorf("encode session %s process IDs: %w", session.ID, err)
+			}
 			if _, err := sessionStatement.ExecContext(
 				ctx,
 				session.ID,
 				repository.ID,
+				session.IdentityKind,
+				session.Adapter,
 				session.Agent,
-				session.PID,
+				string(processIDs),
+				session.CWD,
+				session.WorktreeRoot,
 				session.StartedAt.UnixNano(),
 				session.LastSeenAt.UnixNano(),
 				endedAt,
@@ -317,10 +346,15 @@ func snapshotFingerprint(repositories []hoststate.Repository) string {
 			if session.EndedAt != nil {
 				endedAt = session.EndedAt.UnixNano()
 			}
-			_, _ = fmt.Fprintf(hash, "session\x00%s\x00%s\x00%d\x00%d\x00%d\x00%t\n",
+			processIDs, _ := json.Marshal(session.ProcessIDs)
+			_, _ = fmt.Fprintf(hash, "session\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00%d\x00%t\n",
 				session.ID,
+				session.IdentityKind,
+				session.Adapter,
 				session.Agent,
-				session.PID,
+				string(processIDs),
+				session.CWD,
+				session.WorktreeRoot,
 				session.StartedAt.UnixNano(),
 				endedAt,
 				session.Active,

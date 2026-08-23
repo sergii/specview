@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "host_id": "host:22222222-2222-4222-9222-222222222222",
+  "hostname": "devbox-01",
+  "observed_at": "2026-08-23T20:00:05Z",
+  "repository_instances": [
+    {
+      "instance_id": "instance:18bdda6e039c54af7052414c4417a2f9",
+      "source_repository_id": "repo-devbox-specview",
+      "name": "sergii/specview",
+      "root": "/home/sergii/repos/sergii/specview",
+      "fingerprint": {
+        "explicit_id": "specview:sergii/specview",
+        "name": "sergii/specview",
+        "git_remote": "https://github.com/sergii/specview.git",
+        "forge_provider": "github",
+        "forge_repository": "sergii/specview"
+      },
+      "active": true,
+      "agents": ["Claude Code", "Codex"],
+      "sessions": [
+        {
+          "id": "claude-devbox-1",
+          "adapter": "claude-code",
+          "agent": "Claude Code",
+          "worktree_root": "/home/sergii/repos/sergii/specview/.worktrees/h20",
+          "cwd": "/home/sergii/repos/sergii/specview/.worktrees/h20",
+          "started_at": "2026-08-23T19:35:00Z"
+        },
+        {
+          "id": "codex-devbox-1",
+          "adapter": "codex",
+          "agent": "Codex",
+          "worktree_root": "/home/sergii/repos/sergii/specview",
+          "cwd": "/home/sergii/repos/sergii/specview",
+          "started_at": "2026-08-23T19:20:00Z"
+        }
+      ],
+      "worktrees": [
+        {
+          "path": "/home/sergii/repos/sergii/specview",
+          "branch": "main",
+          "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "detached": false,
+          "dirty_count": 0,
+          "upstream": "origin/main",
+          "ahead": 0,
+          "behind": 0,
+          "last_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "path": "/home/sergii/repos/sergii/specview/.worktrees/h20",
+          "branch": "h20-federation-snapshots",
+          "head": "cccccccccccccccccccccccccccccccccccccccc",
+          "detached": false,
+          "dirty_count": 2,
+          "upstream": "origin/h20-federation-snapshots",
+          "ahead": 3,
+          "behind": 0,
+          "last_commit": "cccccccccccccccccccccccccccccccccccccccc"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "peer": "devbox",
+  "retrieved_at": "2026-08-23T20:30:00Z",
+  "last_attempt_at": "2026-08-23T20:30:00Z",
+  "last_success_at": "2026-08-23T20:30:00Z",
+  "snapshot": {
+    "schema_version": 1,
+    "host_id": "host:22222222-2222-4222-9222-222222222222",
+    "hostname": "devbox-01",
+    "observed_at": "2026-08-23T20:29:45Z",
+    "repository_instances": []
+  }
+}

@@ -103,10 +103,14 @@ func NewClientWithHTTPClient(httpClient *http.Client, maxBytes int64) (*Client, 
 }
 
 func (c *Client) Fetch(ctx context.Context, rawURL, expectedHostID string) (federation.HostSnapshot, error) {
+	return c.FetchWithHeaders(ctx, rawURL, expectedHostID, nil)
+}
+
+func (c *Client) FetchWithHeaders(ctx context.Context, rawURL, expectedHostID string, headers http.Header) (federation.HostSnapshot, error) {
 	if c == nil || c.httpClient == nil {
 		return federation.HostSnapshot{}, errors.New("federation HTTP client is required")
 	}
-	peerURL, err := validatePeerURL(rawURL)
+	peerURL, err := ValidatePeerURL(rawURL)
 	if err != nil {
 		return federation.HostSnapshot{}, err
 	}
@@ -122,6 +126,11 @@ func (c *Client) Fetch(ctx context.Context, rawURL, expectedHostID string) (fede
 		return federation.HostSnapshot{}, err
 	}
 	request.Header.Set("Accept", "application/json")
+	for name, values := range headers {
+		for _, value := range values {
+			request.Header.Add(name, value)
+		}
+	}
 	response, err := c.httpClient.Do(request)
 	if err != nil {
 		return federation.HostSnapshot{}, fmt.Errorf("fetch federation snapshot: %w", err)
@@ -149,7 +158,7 @@ func (c *Client) Fetch(ctx context.Context, rawURL, expectedHostID string) (fede
 	return snapshot, nil
 }
 
-func validatePeerURL(rawURL string) (*url.URL, error) {
+func ValidatePeerURL(rawURL string) (*url.URL, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
 		return nil, errors.New("federation peer URL is required")

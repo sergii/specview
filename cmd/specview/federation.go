@@ -23,7 +23,7 @@ import (
 
 func runFederation(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("federation command requires snapshot, aggregate, serve, or pull")
+		return fmt.Errorf("federation command requires snapshot, aggregate, serve, pull, or peer")
 	}
 
 	switch args[0] {
@@ -44,6 +44,8 @@ func runFederation(args []string) error {
 		return serveFederationHTTP()
 	case "pull":
 		return pullFederationSnapshot(args[1:], os.Stdout)
+	case "peer":
+		return runFederationPeer(args[1:])
 	default:
 		return fmt.Errorf("unknown federation command %q", args[0])
 	}

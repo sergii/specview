@@ -287,15 +287,18 @@ func printHelp() {
 	fmt.Printf(`Specview - local-first observation for repo-native, spec-driven software work.
 
 Usage:
-  specview [options]                              Start the host dashboard and observe active repositories
-  specview serve [options]                        Start the host dashboard and observe active repositories
-  specview mcp [options]                          Run the read-only MCP server over stdin/stdout
-  specview federation snapshot                    Write this Host's federation snapshot JSON to stdout
-  specview federation aggregate <snapshot>...     Aggregate HostSnapshot JSON files into a read-only projection
-  specview init [options]                         Detect the current repository convention and create .specview.yaml
-  specview doctor [options]                       Diagnose the registered Codex execution adapter
-  specview version                                Print the version
-  specview help                                   Show this help
+  specview [options]                                      Start the host dashboard and observe active repositories
+  specview serve [options]                                Start the host dashboard and observe active repositories
+  specview mcp [options]                                  Run the read-only MCP server over stdin/stdout
+  specview federation snapshot                            Write this Host's federation snapshot JSON to stdout
+  specview federation aggregate <snapshot>...             Aggregate HostSnapshot JSON files into a read-only projection
+  specview federation serve                               Serve HostSnapshot on 127.0.0.1:7332 only
+  specview federation pull <url>                          Pull and validate a remote HostSnapshot over HTTPS
+  specview federation pull --expect-host <host:id> <url> Pin the expected remote Host identity
+  specview init [options]                                 Detect the current repository convention and create .specview.yaml
+  specview doctor [options]                               Diagnose the registered Codex execution adapter
+  specview version                                        Print the version
+  specview help                                           Show this help
 
 Options:
   --verbose                      Enable informational runtime logs
@@ -319,8 +322,13 @@ Examples:
   specview serve --log-level=warn
   specview mcp
   specview federation snapshot > laptop.json
+  specview federation serve
+  specview federation pull --expect-host host:550e8400-e29b-41d4-a716-446655440000 https://devbox.example.ts.net > devbox.json
   specview federation aggregate laptop.json devbox.json
   SPECVIEW_LOG_LEVEL=debug specview
+
+Federation HTTP serving is loopback-only. Use an authenticated private ingress such as
+Tailscale Serve or Cloudflare Tunnel + Access to make it reachable by another Host.
 
 The host dashboard does not require .specview.yaml. Project configuration remains
 an optional repository-level override.

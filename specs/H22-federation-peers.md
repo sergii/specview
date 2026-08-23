@@ -1,6 +1,6 @@
 ---
 specview:
-  status: in_progress
+  status: done
 ---
 
 # H22 - Federation Peers and Freshness
@@ -60,21 +60,38 @@ Credential references are configured without secret values. A Tailscale peer nee
 
 ## Acceptance criteria
 
-- [ ] peer registry v1 is versioned and strict;
-- [ ] peer state is Host-level, not repository-level;
-- [ ] persisted peer requires expected Host ID;
-- [ ] H21 URL security validation is reused;
-- [ ] `env_headers` persists only environment variable names;
-- [ ] missing referenced environment variables fail before sending the request;
-- [ ] credential values never appear in persisted files or error text;
-- [ ] successful refresh stores retrieved_at plus unchanged HostSnapshot v1;
-- [ ] failed refresh preserves last valid snapshot;
-- [ ] fresh/stale/unreachable/never_retrieved projection is deterministic;
-- [ ] source observed_at is never rewritten;
-- [ ] language-neutral peer and remote-observation fixtures are tested;
-- [ ] add/list/show/refresh/remove CLI flow is covered by a built-binary smoke test;
-- [ ] H18 MCP, H19 identity, H20 federation, and H21 transport contracts remain compatible;
-- [ ] full gofmt/module/vet/race/coverage/binary/browser/release CI passes.
+- [x] peer registry v1 is versioned and strict;
+- [x] peer state is Host-level, not repository-level;
+- [x] persisted peer requires expected Host ID;
+- [x] H21 URL security validation is reused;
+- [x] `env_headers` persists only environment variable names;
+- [x] missing referenced environment variables fail before sending the request;
+- [x] credential values never appear in persisted files or error text;
+- [x] successful refresh stores retrieved_at plus unchanged HostSnapshot v1;
+- [x] failed refresh preserves last valid snapshot;
+- [x] fresh/stale/unreachable/never_retrieved projection is deterministic;
+- [x] source observed_at is never rewritten;
+- [x] language-neutral peer and remote-observation fixtures are tested;
+- [x] add/list/show/refresh/remove CLI flow is covered by a built-binary smoke test;
+- [x] H18 MCP, H19 identity, H20 federation, and H21 transport contracts remain compatible;
+- [x] full gofmt/module/vet/race/coverage/binary/browser/release CI passes.
+
+## Verification baseline
+
+Functional head `e723e7a21778fbcb019e3b980213ffe24e442b76` passed CI #956 with:
+
+- gofmt and module hygiene;
+- go vet;
+- race tests;
+- 63.3% total production statement coverage;
+- 68.4% `internal/federationpeers` coverage;
+- build;
+- MCP binary stdio smoke;
+- federation file/CLI binary smoke;
+- federation HTTP binary smoke;
+- federation peer lifecycle binary smoke;
+- Chromium semantic E2E;
+- release archives.
 
 ## Out of scope
 

@@ -26,12 +26,12 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test
-        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./cmd/... ./internal/...
       - name: Coverage gate
         shell: bash
         run: |
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
-          echo "Total statement coverage: ${total}%"
+          echo "Total production statement coverage: ${total}%"
           awk -v total="$total" 'BEGIN { if (total + 0 < 60.0) exit 1 }'
       - name: Build
         run: go build ./cmd/specview

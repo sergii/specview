@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "host_id": "host:11111111-1111-4111-9111-111111111111",
+  "hostname": "sergii-macbook",
+  "observed_at": "2026-08-23T20:00:00Z",
+  "repository_instances": [
+    {
+      "instance_id": "instance:f9d10a79ca22b2a0d8f228a3b4f0e4cf",
+      "source_repository_id": "repo-laptop-specview",
+      "name": "sergii/specview",
+      "root": "/Users/sergii/repos/sergii/specview",
+      "fingerprint": {
+        "explicit_id": "specview:sergii/specview",
+        "name": "sergii/specview",
+        "git_remote": "git@github.com:sergii/specview.git",
+        "forge_provider": "github",
+        "forge_repository": "sergii/specview"
+      },
+      "active": true,
+      "agents": ["Codex"],
+      "sessions": [
+        {
+          "id": "codex-laptop-1",
+          "adapter": "codex",
+          "agent": "Codex",
+          "worktree_root": "/Users/sergii/repos/sergii/specview",
+          "cwd": "/Users/sergii/repos/sergii/specview",
+          "started_at": "2026-08-23T19:30:00Z"
+        }
+      ],
+      "worktrees": [
+        {
+          "path": "/Users/sergii/repos/sergii/specview",
+          "branch": "main",
+          "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "detached": false,
+          "dirty_count": 0,
+          "upstream": "origin/main",
+          "ahead": 0,
+          "behind": 0,
+          "last_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  ]
+}

@@ -36,16 +36,16 @@ type HostSnapshot struct {
 }
 
 type RepositoryInstance struct {
-	InstanceID        string                         `json:"instance_id"`
-	SourceRepositoryID string                        `json:"source_repository_id"`
-	Name              string                         `json:"name"`
-	Root              string                         `json:"root"`
-	Fingerprint       identity.RepositoryFingerprint `json:"fingerprint"`
-	Active            bool                           `json:"active"`
-	Agents            []string                       `json:"agents,omitempty"`
-	Sessions          []Session                      `json:"sessions"`
-	Worktrees         []Worktree                     `json:"worktrees"`
-	Warnings          []string                       `json:"warnings,omitempty"`
+	InstanceID         string                         `json:"instance_id"`
+	SourceRepositoryID string                         `json:"source_repository_id"`
+	Name               string                         `json:"name"`
+	Root               string                         `json:"root"`
+	Fingerprint        identity.RepositoryFingerprint `json:"fingerprint"`
+	Active             bool                           `json:"active"`
+	Agents             []string                       `json:"agents,omitempty"`
+	Sessions           []Session                      `json:"sessions"`
+	Worktrees          []Worktree                     `json:"worktrees"`
+	Warnings           []string                       `json:"warnings,omitempty"`
 }
 
 type Session struct {

@@ -41,6 +41,17 @@ func TestWorkEvidenceAcceptanceReadContracts(t *testing.T) {
 		}},
 	)
 
+	workItems, err := reader.ListWorkItems(context.Background(), repository.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(workItems.WorkItems) != 1 || workItems.WorkItems[0].WorkItemID != "H18" || workItems.WorkItems[0].Title != "H18 MCP" {
+		t.Fatalf("unexpected WorkItem discovery: %#v", workItems.WorkItems)
+	}
+	if workItems.WorkItems[0].Status != "in_progress" {
+		t.Fatalf("unexpected WorkItem discovery status: %#v", workItems.WorkItems[0])
+	}
+
 	workItem, err := reader.GetWorkItem(context.Background(), repository.ID, "H18")
 	if err != nil {
 		t.Fatal(err)

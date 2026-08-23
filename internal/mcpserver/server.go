@@ -26,6 +26,7 @@ type Reader interface {
 	GetRepository(context.Context, string) (controlplane.GetRepositoryResult, error)
 	ListActiveSessions(context.Context) (controlplane.ListActiveSessionsResult, error)
 	ListWorktrees(context.Context, string) (controlplane.ListWorktreesResult, error)
+	ListWorkItems(context.Context, string) (controlplane.ListWorkItemsResult, error)
 	GetWorkItem(context.Context, string, string) (controlplane.GetWorkItemResult, error)
 	GetEvidence(context.Context, string, string) (controlplane.GetEvidenceResult, error)
 	GetAcceptance(context.Context, string, string) (controlplane.GetAcceptanceResult, error)
@@ -61,12 +62,16 @@ type rpcError struct {
 }
 
 type initializeParams struct {
-	ProtocolVersion string `json:"protocolVersion"`
+	ProtocolVersion string         `json:"protocolVersion"`
+	Capabilities    map[string]any `json:"capabilities,omitempty"`
+	ClientInfo      map[string]any `json:"clientInfo,omitempty"`
+	Meta            map[string]any `json:"_meta,omitempty"`
 }
 
 type callToolParams struct {
 	Name      string          `json:"name"`
 	Arguments json.RawMessage `json:"arguments,omitempty"`
+	Meta      map[string]any  `json:"_meta,omitempty"`
 }
 
 type repositoryIDArgs struct {
@@ -222,6 +227,13 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (any, *rpcEr
 		}
 		value, readErr := s.reader.ListWorktrees(ctx, arguments.RepositoryID)
 		return toolResultFor(value, readErr), nil
+	case "list_work_items":
+		arguments, err := decodeRepositoryID(params.Arguments)
+		if err != nil {
+			return nil, invalidParams(params.Name, err)
+		}
+		value, readErr := s.reader.ListWorkItems(ctx, arguments.RepositoryID)
+		return toolResultFor(value, readErr), nil
 	case "get_work_item":
 		arguments, err := decodeWorkItemArgs(params.Arguments)
 		if err != nil {
@@ -278,7 +290,7 @@ func toolDefinitions() []map[string]any {
 			"repository_id": repositoryProperty,
 			"work_item_id": map[string]any{
 				"type":        "string",
-				"description": "Normalized WorkItem ID returned by the repository's Intent adapter.",
+				"description": "Normalized WorkItem ID returned by list_work_items.",
 			},
 		},
 		"required":             []string{"repository_id", "work_item_id"},
@@ -306,6 +318,12 @@ func toolDefinitions() []map[string]any {
 		{
 			"name":        "list_worktrees",
 			"description": "List Git worktrees and branch/revision/dirty state for one repository.",
+			"inputSchema": repositorySchema,
+			"annotations": readOnly,
+		},
+		{
+			"name":        "list_work_items",
+			"description": "List normalized WorkItems for one repository so agent clients can discover stable work_item_id values before requesting details.",
 			"inputSchema": repositorySchema,
 			"annotations": readOnly,
 		},

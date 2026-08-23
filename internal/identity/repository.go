@@ -95,8 +95,9 @@ func NormalizeRepositoryName(value string) string {
 		value = strings.ReplaceAll(value, "//", "/")
 	}
 	value = strings.Trim(value, "/")
+	value = strings.ToLower(value)
 	value = strings.TrimSuffix(value, ".git")
-	return strings.ToLower(value)
+	return value
 }
 
 func NormalizeGitRemote(value string) string {

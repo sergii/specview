@@ -105,13 +105,14 @@ PY
 
 responses=$(
   printf '%s\n' \
-    '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}' \
+    '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"binary-smoke","version":"1.0.0"}}}' \
     '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
     '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
     '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_repositories","arguments":{}}}' \
-    '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_work_item","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
-    '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_evidence","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
-    '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_acceptance","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
+    '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_work_items","arguments":{"repository_id":"repo-mcp-smoke"}}}' \
+    '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_work_item","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
+    '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_evidence","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
+    '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_acceptance","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
   | XDG_STATE_HOME="$state_home" "$binary" mcp
 )
 
@@ -120,10 +121,10 @@ import json
 import os
 
 lines = [line for line in os.environ["MCP_RESPONSES"].splitlines() if line.strip()]
-if len(lines) != 6:
-    raise SystemExit(f"expected 6 MCP responses, got {len(lines)}: {lines!r}")
+if len(lines) != 7:
+    raise SystemExit(f"expected 7 MCP responses, got {len(lines)}: {lines!r}")
 
-initialize, tools, repositories, work_item, evidence, acceptance = [json.loads(line) for line in lines]
+initialize, tools, repositories, work_items, work_item, evidence, acceptance = [json.loads(line) for line in lines]
 head = os.environ["GIT_HEAD"]
 revision = f"git:{head}"
 
@@ -138,6 +139,7 @@ expected = [
     "get_repository",
     "list_active_sessions",
     "list_worktrees",
+    "list_work_items",
     "get_work_item",
     "get_evidence",
     "get_acceptance",
@@ -164,6 +166,11 @@ def structured(response):
 repositories_value = structured(repositories)
 if not any(item.get("id") == "repo-mcp-smoke" for item in repositories_value.get("repositories", [])):
     raise SystemExit(f"fixture repository missing: {repositories_value!r}")
+
+work_items_value = structured(work_items)
+items = work_items_value.get("work_items", [])
+if len(items) != 1 or items[0].get("work_item_id") != "H18":
+    raise SystemExit(f"unexpected WorkItem discovery: {work_items_value!r}")
 
 work_item_value = structured(work_item)
 if work_item_value.get("work_item", {}).get("work_item_id") != "H18":

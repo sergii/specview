@@ -16,6 +16,33 @@ import (
 	"github.com/sergii/specview/internal/specs"
 )
 
+func (r *Reader) ListWorkItems(_ context.Context, repositoryID string) (ListWorkItemsResult, error) {
+	catalog, repository, err := r.repository(repositoryID)
+	if err != nil {
+		return ListWorkItemsResult{}, err
+	}
+	project, err := projectstate.Resolve(repository.Root)
+	if err != nil {
+		return ListWorkItemsResult{}, err
+	}
+	items, err := project.WorkItems()
+	if err != nil {
+		return ListWorkItemsResult{}, err
+	}
+
+	result := ListWorkItemsResult{
+		SchemaVersion:  SchemaVersion,
+		Host:           catalog.Hostname(),
+		RepositoryID:   repository.ID,
+		RepositoryName: repository.Name,
+		WorkItems:      make([]WorkItemListEntry, 0, len(items)),
+	}
+	for _, item := range items {
+		result.WorkItems = append(result.WorkItems, workItemListEntry(item))
+	}
+	return result, nil
+}
+
 func (r *Reader) GetWorkItem(_ context.Context, repositoryID, workItemID string) (GetWorkItemResult, error) {
 	catalog, repository, err := r.repository(repositoryID)
 	if err != nil {
@@ -121,6 +148,21 @@ func (r *Reader) repository(repositoryID string) (*hoststate.Catalog, hoststate.
 		return nil, hoststate.Repository{}, fmt.Errorf("repository %q not found", repositoryID)
 	}
 	return catalog, repository, nil
+}
+
+func workItemListEntry(item specs.Artifact) WorkItemListEntry {
+	result := WorkItemListEntry{
+		WorkItemID: item.WorkItemID,
+		Kind:       string(item.Kind),
+		Path:       item.Path,
+		Title:      item.Title,
+		Status:     string(item.Status),
+		Error:      item.Error,
+	}
+	if !item.ModifiedAt.IsZero() {
+		result.ModifiedAt = item.ModifiedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return result
 }
 
 func workItemSummary(item specs.Artifact) WorkItemSummary {

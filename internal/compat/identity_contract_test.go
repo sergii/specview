@@ -46,7 +46,7 @@ func TestConfigV1ExplicitProjectIdentityFixture(t *testing.T) {
 
 func TestRepositoryIdentityV1CorrelationFixture(t *testing.T) {
 	var fixture struct {
-		SchemaVersion int `json:"schema_version"`
+		SchemaVersion      int `json:"schema_version"`
 		RepositoryInstance struct {
 			HostID     string `json:"host_id"`
 			Root       string `json:"root"`

@@ -29,6 +29,7 @@ type Config struct {
 }
 
 type Project struct {
+	ID   string
 	Name string
 	Root string
 }
@@ -132,6 +133,8 @@ func Load(root string) (Config, error) {
 		switch section {
 		case "project":
 			switch key {
+			case "id":
+				cfg.Project.ID = value
 			case "name":
 				cfg.Project.Name = value
 			case "root":
@@ -206,6 +209,9 @@ func unquote(value string) string {
 func (c Config) Validate() error {
 	if c.Version != 1 {
 		return fmt.Errorf("unsupported version %d", c.Version)
+	}
+	if strings.ContainsAny(c.Project.ID, " \t\r\n") {
+		return errors.New("project.id must not contain whitespace")
 	}
 	if c.Project.Root == "" {
 		return errors.New("project.root is required")

@@ -19,7 +19,6 @@ const (
 	invalidRequestCode = -32600
 	methodNotFoundCode = -32601
 	invalidParamsCode  = -32602
-	internalErrorCode  = -32603
 )
 
 type Reader interface {
@@ -27,6 +26,9 @@ type Reader interface {
 	GetRepository(context.Context, string) (controlplane.GetRepositoryResult, error)
 	ListActiveSessions(context.Context) (controlplane.ListActiveSessionsResult, error)
 	ListWorktrees(context.Context, string) (controlplane.ListWorktreesResult, error)
+	GetWorkItem(context.Context, string, string) (controlplane.GetWorkItemResult, error)
+	GetEvidence(context.Context, string, string) (controlplane.GetEvidenceResult, error)
+	GetAcceptance(context.Context, string, string) (controlplane.GetAcceptanceResult, error)
 }
 
 type Server struct {
@@ -69,6 +71,11 @@ type callToolParams struct {
 
 type repositoryIDArgs struct {
 	RepositoryID string `json:"repository_id"`
+}
+
+type workItemArgs struct {
+	RepositoryID string `json:"repository_id"`
+	WorkItemID   string `json:"work_item_id"`
 }
 
 type toolResult struct {
@@ -175,7 +182,7 @@ func (s *Server) initialize(raw json.RawMessage) (any, *rpcError) {
 			"name":    "specview",
 			"version": s.version,
 		},
-		"instructions": "Specview exposes read-only deterministic facts about repositories, worktrees, and active coding-agent sessions on this host.",
+		"instructions": "Specview exposes read-only deterministic facts about repositories, work items, evidence, acceptance, worktrees, and active coding-agent sessions on this host.",
 	}, nil
 }
 
@@ -215,6 +222,27 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (any, *rpcEr
 		}
 		value, readErr := s.reader.ListWorktrees(ctx, arguments.RepositoryID)
 		return toolResultFor(value, readErr), nil
+	case "get_work_item":
+		arguments, err := decodeWorkItemArgs(params.Arguments)
+		if err != nil {
+			return nil, invalidParams(params.Name, err)
+		}
+		value, readErr := s.reader.GetWorkItem(ctx, arguments.RepositoryID, arguments.WorkItemID)
+		return toolResultFor(value, readErr), nil
+	case "get_evidence":
+		arguments, err := decodeWorkItemArgs(params.Arguments)
+		if err != nil {
+			return nil, invalidParams(params.Name, err)
+		}
+		value, readErr := s.reader.GetEvidence(ctx, arguments.RepositoryID, arguments.WorkItemID)
+		return toolResultFor(value, readErr), nil
+	case "get_acceptance":
+		arguments, err := decodeWorkItemArgs(params.Arguments)
+		if err != nil {
+			return nil, invalidParams(params.Name, err)
+		}
+		value, readErr := s.reader.GetAcceptance(ctx, arguments.RepositoryID, arguments.WorkItemID)
+		return toolResultFor(value, readErr), nil
 	default:
 		return toolResultFor(nil, fmt.Errorf("unknown Specview tool %q", params.Name)), nil
 	}
@@ -232,15 +260,28 @@ func toolDefinitions() []map[string]any {
 		"properties":           map[string]any{},
 		"additionalProperties": false,
 	}
+	repositoryProperty := map[string]any{
+		"type":        "string",
+		"description": "Opaque host-local repository ID returned by list_repositories.",
+	}
 	repositorySchema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"repository_id": map[string]any{
-				"type":        "string",
-				"description": "Opaque host-local repository ID returned by list_repositories.",
-			},
+			"repository_id": repositoryProperty,
 		},
 		"required":             []string{"repository_id"},
+		"additionalProperties": false,
+	}
+	workItemSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"repository_id": repositoryProperty,
+			"work_item_id": map[string]any{
+				"type":        "string",
+				"description": "Normalized WorkItem ID returned by the repository's Intent adapter.",
+			},
+		},
+		"required":             []string{"repository_id", "work_item_id"},
 		"additionalProperties": false,
 	}
 	return []map[string]any{
@@ -268,6 +309,24 @@ func toolDefinitions() []map[string]any {
 			"inputSchema": repositorySchema,
 			"annotations": readOnly,
 		},
+		{
+			"name":        "get_work_item",
+			"description": "Get one normalized WorkItem, including its Intent content and relationships.",
+			"inputSchema": workItemSchema,
+			"annotations": readOnly,
+		},
+		{
+			"name":        "get_evidence",
+			"description": "Get normalized revision-scoped Evidence records for one WorkItem, newest observations first.",
+			"inputSchema": workItemSchema,
+			"annotations": readOnly,
+		},
+		{
+			"name":        "get_acceptance",
+			"description": "Evaluate and return deterministic Acceptance for one WorkItem against its exact current revision.",
+			"inputSchema": workItemSchema,
+			"annotations": readOnly,
+		},
 	}
 }
 
@@ -286,12 +345,31 @@ func decodeRepositoryID(raw json.RawMessage) (repositoryIDArgs, error) {
 	return arguments, nil
 }
 
+func decodeWorkItemArgs(raw json.RawMessage) (workItemArgs, error) {
+	var arguments workItemArgs
+	if len(raw) == 0 || string(raw) == "null" {
+		return arguments, errors.New("arguments.repository_id and arguments.work_item_id are required")
+	}
+	if err := decodeStrict(raw, &arguments); err != nil {
+		return arguments, err
+	}
+	arguments.RepositoryID = strings.TrimSpace(arguments.RepositoryID)
+	arguments.WorkItemID = strings.TrimSpace(arguments.WorkItemID)
+	if arguments.RepositoryID == "" {
+		return arguments, errors.New("arguments.repository_id is required")
+	}
+	if arguments.WorkItemID == "" {
+		return arguments, errors.New("arguments.work_item_id is required")
+	}
+	return arguments, nil
+}
+
 func requireEmptyArguments(raw json.RawMessage) error {
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil
 	}
 	var arguments map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &arguments); err != nil {
+	if err := decodeStrict(raw, &arguments); err != nil {
 		return err
 	}
 	if len(arguments) != 0 {
@@ -306,8 +384,12 @@ func decodeStrict(raw json.RawMessage, destination any) error {
 	if err := decoder.Decode(destination); err != nil {
 		return err
 	}
-	if decoder.More() {
-		return errors.New("multiple JSON values are not allowed")
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values are not allowed")
+		}
+		return err
 	}
 	return nil
 }
@@ -357,5 +439,3 @@ func errorResponse(id json.RawMessage, code int, message string, data any) respo
 func isNotification(id json.RawMessage) bool {
 	return len(id) == 0
 }
-
-var _ = internalErrorCode

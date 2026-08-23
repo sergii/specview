@@ -97,6 +97,29 @@ ssh://git@github.com/sergii/specview.git
 
 The normalized comparison value is an implementation-neutral identity hint, not a URL to display to the user.
 
+### Federation authority
+
+Federation does not create a new global source of truth for host-local facts.
+
+Each Host remains authoritative for facts it directly observes or owns:
+
+```text
+Host
+  RepositoryInstance filesystem root
+  local Git/worktree state
+  local execution sessions/processes
+  host-local activity timestamps
+  locally collected Evidence
+```
+
+A federation consumer may cache and project those facts, but cached remote state is always attributed to its source Host and observation time. It must not be rewritten as if it were locally observed.
+
+Logical Repository grouping is derived correlation state. It does not mutate the source RepositoryInstance identities. If correlation later changes from `match` to `conflict`, the original host-local facts remain intact and can be regrouped without data loss.
+
+Remote facts may become stale or unavailable. Staleness affects projection freshness, not historical identity. A disconnected Host is not interpreted as having zero active work unless the source Host explicitly reported that state.
+
+This extends ADR-001 authority-by-fact-type into the multi-host topology: federation aggregates authority, it does not replace it.
+
 ## Consequences
 
 - laptop and devbox can have stable identities independent of hostname;
@@ -105,6 +128,8 @@ The normalized comparison value is an implementation-neutral identity hint, not 
 - local-only repositories remain first-class;
 - explicit identity can resolve otherwise ambiguous same-name repositories;
 - accidental reuse of an explicit identity can be detected as a conflict;
+- stale remote snapshots cannot silently erase source-host state;
+- correlation can be recomputed without mutating source facts;
 - H20 can implement transport/synchronization without redefining identity semantics;
 - future Rust code can be checked against the same language-neutral correlation fixtures.
 

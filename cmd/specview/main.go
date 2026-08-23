@@ -13,6 +13,7 @@ import (
 	"github.com/sergii/specview/internal/config"
 	"github.com/sergii/specview/internal/hostindex"
 	"github.com/sergii/specview/internal/hoststate"
+	"github.com/sergii/specview/internal/identity"
 	"github.com/sergii/specview/internal/logging"
 	webui "github.com/sergii/specview/internal/web"
 )
@@ -205,6 +206,11 @@ func serve() error {
 	}
 	slog.Debug("resolved host state path", "path", statePath)
 
+	hostIdentity, err := identity.LoadOrCreateHostForCatalog(statePath)
+	if err != nil {
+		return err
+	}
+
 	catalog, err := hoststate.OpenCatalog(statePath)
 	if err != nil {
 		return err
@@ -258,6 +264,7 @@ func serve() error {
 	server := webui.NewHostServerWithSearch(catalog, hub, host, port, executions, repositorySearch)
 	address := fmt.Sprintf("http://%s:%d", host, port)
 	slog.Info("Specview host observer started",
+		"host_id", hostIdentity.ID,
 		"hostname", catalog.Hostname(),
 		"state", statePath,
 		"index", indexPath,

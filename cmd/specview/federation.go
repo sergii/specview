@@ -16,6 +16,8 @@ import (
 	"github.com/sergii/specview/internal/controlplane"
 	"github.com/sergii/specview/internal/federation"
 	"github.com/sergii/specview/internal/federationhttp"
+	"github.com/sergii/specview/internal/federationpeers"
+	"github.com/sergii/specview/internal/federationruntime"
 	"github.com/sergii/specview/internal/hoststate"
 	"github.com/sergii/specview/internal/identity"
 	"github.com/sergii/specview/internal/sourcecontrol"
@@ -23,7 +25,7 @@ import (
 
 func runFederation(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("federation command requires snapshot, aggregate, serve, pull, or peer")
+		return fmt.Errorf("federation command requires snapshot, aggregate, status, serve, pull, or peer")
 	}
 
 	switch args[0] {
@@ -37,6 +39,11 @@ func runFederation(args []string) error {
 			return fmt.Errorf("usage: specview federation aggregate <snapshot.json>...")
 		}
 		return writeFederationProjection(args[1:], os.Stdout)
+	case "status":
+		if len(args) != 1 {
+			return fmt.Errorf("usage: specview federation status")
+		}
+		return writeFederationStatus(context.Background(), os.Stdout)
 	case "serve":
 		if len(args) != 1 {
 			return fmt.Errorf("usage: specview federation serve")
@@ -78,6 +85,31 @@ func writeFederationSnapshot(ctx context.Context, destination io.Writer) error {
 		return err
 	}
 	return writeFederationJSON(destination, snapshot)
+}
+
+func writeFederationStatus(ctx context.Context, destination io.Writer) error {
+	statePath, err := hoststate.DefaultStatePath()
+	if err != nil {
+		return err
+	}
+	builder, err := localFederationBuilder()
+	if err != nil {
+		return err
+	}
+	store := federationpeers.NewObservationStore(federationpeers.ObservationDir(statePath))
+	projectionBuilder, err := federationruntime.NewProjectionBuilder(
+		builder,
+		federationpeers.RegistryPath(statePath),
+		store,
+	)
+	if err != nil {
+		return err
+	}
+	projection, err := projectionBuilder.Build(ctx)
+	if err != nil {
+		return err
+	}
+	return writeFederationJSON(destination, projection)
 }
 
 func serveFederationHTTP() error {

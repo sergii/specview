@@ -327,8 +327,8 @@ Examples:
   specview federation aggregate laptop.json devbox.json
   SPECVIEW_LOG_LEVEL=debug specview
 
-Federation HTTP serving is loopback-only. Use an authenticated private ingress such as
-Tailscale Serve or Cloudflare Tunnel + Access to make it reachable by another Host.
+Federation HTTP serving is loopback-only. Tailscale Serve is a supported H21 private ingress.
+Other authenticated proxies may require client credentials that federation pull does not yet send.
 
 The host dashboard does not require .specview.yaml. Project configuration remains
 an optional repository-level override.

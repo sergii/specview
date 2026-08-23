@@ -2,6 +2,7 @@ package federationhttp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,10 +18,10 @@ import (
 )
 
 const (
-	SnapshotPath     = "/v1/federation/snapshot"
-	DefaultAddress   = "127.0.0.1:7332"
-	DefaultMaxBytes  = int64(16 << 20)
-	DefaultTimeout   = 10 * time.Second
+	SnapshotPath    = "/v1/federation/snapshot"
+	DefaultAddress  = "127.0.0.1:7332"
+	DefaultMaxBytes = int64(16 << 20)
+	DefaultTimeout  = 10 * time.Second
 )
 
 type SnapshotSource interface {
@@ -59,21 +60,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		http.Error(w, "encode federation snapshot", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
-	if err := writeSnapshot(w, snapshot); err != nil {
-		return
-	}
-}
-
-func writeSnapshot(w io.Writer, snapshot federation.HostSnapshot) error {
-	data, err := federation.EncodeSnapshot(snapshot)
-	if err != nil {
-		return err
-	}
-	_, err = w.Write(data)
-	return err
+	_, _ = w.Write(append(data, '\n'))
 }
 
 type Client struct {

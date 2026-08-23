@@ -42,23 +42,46 @@ After v0.0.1, a dedicated catalog/index migration may introduce a new historical
 
 That change must be explicit because the persisted catalog and SQLite index are versioned data structures. It must not be smuggled into an unrelated feature slice.
 
-## Decision 2 - Heartbeat persistence is an implementation concern, not a browser event contract
+## Decision 2 - Heartbeat persistence is deferred after explicit characterization
 
-The Host observer currently updates in-memory `LastSeenAt` values during execution polling. The legacy JSON catalog may persist heartbeat-only updates more frequently than the rest of the material model requires.
+The Host observer updates in-memory `LastSeenAt` values during execution polling. The legacy JSON catalog currently persists a heartbeat-only observation as a new atomic catalog snapshot.
 
-The UI and SQLite layers already suppress heartbeat-only material changes through structural fingerprints. Therefore repeated Host catalog persistence is not part of the observable UI contract.
+H23 adds `TestCatalogHeartbeatPersistenceBaseline` to make that behavior explicit rather than assumed. With the current two-second Host execution scan interval, a continuously observed active Host can therefore perform up to:
 
-H23 must evaluate normal dogfooding disk behavior before the release is cut.
+```text
+30 catalog snapshots / minute
+1,800 catalog snapshots / hour
+```
 
-If heartbeat writes are materially noisy, H23 may add write coalescing/throttling without changing:
+The write rate is per catalog refresh, not multiplied by every browser client. The catalog is a small local JSON compatibility/history file written through a temporary file plus atomic rename. SQLite and browser material projections already suppress heartbeat-only changes through structural fingerprints, so this persistence does not create repeated SQLite rewrites or browser fragment refreshes.
 
+### v0.0.1 release decision
+
+Defer write coalescing until after v0.0.1.
+
+Reasoning:
+
+- the behavior is now covered by an explicit baseline test;
+- it does not change logical Execution semantics;
+- it does not amplify into browser or SQLite update traffic;
+- no correctness, safety, privacy, or observed release-gate failure is caused by it at current POC scale;
+- changing persistence cadence immediately before the first release would alter crash/restart history semantics without a migration-specific acceptance slice.
+
+The current behavior is not considered desirable long-term. It is accepted as bounded implementation debt for the first POC release.
+
+### Migration target
+
+After v0.0.1, add an explicit Host-catalog persistence slice that can coalesce or throttle heartbeat-only snapshots while preserving:
+
+- immediate persistence of repository/session lifecycle changes;
+- useful crash/restart history semantics;
 - execution discovery cadence;
 - logical session semantics;
 - Host material fingerprint semantics;
 - SQLite authority boundaries;
 - MCP/federation contracts.
 
-If normal disk behavior is negligible at v0.0.1 scale, the persistence optimization may be deferred. The decision must be recorded with evidence rather than assumed.
+The migration should replace the H23 baseline test with tests for the chosen coalescing semantics.
 
 ## Decision 3 - Repository `server` fields are legacy v1 compatibility fields
 
@@ -96,15 +119,16 @@ Removal of repository `server` fields requires either:
 - v0.0.1 avoids unnecessary schema churn immediately before release;
 - future migrations have explicit targets;
 - public MCP/federation contracts remain logical-session based;
-- Host-scoped configuration is not accidentally expanded inside repositories.
+- Host-scoped configuration is not accidentally expanded inside repositories;
+- heartbeat persistence debt is quantified and regression-characterized rather than hidden.
 
 ### Negative
 
 - the first release intentionally carries some internal compatibility debt;
 - the JSON catalog remains less elegant than the live Execution model;
-- heartbeat persistence still requires a measured release decision;
+- a continuously active Host may still rewrite the small JSON catalog every two seconds;
 - `.specview.yaml` v1 contains fields that are not the long-term Host configuration design.
 
 ## Release gate
 
-These items are not automatically release blockers. H23 becomes blocked only if acceptance testing shows a correctness, safety, privacy, portability, or material performance defect caused by one of them.
+These items are not release blockers for v0.0.1 unless later installed-product acceptance exposes a correctness, safety, privacy, portability, or material performance defect caused by one of them.

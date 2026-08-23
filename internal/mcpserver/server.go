@@ -1,0 +1,361 @@
+package mcpserver
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/sergii/specview/internal/controlplane"
+)
+
+const ProtocolVersion = "2025-11-25"
+
+const (
+	parseErrorCode     = -32700
+	invalidRequestCode = -32600
+	methodNotFoundCode = -32601
+	invalidParamsCode  = -32602
+	internalErrorCode  = -32603
+)
+
+type Reader interface {
+	ListRepositories(context.Context) (controlplane.ListRepositoriesResult, error)
+	GetRepository(context.Context, string) (controlplane.GetRepositoryResult, error)
+	ListActiveSessions(context.Context) (controlplane.ListActiveSessionsResult, error)
+	ListWorktrees(context.Context, string) (controlplane.ListWorktreesResult, error)
+}
+
+type Server struct {
+	reader  Reader
+	version string
+}
+
+func New(reader Reader, version string) *Server {
+	return &Server{reader: reader, version: version}
+}
+
+type request struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+}
+
+type response struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Result  any             `json:"result,omitempty"`
+	Error   *rpcError       `json:"error,omitempty"`
+}
+
+type rpcError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
+}
+
+type initializeParams struct {
+	ProtocolVersion string `json:"protocolVersion"`
+}
+
+type callToolParams struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments,omitempty"`
+}
+
+type repositoryIDArgs struct {
+	RepositoryID string `json:"repository_id"`
+}
+
+type toolResult struct {
+	Content           []content `json:"content"`
+	StructuredContent any       `json:"structuredContent,omitempty"`
+	IsError           bool      `json:"isError,omitempty"`
+}
+
+type content struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+func (s *Server) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
+	if s.reader == nil {
+		return errors.New("MCP reader is required")
+	}
+
+	scanner := bufio.NewScanner(in)
+	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
+	encoder := json.NewEncoder(out)
+	encoder.SetEscapeHTML(false)
+
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		if err := s.handleLine(ctx, encoder, []byte(line)); err != nil {
+			return err
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Server) handleLine(ctx context.Context, encoder *json.Encoder, line []byte) error {
+	var req request
+	if err := json.Unmarshal(line, &req); err != nil {
+		return encoder.Encode(errorResponse(nil, parseErrorCode, "Parse error", nil))
+	}
+	if req.JSONRPC != "2.0" || strings.TrimSpace(req.Method) == "" {
+		if isNotification(req.ID) {
+			return nil
+		}
+		return encoder.Encode(errorResponse(req.ID, invalidRequestCode, "Invalid Request", nil))
+	}
+
+	if isNotification(req.ID) {
+		s.handleNotification(req)
+		return nil
+	}
+
+	result, rpcErr := s.dispatch(ctx, req)
+	if rpcErr != nil {
+		return encoder.Encode(response{JSONRPC: "2.0", ID: req.ID, Error: rpcErr})
+	}
+	return encoder.Encode(response{JSONRPC: "2.0", ID: req.ID, Result: result})
+}
+
+func (s *Server) handleNotification(req request) {
+	// Legacy MCP clients send notifications/initialized after initialize.
+	// Unknown notifications are intentionally ignored because JSON-RPC does not
+	// permit a response to notifications.
+	_ = req
+}
+
+func (s *Server) dispatch(ctx context.Context, req request) (any, *rpcError) {
+	switch req.Method {
+	case "initialize":
+		return s.initialize(req.Params)
+	case "ping":
+		return map[string]any{}, nil
+	case "tools/list":
+		return map[string]any{"tools": toolDefinitions()}, nil
+	case "tools/call":
+		return s.callTool(ctx, req.Params)
+	default:
+		return nil, &rpcError{Code: methodNotFoundCode, Message: "Method not found"}
+	}
+}
+
+func (s *Server) initialize(raw json.RawMessage) (any, *rpcError) {
+	if len(raw) > 0 {
+		var params initializeParams
+		if err := decodeStrict(raw, &params); err != nil {
+			return nil, invalidParams("initialize", err)
+		}
+	}
+	return map[string]any{
+		"protocolVersion": ProtocolVersion,
+		"capabilities": map[string]any{
+			"tools": map[string]any{"listChanged": false},
+		},
+		"serverInfo": map[string]any{
+			"name":    "specview",
+			"version": s.version,
+		},
+		"instructions": "Specview exposes read-only deterministic facts about repositories, worktrees, and active coding-agent sessions on this host.",
+	}, nil
+}
+
+func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (any, *rpcError) {
+	var params callToolParams
+	if err := decodeStrict(raw, &params); err != nil {
+		return nil, invalidParams("tools/call", err)
+	}
+	if strings.TrimSpace(params.Name) == "" {
+		return nil, invalidParams("tools/call", errors.New("name is required"))
+	}
+
+	switch params.Name {
+	case "list_repositories":
+		if err := requireEmptyArguments(params.Arguments); err != nil {
+			return nil, invalidParams(params.Name, err)
+		}
+		value, err := s.reader.ListRepositories(ctx)
+		return toolResultFor(value, err), nil
+	case "get_repository":
+		arguments, err := decodeRepositoryID(params.Arguments)
+		if err != nil {
+			return nil, invalidParams(params.Name, err)
+		}
+		value, readErr := s.reader.GetRepository(ctx, arguments.RepositoryID)
+		return toolResultFor(value, readErr), nil
+	case "list_active_sessions":
+		if err := requireEmptyArguments(params.Arguments); err != nil {
+			return nil, invalidParams(params.Name, err)
+		}
+		value, err := s.reader.ListActiveSessions(ctx)
+		return toolResultFor(value, err), nil
+	case "list_worktrees":
+		arguments, err := decodeRepositoryID(params.Arguments)
+		if err != nil {
+			return nil, invalidParams(params.Name, err)
+		}
+		value, readErr := s.reader.ListWorktrees(ctx, arguments.RepositoryID)
+		return toolResultFor(value, readErr), nil
+	default:
+		return toolResultFor(nil, fmt.Errorf("unknown Specview tool %q", params.Name)), nil
+	}
+}
+
+func toolDefinitions() []map[string]any {
+	readOnly := map[string]any{
+		"readOnlyHint":    true,
+		"destructiveHint": false,
+		"idempotentHint":  true,
+		"openWorldHint":   false,
+	}
+	emptySchema := map[string]any{
+		"type":                 "object",
+		"properties":           map[string]any{},
+		"additionalProperties": false,
+	}
+	repositorySchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"repository_id": map[string]any{
+				"type":        "string",
+				"description": "Opaque host-local repository ID returned by list_repositories.",
+			},
+		},
+		"required":             []string{"repository_id"},
+		"additionalProperties": false,
+	}
+	return []map[string]any{
+		{
+			"name":        "list_repositories",
+			"description": "List repositories known on this Specview host, combining persisted history with live agent execution state.",
+			"inputSchema": emptySchema,
+			"annotations": readOnly,
+		},
+		{
+			"name":        "get_repository",
+			"description": "Get one repository with live agent state plus degradable Git and forge context.",
+			"inputSchema": repositorySchema,
+			"annotations": readOnly,
+		},
+		{
+			"name":        "list_active_sessions",
+			"description": "List active coding-agent execution sessions observed on this host.",
+			"inputSchema": emptySchema,
+			"annotations": readOnly,
+		},
+		{
+			"name":        "list_worktrees",
+			"description": "List Git worktrees and branch/revision/dirty state for one repository.",
+			"inputSchema": repositorySchema,
+			"annotations": readOnly,
+		},
+	}
+}
+
+func decodeRepositoryID(raw json.RawMessage) (repositoryIDArgs, error) {
+	var arguments repositoryIDArgs
+	if len(raw) == 0 || string(raw) == "null" {
+		return arguments, errors.New("arguments.repository_id is required")
+	}
+	if err := decodeStrict(raw, &arguments); err != nil {
+		return arguments, err
+	}
+	arguments.RepositoryID = strings.TrimSpace(arguments.RepositoryID)
+	if arguments.RepositoryID == "" {
+		return arguments, errors.New("arguments.repository_id is required")
+	}
+	return arguments, nil
+}
+
+func requireEmptyArguments(raw json.RawMessage) error {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var arguments map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &arguments); err != nil {
+		return err
+	}
+	if len(arguments) != 0 {
+		return errors.New("tool does not accept arguments")
+	}
+	return nil
+}
+
+func decodeStrict(raw json.RawMessage, destination any) error {
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(destination); err != nil {
+		return err
+	}
+	if decoder.More() {
+		return errors.New("multiple JSON values are not allowed")
+	}
+	return nil
+}
+
+func toolResultFor(value any, err error) toolResult {
+	if err != nil {
+		return toolResult{
+			Content: []content{{Type: "text", Text: err.Error()}},
+			IsError: true,
+		}
+	}
+	encoded, marshalErr := json.MarshalIndent(value, "", "  ")
+	if marshalErr != nil {
+		return toolResult{
+			Content: []content{{Type: "text", Text: marshalErr.Error()}},
+			IsError: true,
+		}
+	}
+	return toolResult{
+		Content:           []content{{Type: "text", Text: string(encoded)}},
+		StructuredContent: value,
+	}
+}
+
+func invalidParams(method string, err error) *rpcError {
+	return &rpcError{
+		Code:    invalidParamsCode,
+		Message: "Invalid params",
+		Data: map[string]any{
+			"method": method,
+			"error":  err.Error(),
+		},
+	}
+}
+
+func errorResponse(id json.RawMessage, code int, message string, data any) response {
+	if len(id) == 0 {
+		id = json.RawMessage("null")
+	}
+	return response{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error:   &rpcError{Code: code, Message: message, Data: data},
+	}
+}
+
+func isNotification(id json.RawMessage) bool {
+	return len(id) == 0
+}
+
+var _ = internalErrorCode

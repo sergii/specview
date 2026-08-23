@@ -50,13 +50,27 @@ Repository config may be read to obtain optional H19 `project.id` identity hints
 
 For the POC:
 
-- newest snapshot wins when several snapshots have the same Host ID;
+- newest `observed_at` snapshot wins when several snapshots have the same Host ID;
+- equal timestamps with different content fail explicitly instead of depending on input order;
 - all source timestamps remain visible;
 - ADR-008 repository correlation decides whether instances can group;
-- `ambiguous` does not merge by itself;
-- `distinct` and `conflict` block grouping;
-- a candidate can join a group only if at least one comparison is `match` and none are `distinct`/`conflict`;
-- no durable global logical Repository ID is invented yet.
+- a RepositoryInstance joins a group only if it is `match` against every existing group member;
+- `ambiguous`, `distinct`, or `conflict` against any group member blocks the join;
+- a candidate that fully matches more than one already-distinct group remains separate and surfaces ambiguity rather than bridging those groups transitively;
+- no durable global logical Repository ID is invented yet;
+- `group_id` is derived projection state for the exact current member set, not canonical Repository identity.
+
+## Executable POC
+
+The first transport is intentionally file/stdout based:
+
+```text
+specview federation snapshot > laptop.json
+specview federation snapshot > devbox.json
+specview federation aggregate laptop.json devbox.json
+```
+
+This makes H20 usable between two real machines through a manual copy or `scp` while keeping the snapshot contract independent from future HTTP/WebSocket/Tailscale/Cloudflare transport.
 
 ## Contract fixtures
 
@@ -66,7 +80,8 @@ Add language-neutral fixtures for:
 2. DevBox HostSnapshot v1;
 3. expected two-host federated projection;
 4. same-name ambiguous repositories that remain separate;
-5. contradictory explicit identity that remains a conflict.
+5. contradictory explicit identity that remains a conflict;
+6. a transitive bridge case that must not collapse explicitly distinct groups.
 
 These fixtures must be consumable by a future Rust implementation.
 
@@ -80,14 +95,18 @@ These fixtures must be consumable by a future Rust implementation.
 - [ ] sessions stay attached to the correct source RepositoryInstance;
 - [ ] Git worktrees stay attached to the correct source RepositoryInstance;
 - [ ] multiple snapshots from one Host resolve to the newest snapshot for current projection;
+- [ ] same-time conflicting Host snapshots fail explicitly;
 - [ ] laptop + DevBox matching instances group into one derived logical repository;
 - [ ] the grouped projection still exposes both Host IDs and both local roots;
 - [ ] same-name-only repositories remain separate/ambiguous;
 - [ ] contradictory evidence never silently merges instances;
+- [ ] transitive correlation cannot bridge already-distinct groups;
 - [ ] language-neutral snapshot and aggregation fixtures are tested;
+- [ ] `specview federation snapshot` emits valid HostSnapshot v1 JSON;
+- [ ] `specview federation aggregate` consumes snapshot files and emits the derived projection;
 - [ ] existing H18 MCP v1 contract remains unchanged;
 - [ ] existing catalog v1 and Host identity v1 contracts remain unchanged;
-- [ ] gofmt, module, vet, race, coverage, MCP binary, browser, and release gates pass.
+- [ ] gofmt, module, vet, race, coverage, MCP binary, federation binary, browser, and release gates pass.
 
 ## Out of scope
 

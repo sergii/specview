@@ -19,6 +19,9 @@ mcp/v1-list-work-items.json                   MCP WorkItem discovery structured 
 mcp/v1-get-work-item.json                     MCP WorkItem detail structured content
 mcp/v1-get-evidence.json                      MCP Evidence structured content
 mcp/v1-get-acceptance.json                    MCP Acceptance structured content
+federation/v1-laptop.json                     HostSnapshot v1 from a laptop
+federation/v1-devbox.json                     HostSnapshot v1 from a DevBox
+federation/v1-projection.json                 derived two-host federation projection v1
 ```
 
 The current Go implementation must consume these fixtures in CI. A future Rust implementation must consume the same fixtures before it can replace the Go implementation.
@@ -30,5 +33,8 @@ Rules:
 - Introduce a new contract version or explicit migration when semantics are incompatible.
 - Future public CLI JSON, MCP schemas, and federation formats must add their own versioned fixtures when they become contracts.
 - Repository correlation fixtures are safety contracts: an implementation must never upgrade `ambiguous`, `distinct`, or `conflict` to `match` merely to make federation more convenient.
+- Federation snapshots preserve source Host identity and observation time. A projection may correlate snapshots, but it must not erase source attribution.
+- When several snapshots from one Host are supplied for a current projection, the newest `observed_at` wins. Equal timestamps with conflicting content are invalid rather than order-dependent.
+- A federation `group_id` is derived projection state for an exact member set, not a durable global Repository identity.
 
 These fixtures intentionally do not freeze HTML, CSS, Go structs, package names, SQLite schema internals, or a future federation transport that has not yet been designed.

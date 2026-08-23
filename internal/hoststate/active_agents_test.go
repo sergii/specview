@@ -7,10 +7,10 @@ import (
 
 func TestRepositoryActiveAgentsCollapsesProcessMultiplicity(t *testing.T) {
 	repo := Repository{Sessions: []Session{
-		{Agent: "Codex", PID: 101, Active: true},
-		{Agent: "Claude", PID: 202, Active: true},
-		{Agent: "Codex", PID: 303, Active: true},
-		{Agent: "Cursor", PID: 404, Active: false},
+		{Agent: "Codex", ProcessIDs: []int{101}, Active: true},
+		{Agent: "Claude", ProcessIDs: []int{202}, Active: true},
+		{Agent: "Codex", ProcessIDs: []int{303}, Active: true},
+		{Agent: "Cursor", ProcessIDs: []int{404}, Active: false},
 	}}
 
 	want := []string{"Claude", "Codex"}

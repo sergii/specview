@@ -95,8 +95,8 @@ func TestCatalogV1ContractFixture(t *testing.T) {
 		t.Fatalf("sessions = %d, want 1", len(repository.Sessions))
 	}
 	session := repository.Sessions[0]
-	if session.ID != "session-contract-v1" || session.Agent != "Codex" || session.PID != 4242 || !session.Active {
-		t.Fatalf("unexpected session contract: %#v", session)
+	if session.ID != "session-contract-v1" || session.IdentityKind != hoststate.SessionIdentityLegacyPID || session.Adapter != "codex" || session.Agent != "Codex" || len(session.ProcessIDs) != 1 || session.ProcessIDs[0] != 4242 || !session.Active {
+		t.Fatalf("unexpected migrated v1 session contract: %#v", session)
 	}
 }
 

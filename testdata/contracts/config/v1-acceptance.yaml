@@ -1,0 +1,18 @@
+version: 1
+project:
+  name: "Contract Demo"
+  root: "."
+specs:
+  adapter: specview
+  path: specs
+  pattern: "*.md"
+acceptance:
+  required:
+    - unit-tests
+    - lint
+    - hardware-in-loop
+  allow_skipped:
+    - hardware-in-loop
+server:
+  host: 127.0.0.1
+  port: 7331

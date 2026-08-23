@@ -1,6 +1,6 @@
 ---
 specview:
-  status: in_progress
+  status: done
 ---
 
 # H23 - Federation Runtime and Multi-Host Projection
@@ -11,16 +11,18 @@ Keep configured federation peers current while `specview serve` is running and e
 
 ## Runtime
 
-The initial polling runtime:
+The polling runtime:
 
 - re-opens the Host-level peer registry on every cycle;
 - refreshes every currently configured peer through the H22 `Refresher`;
 - preserves H22 success/failure and credential-redaction behavior;
 - isolates peer failures;
-- has a conservative fixed polling interval;
-- can notify the host observer when material peer state changes.
+- uses a conservative fixed polling interval;
+- notifies the host observer only when peer material changes.
 
 Re-opening the registry each cycle means a separate `specview federation peer add/remove` process is observed without restarting `specview serve`.
+
+Material-change notification excludes transport-only attempt timestamps, preventing periodic polling from causing unnecessary UI reloads when peer facts are unchanged.
 
 ## Multi-host projection
 
@@ -41,7 +43,7 @@ Rules:
 - remote freshness metadata does not rewrite source HostSnapshot fields;
 - correlation remains the unchanged H20 all-pairs-safe algorithm.
 
-## Initial public surface
+## Public surface
 
 H23 adds:
 
@@ -55,21 +57,40 @@ which emits a versioned deterministic JSON projection suitable for black-box tes
 
 ## Acceptance criteria
 
-- [ ] polling runtime re-opens peer registry every cycle;
-- [ ] peer add/remove can be observed without restarting the runtime;
-- [ ] peer failures are isolated from other peers;
-- [ ] H22 credential/redaction behavior is reused unchanged;
-- [ ] local Host is always represented by a freshly built snapshot;
-- [ ] cached remote snapshots remain in projection when a peer is unreachable;
-- [ ] never-retrieved peers appear without invented repository facts;
-- [ ] source freshness is explicit and deterministic;
-- [ ] H20 aggregator is reused without changing correlation semantics;
-- [ ] `specview federation status` emits deterministic versioned JSON;
-- [ ] language-neutral multi-host projection fixture is consumed in CI;
-- [ ] built-binary test covers local + remote fresh + unreachable cached + never-retrieved cases;
-- [ ] `specview serve` runs polling with clean cancellation;
-- [ ] H18-H22 contracts remain compatible;
-- [ ] full gofmt/module/vet/race/coverage/binary/browser/release CI passes.
+- [x] polling runtime re-opens peer registry every cycle;
+- [x] peer add/remove can be observed without restarting the runtime;
+- [x] peer failures are isolated from other peers;
+- [x] H22 credential/redaction behavior is reused unchanged;
+- [x] local Host is always represented by a freshly built snapshot;
+- [x] cached remote snapshots remain in projection when a peer is unreachable;
+- [x] never-retrieved peers appear without invented repository facts;
+- [x] source freshness is explicit and deterministic;
+- [x] H20 aggregator is reused without changing correlation semantics;
+- [x] `specview federation status` emits deterministic versioned JSON;
+- [x] language-neutral multi-host projection fixture is consumed in CI;
+- [x] built-binary test covers local + remote fresh + unreachable cached + never-retrieved cases;
+- [x] `specview serve` performs an initial peer poll and shuts polling down cleanly;
+- [x] host observer notifications occur only on material federation changes;
+- [x] H18-H22 contracts remain compatible;
+- [x] full gofmt/module/vet/race/coverage/binary/browser/release CI passes.
+
+## Verification baseline
+
+Functional head `85a469f314abd781656eca0522991bf48d7dd38e` passed CI #993 with:
+
+- gofmt and module hygiene;
+- go vet;
+- race tests;
+- 63.4% total production statement coverage;
+- 80.0% `internal/federationruntime` coverage;
+- build;
+- MCP binary stdio smoke;
+- federation file/CLI binary smoke;
+- federation HTTP binary smoke;
+- federation peer lifecycle binary smoke;
+- federation runtime/status binary smoke, including fresh, unreachable-cached, never-retrieved, initial polling, and clean process shutdown;
+- Chromium semantic E2E;
+- release archives.
 
 ## Out of scope
 
@@ -85,4 +106,4 @@ which emits a versioned deterministic JSON projection suitable for black-box tes
 
 ## Next
 
-Once H23 proves the runtime/projection boundary, the same read model can be exposed in the host Web UI and MCP without duplicating federation logic.
+The same multi-host read model can now be exposed in the host Web UI and MCP without duplicating federation logic.

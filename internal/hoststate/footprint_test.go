@@ -10,9 +10,9 @@ import (
 
 func TestFormatFootprintBytes(t *testing.T) {
 	tests := map[int64]string{
-		300 * 1024:             "300 KB",
-		2 * 1024 * 1024:        "2 MB",
-		812 * 1024 * 1024:      "812 MB",
+		300 * 1024:                   "300 KB",
+		2 * 1024 * 1024:              "2 MB",
+		812 * 1024 * 1024:            "812 MB",
 		15 * 1024 * 1024 * 1024 / 10: "1.5 GB",
 	}
 	for input, want := range tests {

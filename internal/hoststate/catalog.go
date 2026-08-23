@@ -16,7 +16,10 @@ import (
 	"github.com/sergii/specview/internal/config"
 )
 
-const catalogVersion = 1
+const (
+	catalogVersion           = 1
+	heartbeatPersistInterval = 30 * time.Second
+)
 
 type Observation struct {
 	Agent          string
@@ -103,8 +106,10 @@ type Catalog struct {
 	hostname string
 	detect   Detector
 
-	mu    sync.RWMutex
-	repos map[string]*Repository
+	mu              sync.RWMutex
+	repos           map[string]*Repository
+	lastPersistedAt time.Time
+	heartbeatDirty  bool
 }
 
 func DefaultStatePath() (string, error) {
@@ -200,6 +205,8 @@ func (c *Catalog) Observe(observations []Observation, now time.Time) (bool, erro
 
 	activeKeys := make(map[string]struct{})
 	changed := false
+	materialChanged := false
+	heartbeatChanged := false
 
 	for _, observation := range observations {
 		root := filepath.Clean(observation.RepositoryRoot)
@@ -218,6 +225,7 @@ func (c *Catalog) Observe(observations []Observation, now time.Time) (bool, erro
 			}
 			c.repos[repoID] = repo
 			changed = true
+			materialChanged = true
 		}
 
 		convention, err := c.detect(root)
@@ -226,11 +234,13 @@ func (c *Catalog) Observe(observations []Observation, now time.Time) (bool, erro
 				repo.DetectionError = err.Error()
 				repo.Convention = config.Convention{}
 				changed = true
+				materialChanged = true
 			}
 		} else if repo.Convention != convention || repo.DetectionError != "" {
 			repo.Convention = convention
 			repo.DetectionError = ""
 			changed = true
+			materialChanged = true
 		}
 
 		key := activeSessionKey(repoID, observation.Agent, observation.PID)
@@ -253,16 +263,19 @@ func (c *Catalog) Observe(observations []Observation, now time.Time) (bool, erro
 				Active:     true,
 			})
 			changed = true
+			materialChanged = true
 		} else {
 			session := &repo.Sessions[sessionIndex]
 			if !session.LastSeenAt.Equal(now) {
 				session.LastSeenAt = now
 				changed = true
+				heartbeatChanged = true
 			}
 		}
 		if repo.LastSeenAt.Before(now) {
 			repo.LastSeenAt = now
 			changed = true
+			heartbeatChanged = true
 		}
 	}
 
@@ -279,19 +292,47 @@ func (c *Catalog) Observe(observations []Observation, now time.Time) (bool, erro
 			session.Active = false
 			session.EndedAt = &ended
 			changed = true
+			materialChanged = true
 		}
 	}
 
-	if changed {
-		if err := c.saveLocked(); err != nil {
+	switch {
+	case materialChanged:
+		if err := c.saveLocked(now); err != nil {
 			return false, err
+		}
+		c.heartbeatDirty = false
+	case heartbeatChanged:
+		c.heartbeatDirty = true
+		if c.lastPersistedAt.IsZero() || !now.Before(c.lastPersistedAt.Add(heartbeatPersistInterval)) {
+			if err := c.saveLocked(now); err != nil {
+				return false, err
+			}
+			c.heartbeatDirty = false
 		}
 	}
 	return changed, nil
 }
 
-func (c *Catalog) saveLocked() error {
+// Flush persists any coalesced heartbeat state. Material lifecycle changes are
+// already persisted synchronously by Observe, so a clean Flush is a no-op.
+func (c *Catalog) Flush() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.heartbeatDirty {
+		return nil
+	}
+	if err := c.saveLocked(time.Now()); err != nil {
+		return err
+	}
+	c.heartbeatDirty = false
+	return nil
+}
+
+func (c *Catalog) saveLocked(persistedAt time.Time) error {
 	if c.path == "" {
+		c.lastPersistedAt = persistedAt
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(c.path), 0o700); err != nil {
@@ -315,7 +356,11 @@ func (c *Catalog) saveLocked() error {
 	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, c.path)
+	if err := os.Rename(tmp, c.path); err != nil {
+		return err
+	}
+	c.lastPersistedAt = persistedAt
+	return nil
 }
 
 func repositoryDisplayName(root string) string {

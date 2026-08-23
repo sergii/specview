@@ -154,10 +154,37 @@ func TestAggregateDoesNotBridgeDistinctGroupsTransitively(t *testing.T) {
 	}
 }
 
-func TestAggregateRejectsDuplicateHostSnapshots(t *testing.T) {
-	snapshot := loadSnapshotFixture(t, "v1-laptop.json")
-	if _, err := NewAggregator().Aggregate(snapshot, snapshot); err == nil {
-		t.Fatal("expected duplicate Host snapshots to fail")
+func TestAggregateUsesNewestSnapshotPerHost(t *testing.T) {
+	current := loadSnapshotFixture(t, "v1-laptop.json")
+	old := current
+	old.ObservedAt = current.ObservedAt.Add(-time.Minute)
+	old.Hostname = "old-hostname"
+	old.Instances = append([]RepositoryInstance(nil), current.Instances...)
+	old.Instances[0].Agents = []string{"Old Agent"}
+	old.Instances[0].Sessions = []Session{{ID: "old-session", Adapter: "old", Agent: "Old Agent", CWD: old.Instances[0].Root}}
+
+	projection, err := NewAggregator().Aggregate(current, old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projection.Hosts) != 1 || projection.Hosts[0].Hostname != "sergii-macbook" {
+		t.Fatalf("newest Host snapshot was not selected: %#v", projection.Hosts)
+	}
+	if len(projection.Repositories) != 1 || len(projection.Repositories[0].Instances) != 1 {
+		t.Fatalf("old Host snapshot leaked into current projection: %#v", projection.Repositories)
+	}
+	instance := projection.Repositories[0].Instances[0]
+	if len(instance.Sessions) != 1 || instance.Sessions[0].ID != "codex-laptop-1" {
+		t.Fatalf("old sessions leaked into current projection: %#v", instance.Sessions)
+	}
+}
+
+func TestAggregateRejectsConflictingSnapshotsAtSameObservationTime(t *testing.T) {
+	left := loadSnapshotFixture(t, "v1-laptop.json")
+	right := left
+	right.Hostname = "different-hostname"
+	if _, err := NewAggregator().Aggregate(left, right); err == nil {
+		t.Fatal("expected conflicting same-time Host snapshots to fail")
 	}
 }
 

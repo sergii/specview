@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -211,7 +210,7 @@ func nextPeerFlagValue(args []string, index *int) (string, bool) {
 	if *index+1 >= len(args) {
 		return "", false
 	}
-	*index++
+	*index = *index + 1
 	value := strings.TrimSpace(args[*index])
 	return value, value != ""
 }
@@ -222,7 +221,7 @@ func parseStaleAfter(raw string) (int, error) {
 		return 0, fmt.Errorf("invalid --stale-after %q; use a positive whole-second duration such as 5m or 1h", raw)
 	}
 	seconds := duration / time.Second
-	if seconds > time.Duration(^uint(0)>>1) {
+	if seconds > time.Duration(int(^uint(0)>>1)) {
 		return 0, errors.New("--stale-after is too large")
 	}
 	return int(seconds), nil
@@ -243,19 +242,19 @@ func addHeaderEnvRef(refs map[string]string, raw string) error {
 }
 
 type peerStatusOutput struct {
-	Name               string                   `json:"name"`
-	URL                string                   `json:"url"`
-	ExpectedHostID     string                   `json:"expected_host_id"`
-	StaleAfterSeconds  int                      `json:"stale_after_seconds"`
-	CredentialType     string                   `json:"credential_type,omitempty"`
-	CredentialRefs     map[string]string        `json:"credential_refs,omitempty"`
-	Status             federationpeers.Freshness `json:"status"`
-	RetrievedAt        *time.Time               `json:"retrieved_at,omitempty"`
-	LastAttemptAt      *time.Time               `json:"last_attempt_at,omitempty"`
-	LastSuccessAt      *time.Time               `json:"last_success_at,omitempty"`
-	LastError          string                   `json:"last_error,omitempty"`
-	SourceAgeSeconds   int64                    `json:"source_age_seconds,omitempty"`
-	Snapshot           *federation.HostSnapshot `json:"snapshot,omitempty"`
+	Name              string                    `json:"name"`
+	URL               string                    `json:"url"`
+	ExpectedHostID    string                    `json:"expected_host_id"`
+	StaleAfterSeconds int                       `json:"stale_after_seconds"`
+	CredentialType    string                    `json:"credential_type,omitempty"`
+	CredentialRefs    map[string]string         `json:"credential_refs,omitempty"`
+	Status            federationpeers.Freshness `json:"status"`
+	RetrievedAt       *time.Time                `json:"retrieved_at,omitempty"`
+	LastAttemptAt     *time.Time                `json:"last_attempt_at,omitempty"`
+	LastSuccessAt     *time.Time                `json:"last_success_at,omitempty"`
+	LastError         string                    `json:"last_error,omitempty"`
+	SourceAgeSeconds  int64                     `json:"source_age_seconds,omitempty"`
+	Snapshot          *federation.HostSnapshot  `json:"snapshot,omitempty"`
 }
 
 func makePeerStatusOutput(status federationpeers.PeerStatus) peerStatusOutput {
@@ -285,12 +284,4 @@ func makePeerStatusOutput(status federationpeers.PeerStatus) peerStatusOutput {
 		}
 	}
 	return output
-}
-
-func parsePositiveInt(raw string) (int, error) {
-	value, err := strconv.Atoi(strings.TrimSpace(raw))
-	if err != nil || value <= 0 {
-		return 0, fmt.Errorf("invalid positive integer %q", raw)
-	}
-	return value, nil
 }

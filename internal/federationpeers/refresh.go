@@ -2,7 +2,10 @@ package federationpeers
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/sergii/specview/internal/federationhttp"
@@ -41,6 +44,7 @@ func (r *Refresher) Refresh(ctx context.Context, peer Peer) (PeerStatus, error) 
 
 	snapshot, err := r.client.FetchWithHeaders(ctx, peer.URL, peer.ExpectedHostID, headers)
 	if err != nil {
+		err = redactCredentialError(err, headers)
 		observation, recordErr := r.store.RecordFailure(peer, err, now)
 		if recordErr != nil {
 			return PeerStatus{}, recordErr
@@ -63,4 +67,20 @@ func (r *Refresher) Status(peer Peer) (PeerStatus, error) {
 		return PeerStatus{}, err
 	}
 	return ProjectStatus(peer, observation, r.now().UTC()), nil
+}
+
+func redactCredentialError(err error, headers http.Header) error {
+	if err == nil {
+		return nil
+	}
+	message := err.Error()
+	for _, values := range headers {
+		for _, value := range values {
+			if value == "" {
+				continue
+			}
+			message = strings.ReplaceAll(message, value, "[REDACTED]")
+		}
+	}
+	return errors.New(message)
 }

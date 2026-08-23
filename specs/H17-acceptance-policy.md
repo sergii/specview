@@ -154,21 +154,31 @@ Duplicate or blank logical check names are invalid policy.
 
 ## Configuration
 
-The first implementation lands the pure domain evaluator before configuration syntax.
+Acceptance requirements are optional durable project configuration in `.specview.yaml`.
 
-The follow-up in this H17 slice will expose required checks through durable project configuration while preserving the existing `.specview.yaml` versioning and validation contract.
-
-The configuration shape should remain provider-neutral. Conceptually:
+The initial syntax stays deliberately provider-neutral and small enough for the current strict config parser:
 
 ```yaml
 acceptance:
   required:
-    - check: unit-tests
-    - check: lint
-    - check: security
+    - unit-tests
+    - lint
+    - security
+    - hardware-in-loop
+  allow_skipped:
+    - hardware-in-loop
 ```
 
-Exact parser syntax is part of the configuration sub-slice and must be covered by compatibility tests before it is declared stable.
+Rules:
+
+- `required` contains stable logical check names;
+- `allow_skipped` is optional;
+- every `allow_skipped` check must also appear in `required`;
+- duplicate required or allow-skipped checks are invalid;
+- unknown Acceptance keys are rejected;
+- a config without `acceptance:` remains backward compatible and produces an unconfigured policy.
+
+The domain conversion preserves required-check order and maps `allow_skipped` into the corresponding normalized `Requirement`.
 
 ## UI projection
 
@@ -187,9 +197,23 @@ BLOCKED
 
 No drag-and-drop, status mutation, merge button, or automatic workflow advancement is introduced by H17.
 
+## Revision resolution safety
+
+Repository projection must not equate a dirty workspace with its Git HEAD.
+
+A clean Git worktree may use:
+
+```text
+git:<head-sha>
+```
+
+A dirty worktree requires a workspace revision/fingerprint or must remain unevaluable. Existing evidence for the clean HEAD must never be reused to mark modified local files as accepted.
+
+This fail-closed revision resolver is part of the repository-integration sub-slice.
+
 ## Implementation status
 
-Completed in the first H17 foundation commit:
+Completed:
 
 - `internal/acceptance` domain package;
 - normalized policy, requirement, decision, and check-state types;
@@ -199,16 +223,18 @@ Completed in the first H17 foundation commit:
 - blocked precedence;
 - explicit skipped policy;
 - invalid evidence fails closed;
-- unit tests for evaluator semantics.
+- unit tests for evaluator semantics;
+- durable `.specview.yaml` Acceptance configuration;
+- config compatibility and validation tests;
+- conversion from config to normalized Acceptance policy.
 
 Still to complete in H17:
 
-- durable `.specview.yaml` policy configuration;
-- config compatibility/validation tests;
+- safe current-revision resolution for clean vs dirty worktrees;
 - repository projection integration;
 - minimal Acceptance UI;
-- end-to-end evidence-to-acceptance acceptance test;
-- full CI/release gate.
+- end-to-end Evidence -> Acceptance acceptance test;
+- full CI/release gate on the completed slice.
 
 ## Acceptance criteria
 
@@ -222,10 +248,11 @@ Still to complete in H17:
 - [x] skipped is rejected unless the requirement explicitly allows it.
 - [x] no configured requirements produce `unconfigured`, not `accepted`.
 - [x] malformed policy fails explicitly.
-- [ ] project configuration can declare acceptance requirements.
+- [x] project configuration can declare acceptance requirements.
+- [ ] dirty worktrees cannot inherit Acceptance from clean HEAD evidence.
 - [ ] repository projection can evaluate the current revision against Evidence.
 - [ ] UI exposes the decision without becoming a workflow editor.
-- [ ] gofmt, module verification, go vet, race tests, build, and release cross-build pass.
+- [ ] gofmt, module verification, go vet, race tests, build, and release cross-build pass on the completed slice.
 
 ## Out of scope
 

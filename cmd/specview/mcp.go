@@ -8,6 +8,7 @@ import (
 
 	"github.com/sergii/specview/internal/controlplane"
 	"github.com/sergii/specview/internal/hoststate"
+	"github.com/sergii/specview/internal/identity"
 	"github.com/sergii/specview/internal/mcpserver"
 	"github.com/sergii/specview/internal/sourcecontrol"
 )
@@ -15,6 +16,9 @@ import (
 func serveMCP() error {
 	statePath, err := hoststate.DefaultStatePath()
 	if err != nil {
+		return err
+	}
+	if _, err := identity.LoadOrCreateHostForCatalog(statePath); err != nil {
 		return err
 	}
 

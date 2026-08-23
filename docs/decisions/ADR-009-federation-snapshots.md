@@ -78,14 +78,24 @@ It never mutates input snapshots.
 
 For the POC:
 
-1. if multiple snapshots from the same Host are supplied, only the newest snapshot from that Host participates in the current projection;
-2. RepositoryInstances are correlated with ADR-008;
-3. an instance can join an existing logical group only when at least one member is a `match` and no member comparison is `distinct` or `conflict`;
-4. `ambiguous` alone never causes a merge;
-5. conflicts remain separately visible rather than being silently collapsed;
-6. no durable global Repository ID is introduced in H20.
+1. if multiple snapshots from the same Host are supplied, only the newest `observed_at` snapshot from that Host participates in the current projection;
+2. equal timestamps with different snapshot content are invalid rather than resolved by input order;
+3. RepositoryInstances are correlated with ADR-008;
+4. an instance can join an existing logical group only when its correlation result is `match` against every existing member of that group;
+5. `ambiguous`, `distinct`, or `conflict` against any member prevents that group join;
+6. a candidate that fully matches more than one already-distinct group remains separate and surfaces ambiguity instead of bridging those groups transitively;
+7. conflicts remain separately visible rather than being silently collapsed;
+8. no durable global Repository ID is introduced in H20.
+
+The all-pairs rule is intentionally stricter than graph connectivity. A chain such as `A matches C` and `B matches C` must not merge A and B when A and B are explicitly distinct or conflicting.
 
 Logical grouping is therefore a projection that can be recomputed when new snapshots arrive.
+
+### Derived group IDs are not domain identity
+
+The projection may emit a deterministic `group_id` for one exact member set so callers can address a rendered group during that projection.
+
+That ID is derived from the member RepositoryInstance IDs. It may change when membership changes and must not be persisted as canonical Repository identity.
 
 ### Freshness is explicit
 
@@ -97,7 +107,14 @@ No snapshot disappearance is interpreted as zero activity. The last known snapsh
 
 ### Transport is intentionally deferred
 
-H20 can prove federation using JSON files and in-process aggregation. A later slice may carry the exact same HostSnapshot contract over HTTP or another transport.
+H20 can prove federation using JSON files and in-process aggregation. The executable boundary is intentionally simple:
+
+```text
+specview federation snapshot > laptop.json
+specview federation aggregate laptop.json devbox.json
+```
+
+A later slice may carry the exact same HostSnapshot contract over HTTP or another transport.
 
 Transport authentication, encryption, discovery, retries, and connectivity are separate concerns and must not redefine Repository correlation or source authority.
 
@@ -108,6 +125,7 @@ Transport authentication, encryption, discovery, retries, and connectivity are s
 - a shared database is not required for the first federation proof;
 - source Host authority is preserved;
 - stale remote state cannot masquerade as current local state;
+- transitive correlation cannot silently bridge explicitly distinct repositories;
 - the UI can eventually show one logical repository with multiple source-host instances and session counts;
 - HTTP/Tailscale/Cloudflare transport can be added later without changing the core snapshot format.
 

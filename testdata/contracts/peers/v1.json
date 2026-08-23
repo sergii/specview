@@ -2,12 +2,6 @@
   "version": 1,
   "peers": [
     {
-      "name": "devbox",
-      "url": "https://devbox.example.ts.net/v1/federation/snapshot",
-      "expected_host_id": "host:22222222-2222-4222-9222-222222222222",
-      "stale_after_seconds": 300
-    },
-    {
       "name": "cloud-devbox",
       "url": "https://specview-devbox.example.com/v1/federation/snapshot",
       "expected_host_id": "host:33333333-3333-4333-9333-333333333333",
@@ -19,6 +13,12 @@
           "CF-Access-Client-Secret": "SPECVIEW_CLOUDFLARE_CLIENT_SECRET"
         }
       }
+    },
+    {
+      "name": "devbox",
+      "url": "https://devbox.example.ts.net/v1/federation/snapshot",
+      "expected_host_id": "host:22222222-2222-4222-9222-222222222222",
+      "stale_after_seconds": 300
     }
   ]
 }

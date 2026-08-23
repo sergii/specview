@@ -26,6 +26,15 @@ func TestHostIdentityPersistsAcrossReopen(t *testing.T) {
 		t.Fatalf("created_at = %s", first.CreatedAt)
 	}
 
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = "{\n  \"version\": 1,\n  \"id\": \"host:11111111-1111-4111-9111-111111111111\",\n  \"created_at\": \"2026-08-23T19:00:00Z\"\n}\n"
+	if string(data) != want {
+		t.Fatalf("persisted host identity changed\nwant:\n%s\ngot:\n%s", want, data)
+	}
+
 	second, err := loadOrCreateHost(path, func() time.Time { return createdAt.Add(time.Hour) }, bytes.NewReader(bytes.Repeat([]byte{0x22}, 16)))
 	if err != nil {
 		t.Fatal(err)
@@ -36,19 +45,25 @@ func TestHostIdentityPersistsAcrossReopen(t *testing.T) {
 }
 
 func TestHostIdentityRejectsCorruptOrUnsupportedState(t *testing.T) {
-	for name, body := range map[string]string{
-		"invalid-json":        `not-json`,
-		"unknown-field":       `{"version":1,"id":"host:11111111-1111-4111-9111-111111111111","created_at":"2026-08-23T19:00:00Z","extra":true}`,
-		"unsupported-version": `{"version":2,"id":"host:11111111-1111-4111-9111-111111111111","created_at":"2026-08-23T19:00:00Z"}`,
-	} {
-		t.Run(name, func(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "invalid-json", body: `not-json`, want: "decode host identity"},
+		{name: "unknown-field", body: `{"version":1,"id":"host:11111111-1111-4111-9111-111111111111","created_at":"2026-08-23T19:00:00Z","extra":true}`, want: "unknown field"},
+		{name: "unsupported-version", body: `{"version":2,"id":"host:11111111-1111-4111-9111-111111111111","created_at":"2026-08-23T19:00:00Z"}`, want: "unsupported host identity version"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "host.json")
+			body := strings.ReplaceAll(tc.body, `\"`, `"`)
 			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			_, err := LoadOrCreateHost(path)
-			if err == nil {
-				t.Fatal("expected invalid persisted identity to fail")
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want substring %q", err, tc.want)
 			}
 		})
 	}

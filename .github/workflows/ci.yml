@@ -18,7 +18,7 @@ jobs:
           go-version: '1.26.5'
           cache: false
       - name: Check developer scripts
-        run: bash -n bin/dev bin/install bin/doctor scripts/test-mcp-stdio.sh scripts/test-federation-cli.sh
+        run: bash -n bin/dev bin/install bin/doctor scripts/test-mcp-stdio.sh scripts/test-federation-cli.sh scripts/test-federation-http.sh
       - name: Check formatting
         shell: bash
         run: |
@@ -46,6 +46,8 @@ jobs:
         run: bash scripts/test-mcp-stdio.sh ./specview
       - name: Federation CLI binary smoke
         run: bash scripts/test-federation-cli.sh ./specview
+      - name: Federation HTTP binary smoke
+        run: bash scripts/test-federation-http.sh ./specview
 
   browser-e2e:
     runs-on: ubuntu-latest

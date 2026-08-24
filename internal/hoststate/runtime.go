@@ -7,24 +7,53 @@ import (
 )
 
 type Runtime struct {
-	catalog  *Catalog
-	scanner  Scanner
-	interval time.Duration
-	onChange func()
+	catalog    *Catalog
+	scanner    Scanner
+	executions ExecutionSource
+	interval   time.Duration
+	onChange   func()
 }
 
 func NewRuntime(catalog *Catalog, scanner Scanner, interval time.Duration, onChange func()) *Runtime {
-	return &Runtime{
+	runtime := &Runtime{
 		catalog:  catalog,
 		scanner:  scanner,
 		interval: interval,
 		onChange: onChange,
 	}
+	if source, ok := scanner.(ExecutionSource); ok {
+		runtime.executions = source
+	}
+	return runtime
 }
 
 func (r *Runtime) Refresh() (int, error) {
 	started := time.Now()
 	slog.Debug("host activity refresh started")
+
+	if r.executions != nil {
+		sessions, err := r.executions.Sessions()
+		if err != nil {
+			slog.Error("logical execution scan failed", "error", err, "duration", time.Since(started))
+			return 0, err
+		}
+		slog.Debug("logical execution scan completed",
+			"sessions", len(sessions),
+			"duration", time.Since(started),
+		)
+		changed, err := r.catalog.ObserveExecutions(sessions, time.Now())
+		if err != nil {
+			slog.Error("host catalog logical execution update failed", "error", err, "sessions", len(sessions))
+			return len(sessions), err
+		}
+		r.broadcastChange(changed, len(sessions), "sessions")
+		slog.Debug("host activity refresh completed",
+			"sessions", len(sessions),
+			"catalog_changed", changed,
+			"duration", time.Since(started),
+		)
+		return len(sessions), nil
+	}
 
 	observations, err := r.scanner.Scan()
 	if err != nil {
@@ -41,19 +70,24 @@ func (r *Runtime) Refresh() (int, error) {
 		slog.Error("host catalog update failed", "error", err, "observations", len(observations))
 		return len(observations), err
 	}
-	if r.onChange != nil && (changed || len(observations) > 0) {
-		slog.Debug("broadcasting host activity change",
-			"catalog_changed", changed,
-			"observations", len(observations),
-		)
-		r.onChange()
-	}
+	r.broadcastChange(changed, len(observations), "observations")
 	slog.Debug("host activity refresh completed",
 		"observations", len(observations),
 		"catalog_changed", changed,
 		"duration", time.Since(started),
 	)
 	return len(observations), nil
+}
+
+func (r *Runtime) broadcastChange(changed bool, count int, unit string) {
+	if r.onChange == nil || (!changed && count == 0) {
+		return
+	}
+	slog.Debug("broadcasting host activity change",
+		"catalog_changed", changed,
+		unit, count,
+	)
+	r.onChange()
 }
 
 func (r *Runtime) Run(ctx context.Context) {

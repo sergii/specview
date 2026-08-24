@@ -1,6 +1,8 @@
 package executionhistory
 
 import (
+	"context"
+	"errors"
 	"sort"
 	"time"
 
@@ -30,6 +32,21 @@ type Entry struct {
 	LastSeenAt     time.Time  `json:"last_seen_at"`
 	EndedAt        *time.Time `json:"ended_at,omitempty"`
 	Active         bool       `json:"active"`
+}
+
+type Reader struct {
+	catalog *hoststate.Catalog
+}
+
+func NewReader(catalog *hoststate.Catalog) *Reader {
+	return &Reader{catalog: catalog}
+}
+
+func (r *Reader) Build(context.Context) (Projection, error) {
+	if r == nil || r.catalog == nil {
+		return Projection{}, errors.New("execution history catalog is required")
+	}
+	return Build(r.catalog.Hostname(), r.catalog.Repositories()), nil
 }
 
 func Build(hostname string, repositories []hoststate.Repository) Projection {

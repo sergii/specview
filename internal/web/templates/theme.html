@@ -28,7 +28,8 @@
   const setTheme = theme => { document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light'; try { localStorage.setItem('specview-theme', document.documentElement.dataset.theme); } catch (_) {} sync(); };
   for (const button of buttons) button.addEventListener('click', () => setTheme(button.dataset.themeChoice));
   const navLinks = Array.from(document.querySelectorAll('[data-host-nav]'));
-  const activeHostPath = window.location.pathname === '/history' ? '/history' : window.location.pathname === '/federation' ? '/federation' : '/';
+  const pathname = window.location.pathname;
+  const activeHostPath = pathname === '/history' ? '/history' : (pathname === '/federation' || pathname.startsWith('/federation/')) ? '/federation' : '/';
   for (const link of navLinks) {
     if (link.dataset.hostNav === activeHostPath) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
   }

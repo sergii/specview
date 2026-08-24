@@ -260,6 +260,11 @@ func serve() error {
 	}
 	go runtime.Run(ctx)
 
+	federationProjection, err := newFederationProjectionBuilder(statePath, hostIdentity.ID, executions)
+	if err != nil {
+		return err
+	}
+
 	const host = "127.0.0.1"
 	const port = 7331
 	var repositorySearch webui.RepositorySearcher
@@ -279,7 +284,7 @@ func serve() error {
 	)
 	fmt.Printf("Specview running at %s\n", address)
 
-	err = server.ListenAndServe(ctx)
+	err = server.ListenAndServeWithFederation(ctx, federationProjection)
 	if err == nil {
 		slog.Info("Specview stopped cleanly")
 	}
@@ -348,6 +353,7 @@ Examples:
 Federation HTTP serving is loopback-only. Tailscale Serve can publish that endpoint privately.
 Peer credential values are read from environment variables at request time and are never stored in peer state.
 While the host dashboard runs, configured peers are refreshed periodically and last-known snapshots remain visible during outages.
+The same deterministic federation projection is available at http://127.0.0.1:7331/federation and through the MCP get_federation_status tool.
 
 The host dashboard does not require .specview.yaml. Project configuration remains
 an optional repository-level override.

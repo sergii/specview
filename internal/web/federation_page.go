@@ -55,6 +55,7 @@ func (s *HostServer) ListenAndServeWithFederation(ctx context.Context, federatio
 	mux.HandleFunc("GET /fragments/project", s.projectFragment)
 	mux.HandleFunc("GET /project/spec", s.projectSpec)
 	mux.HandleFunc("GET /federation", s.federationPage(federation))
+	mux.HandleFunc("GET /federation/repository", s.federationRepositoryPage(federation))
 	mux.HandleFunc("GET /history", s.historyPage)
 	mux.HandleFunc("GET /events", s.events)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

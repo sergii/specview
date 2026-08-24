@@ -15,6 +15,8 @@ import (
 const FileName = ".specview.yaml"
 
 const (
+	legacyVersion            = 1
+	currentVersion           = 2
 	defaultAdapterName       = "specview"
 	githubSpecKitAdapterName = "github-spec-kit"
 	openSpecAdapterName      = "openspec"
@@ -25,7 +27,11 @@ type Config struct {
 	Project    Project
 	Specs      Specs
 	Acceptance Acceptance
-	Server     Server
+	// Server is populated only when reading legacy repository config v1.
+	// Host networking is not part of repository config v2.
+	Server Server
+
+	serverSectionSeen bool
 }
 
 type Project struct {
@@ -45,6 +51,9 @@ type Acceptance struct {
 	AllowSkipped []string
 }
 
+// Server is the legacy v1 repository-scoped server contract. It remains in the
+// read model so existing v1 files are readable, but v2 never generates or
+// accepts this section.
 type Server struct {
 	Host string
 	Port int
@@ -75,6 +84,9 @@ func Load(root string) (Config, error) {
 		if indent == 0 && strings.HasSuffix(trimmed, ":") {
 			section = strings.TrimSuffix(trimmed, ":")
 			subsection = ""
+			if section == "server" {
+				cfg.serverSectionSeen = true
+			}
 			continue
 		}
 
@@ -156,6 +168,7 @@ func Load(root string) (Config, error) {
 		case "acceptance":
 			return Config{}, fmt.Errorf("parse %s line %d: acceptance values must use a list", FileName, lineNumber)
 		case "server":
+			cfg.serverSectionSeen = true
 			switch key {
 			case "host":
 				cfg.Server.Host = value
@@ -207,7 +220,19 @@ func unquote(value string) string {
 }
 
 func (c Config) Validate() error {
-	if c.Version != 1 {
+	switch c.Version {
+	case legacyVersion:
+		if c.Server.Host == "" {
+			return errors.New("server.host is required in version 1")
+		}
+		if c.Server.Port < 1 || c.Server.Port > 65535 {
+			return errors.New("server.port must be between 1 and 65535 in version 1")
+		}
+	case currentVersion:
+		if c.serverSectionSeen || c.Server.Host != "" || c.Server.Port != 0 {
+			return errors.New("server section is not supported in version 2; Host networking is configured outside repository config")
+		}
+	default:
 		return fmt.Errorf("unsupported version %d", c.Version)
 	}
 	if strings.ContainsAny(c.Project.ID, " \t\r\n") {
@@ -233,12 +258,6 @@ func (c Config) Validate() error {
 	}
 	if err := validateAcceptance(c.Acceptance); err != nil {
 		return err
-	}
-	if c.Server.Host == "" {
-		return errors.New("server.host is required")
-	}
-	if c.Server.Port < 1 || c.Server.Port > 65535 {
-		return errors.New("server.port must be between 1 and 65535")
 	}
 	return nil
 }
@@ -368,7 +387,7 @@ func isDir(path string) bool {
 }
 
 func initialConfig(adapter, path string) []byte {
-	return []byte(fmt.Sprintf(`version: 1
+	return []byte(fmt.Sprintf(`version: 2
 
 project:
   name: ""
@@ -378,9 +397,5 @@ specs:
   adapter: %s
   path: %s
   pattern: "*.md"
-
-server:
-  host: 127.0.0.1
-  port: 7331
 `, adapter, path))
 }

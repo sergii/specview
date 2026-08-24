@@ -1,4 +1,4 @@
-# Specview v0.0.1 Release Candidate Specification
+# Specview Canonical Product Specification
 
 ## Purpose
 
@@ -58,7 +58,7 @@ Rules:
 - SQLite is disposable and rebuildable;
 - every remote HostSnapshot remains attributable to its source Host;
 - federation correlation and polling create derived views, not shared authority;
-- Specview does not write tasks, branches, pull requests, specifications, Evidence, or remote Host state in v0.0.1.
+- Specview does not write tasks, branches, pull requests, specifications, Evidence, or remote Host state.
 
 ## Domain graph
 
@@ -87,7 +87,7 @@ Relationships matter more than any one visualization. A repository may have mult
 
 Repository specification adapters normalize repo-native artifacts into a common model.
 
-Supported projection adapters in v0.0.1:
+Supported projection adapters:
 
 - native Specview;
 - GitHub Spec Kit;
@@ -136,9 +136,9 @@ ExecutionRegistry
 ExecutionSession
 ```
 
-A logical execution session is not an operating-system process. One session may contain multiple helper process IDs. Process IDs are diagnostics, not durable cross-Host identity.
+A logical execution session is not an operating-system process. One session may contain multiple helper process IDs. Process IDs are diagnostics, not durable cross-Host or historical session identity.
 
-The first automatic adapters observe Codex and Claude Code on supported macOS/Linux hosts. Adapter failures are isolated so one unavailable agent adapter does not erase sessions produced by another.
+The automatic adapters observe Codex and Claude Code on supported macOS/Linux hosts. Adapter failures are isolated so one unavailable agent adapter does not erase sessions produced by another.
 
 Execution sessions carry at least:
 
@@ -149,6 +149,8 @@ Execution sessions carry at least:
 - repository root;
 - worktree root when known;
 - process IDs as diagnostics.
+
+The Host catalog persists logical execution-session identity. The catalog v1 PID-shaped history reader remains available only as a deterministic compatibility migration path into catalog v2.
 
 ## Source control and provider context
 
@@ -212,7 +214,7 @@ The Host page answers:
 
 Observed history is kept outside repositories in the Specview Host state directory.
 
-The JSON Host catalog remains a compatibility/history snapshot in v0.0.1. SQLite is a derived, rebuildable index used for search. Deleting the SQLite index must be safe.
+The JSON Host catalog is versioned local history/compatibility state. Heartbeat-only persistence is coalesced while lifecycle changes remain immediately durable. SQLite is a derived, rebuildable index used for search. Deleting the SQLite index must be safe.
 
 Search can match repository identity/context without making SQLite the authority for rendered live state.
 
@@ -234,13 +236,13 @@ replace live projection
 
 Heartbeat-only observations must not cause unnecessary browser fragment refreshes.
 
-The current slice intentionally uses browser-native EventSource, fetch, AbortController, History API, and HTML templates instead of requiring a SPA framework.
+The current implementation intentionally uses browser-native EventSource, fetch, AbortController, History API, and HTML templates instead of requiring a SPA framework.
 
 ## Read-only MCP
 
 Specview exposes normalized local control-plane facts through a read-only MCP stdio interface.
 
-The MCP layer is an adapter over the same domain contracts used by the web projection. It must not create a second source of truth or gain write authority in v0.0.1.
+The MCP layer is an adapter over the same domain contracts used by the web projection. It must not create a second source of truth or gain write authority.
 
 Language-neutral fixtures protect the observable contracts so the implementation can be replaced without redefining product semantics.
 
@@ -262,7 +264,7 @@ Remote observations never override the source Host's authority.
 
 ### Snapshot and correlation contract
 
-v0.0.1 federation includes:
+Federation includes:
 
 - persistent Host identity;
 - deterministic RepositoryInstance identity;
@@ -296,7 +298,7 @@ Credential values are resolved at request time and must not be persisted or expo
 The runtime:
 
 - re-opens the Host-level peer registry each cycle so peer add/remove is observed without restart;
-- refreshes configured peers through the existing H22 refresher and security rules;
+- refreshes configured peers through the existing peer refresher and security rules;
 - isolates peer failures;
 - changes cached observations, not remote authority;
 - notifies observers only when peer material changes, not for transport-only attempt timestamps.
@@ -310,28 +312,28 @@ specview federation status
 Projection rules:
 
 - the local HostSnapshot is freshly built for each projection read;
-- `fresh`, `stale`, and `unreachable` peers with a cached valid snapshot contribute that snapshot to unchanged H20 aggregation;
+- `fresh`, `stale`, and `unreachable` peers with a cached valid snapshot contribute that snapshot to unchanged conservative aggregation;
 - `never_retrieved` peers remain visible as Hosts but contribute no invented repository facts;
 - unreachable never means inactive or zero sessions;
 - remote freshness metadata never rewrites source HostSnapshot fields;
-- H20 conservative correlation semantics remain unchanged.
+- conservative correlation semantics remain unchanged.
 
-v0.0.1 does not include automatic peer discovery, push synchronization, remote execution, remote writes, per-peer polling schedules, or a shared database.
+Federation does not include automatic peer discovery, push synchronization, remote execution, remote writes, per-peer polling schedules, or a shared database.
 
 ## Configuration
 
-Repository configuration lives in:
+Repository Intent configuration lives in:
 
 ```text
 .specview.yaml
 ```
 
-The v1 contract currently supports repository identity, project root, Intent adapter configuration, Acceptance policy, and legacy server fields retained for compatibility.
+The canonical repository configuration contract is version 2. It supports repository identity, project root, Intent adapter configuration, and Acceptance policy. Host networking is intentionally absent.
 
 Example with an explicit Acceptance policy:
 
 ```yaml
-version: 1
+version: 2
 
 project:
   id: ""
@@ -349,23 +351,19 @@ acceptance:
     - lint
   allow_skipped:
     - lint
-
-server:
-  host: 127.0.0.1
-  port: 7331
 ```
 
 Repositories that do not define Acceptance policy can omit the `acceptance` section.
 
 `project.id` is optional explicit cross-Host project identity. It must not be synthesized from personal or machine identity.
 
-Host identity, federation peers, remote observation cache, and other Host-level federation state live outside repositories.
+Valid repository config v1 remains readable for compatibility. Its legacy `server.host` and `server.port` fields are parsed only as v1 compatibility data and are not used to own the Host dashboard or federation runtime. `specview init` does not rewrite an existing valid v1 file.
 
-The repository-level `server` section is a compatibility artifact in v1, not a precedent for putting future Host settings in repository configuration. Its cleanup or migration requires an explicit configuration-contract change rather than an incidental removal.
+Version 2 rejects a `server` section. Host identity, local listeners, federation peers, remote observation cache, and other Host-level state live outside repository Intent configuration.
+
+The dashboard remains loopback-first at `127.0.0.1:7331`; federation snapshot serving remains loopback-first at `127.0.0.1:7332`. Configurable Host networking, if introduced later, requires an explicit Host-level configuration contract rather than repository fields.
 
 ## CLI surface
-
-The product includes the Host observer plus explicit read-only/control-plane utilities introduced through H01-H23.
 
 Core commands include:
 
@@ -399,7 +397,7 @@ Repository observation must not write product state into unrelated repositories.
 
 ## Distribution
 
-GitHub Releases are the v0.0.1 binary distribution origin.
+GitHub Releases are the binary distribution origin.
 
 Release artifacts target:
 
@@ -409,7 +407,7 @@ Release artifacts target:
 - macOS arm64;
 - SHA-256 checksums.
 
-POC installer:
+Installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sergii/specview/main/install.sh | sh
@@ -421,22 +419,17 @@ Future canonical installer:
 curl -fsSL https://specview.sh/install | sh
 ```
 
-## Release boundary
+## Compatibility evolution after v0.0.1
 
-v0.0.1 is a proof of the observation/control-plane architecture, not a promise to complete every possible agentic-development feature.
+The first release bounded three implementation debts in ADR-013. They are retired through explicit migration slices rather than incidental refactors:
 
-Included product capabilities are those already defined and accepted by H01-H23, plus H24 release-stabilization work that does not expand the product surface.
+- H25: heartbeat-only Host catalog persistence is coalesced while lifecycle durability is preserved;
+- H26: historical Host catalog/index sessions use logical `ExecutionSession` identity, with deterministic v1 history migration;
+- H27: repository config v2 removes Host networking from newly generated repository Intent config while retaining a strict v1 compatibility reader.
 
-Before v0.0.1, development is frozen against new feature planes. H24 may:
+These migrations do not redefine the public MCP, federation, Evidence, or Acceptance contracts.
 
-- correct contract/documentation drift;
-- fix correctness, safety, portability, performance, or packaging defects;
-- improve tests and acceptance gates;
-- remove accidental coupling when it can be done without destabilizing frozen public contracts.
-
-H24 must not add a new workflow, provider, agent family, federation transport/mode, UI paradigm, remote-write capability, or orchestration responsibility.
-
-## Explicit non-goals for v0.0.1
+## Explicit non-goals
 
 - becoming a task/project management system;
 - writing specification status from the UI;
@@ -453,17 +446,12 @@ H24 must not add a new workflow, provider, agent family, federation transport/mo
 - coupling the domain model to Kanban, list, hierarchy, or graph presentation;
 - requiring React, Vue, or another SPA framework.
 
-## Definition of done
+## Definition of done for compatibility slices
 
-v0.0.1 is release-ready when:
+A compatibility migration is ready when:
 
-1. canonical product documentation describes the architecture actually implemented through H23;
-2. H01-H23 accepted contracts remain green;
-3. formatting, module verification, vet, race tests, coverage, build, MCP/federation built-binary smoke tests, federation runtime/status smoke, browser semantic E2E, and release cross-build pass on the release candidate;
-4. macOS and Linux release artifacts are reproducible from the release workflow;
-5. installation from a GitHub Release works as a user installation, not only from a development checkout;
-6. Host observation survives restart and does not require a repository-local Specview config to start;
-7. Intent, Execution, Git/provider, Evidence, Acceptance, MCP, and federation failures degrade according to their documented independent authority boundaries;
-8. no credential secret is persisted by federation peer state;
-9. the release contains no hidden remote-write or agent-orchestration path;
-10. unresolved architectural debt is explicitly classified as either release-blocking or post-v0.0.1 instead of being silently expanded into new feature work.
+1. the prior persisted/configuration format remains readable according to its documented compatibility contract;
+2. the new canonical writer shape is frozen by language-neutral fixtures where applicable;
+3. formatting, module verification, vet, race tests, coverage, build, MCP/federation built-binary smoke tests, browser semantic E2E, and release cross-build pass;
+4. unrelated authority and wire contracts remain unchanged;
+5. migration failure is explicit rather than silently discarding or inventing facts.

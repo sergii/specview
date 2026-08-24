@@ -4,7 +4,7 @@
 
 Website: **specview.sh**
 
-The canonical v0.0.1 architecture and release boundary live in [`SPEC.md`](SPEC.md).
+The canonical architecture and compatibility boundary live in [`SPEC.md`](SPEC.md).
 
 ## What Specview observes
 
@@ -38,7 +38,7 @@ Host
 
 Kanban, list, hierarchy, and future graph views are projections over this model. The visualization is not the source of truth.
 
-## Current v0.0.1 capabilities
+## Current capabilities
 
 - Host-level repository activity observation
 - Codex and Claude Code execution adapters on supported macOS/Linux hosts
@@ -81,7 +81,7 @@ If an optional source fails, unrelated facts should remain visible. GitHub failu
 
 ## Install
 
-During the POC, binaries are distributed through GitHub Releases.
+Binaries are distributed through GitHub Releases.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sergii/specview/main/install.sh | sh
@@ -135,10 +135,10 @@ With no stronger supported convention, Specview creates:
 specs/
 ```
 
-The current v1 configuration contract supports repository identity, Intent configuration, Acceptance policy, and legacy repository-level server fields:
+The canonical repository configuration contract is v2. It contains repository identity, Intent configuration, and Acceptance policy; Host networking is deliberately not repository-owned:
 
 ```yaml
-version: 1
+version: 2
 
 project:
   id: ""
@@ -153,15 +153,11 @@ specs:
 acceptance:
   required: []
   allow_skipped: []
-
-server:
-  host: 127.0.0.1
-  port: 7331
 ```
 
 `project.id` is optional explicit cross-Host project identity. It must not be synthesized from personal or machine identity.
 
-The repository-level `server` section is retained as a v1 compatibility field. Future Host-level settings belong in Host-level configuration or explicit CLI/environment configuration, not in repository Intent configuration by default.
+Valid v1 repository files remain readable for compatibility, including their legacy `server.host` and `server.port` fields, and `specview init` does not rewrite them. Version 2 does not accept a `server` section: the Host dashboard and federation networking are Host concerns, not repository Intent configuration.
 
 ## Native specification status
 
@@ -178,7 +174,7 @@ specview:
 Implementation notes go here.
 ```
 
-The native v0.0.1 statuses are:
+The native statuses are:
 
 ```text
 new
@@ -212,7 +208,7 @@ ExecutionRegistry
 ExecutionSession
 ```
 
-A logical execution session can represent several helper OS processes. PID is diagnostic context, not durable logical session identity.
+A logical execution session can represent several helper OS processes. PID is diagnostic context, not durable logical session identity. The Host catalog persists logical execution identity and retains a deterministic reader for the legacy v1 PID-shaped history format.
 
 For diagnostics:
 
@@ -279,7 +275,7 @@ Run the MCP server over stdin/stdout:
 specview mcp
 ```
 
-The MCP interface exposes the same normalized control-plane facts used by the web projection. It is read-only in v0.0.1.
+The MCP interface exposes the same normalized control-plane facts used by the web projection. It is read-only.
 
 The public execution shape exposes a logical session `id` and keeps `process_ids` as diagnostics.
 
@@ -365,7 +361,7 @@ specview federation status
 
 The status projection includes the freshly built local Host plus configured remote Hosts and their freshness. Cached snapshots from unreachable peers remain attributable to their source Host. `never_retrieved` peers are visible without invented repository facts.
 
-Federation remains read-only. There is no automatic peer discovery, push sync, remote execution, remote write path, per-peer scheduling, or shared database in v0.0.1.
+Federation remains read-only. There is no automatic peer discovery, push sync, remote execution, remote write path, per-peer scheduling, or shared database.
 
 ## Live UI
 
@@ -411,21 +407,16 @@ Diagnostics:
 bin/doctor
 ```
 
-The current release gate includes formatting, module verification, vet, race tests, coverage, build, built-binary MCP/federation smoke tests, federation runtime/status smoke, Chromium semantic E2E, and release cross-builds.
+The release gate includes formatting, module verification, vet, race tests, coverage, build, built-binary MCP/federation smoke tests, federation runtime/status smoke, Chromium semantic E2E, and release cross-builds.
 
 Logging is documented in `docs/observability/logging.md`.
 
-## v0.0.1 feature freeze
+## Post-v0.0.1 compatibility migrations
 
-H23 completed the first federation runtime and deterministic multi-host status projection. H24 is the release-stabilization slice.
+The first release intentionally bounded three internal compatibility debts in ADR-013. Post-release slices retire them without changing public authority boundaries:
 
-H24 may fix correctness, safety, portability, performance, documentation, packaging, and test gaps, but it must not add another product plane or major feature family before the first release.
+- H25 coalesces heartbeat-only Host catalog persistence while preserving immediate lifecycle durability.
+- H26 migrates historical catalog/index sessions from PID-shaped records to logical `ExecutionSession` identity.
+- H27 introduces repository config v2, removes Host networking from newly generated repository config, and keeps the v1 reader for existing repositories.
 
-See:
-
-```text
-SPEC.md
-specs/H24-v001-release-stabilization.md
-```
-
-The next feature slice starts only after the v0.0.1 release head is green and the installed binary has passed real-user dogfooding.
+These migrations preserve the read-only MCP, federation, Evidence and Acceptance contracts while simplifying internal persistence and configuration boundaries.

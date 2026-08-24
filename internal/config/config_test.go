@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -19,11 +20,14 @@ func TestInitAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if cfg.Version != currentVersion {
+		t.Fatalf("config version = %d, want %d", cfg.Version, currentVersion)
+	}
 	if cfg.Specs.Adapter != "specview" || cfg.Specs.Path != "specs" || cfg.Specs.Pattern != "*.md" {
 		t.Fatalf("unexpected specs config: %#v", cfg.Specs)
 	}
-	if cfg.Server.Host != "127.0.0.1" || cfg.Server.Port != 7331 {
-		t.Fatalf("unexpected server config: %#v", cfg.Server)
+	if cfg.Server != (Server{}) {
+		t.Fatalf("repository config v2 must not contain Host server settings: %#v", cfg.Server)
 	}
 	if cfg.Project.Name != "" || cfg.Project.Root != "." {
 		t.Fatalf("unexpected project config: %#v", cfg.Project)
@@ -33,6 +37,13 @@ func TestInitAndLoad(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "specs")); err != nil {
 		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "server:") {
+		t.Fatalf("generated repository config contains legacy server section:\n%s", data)
 	}
 }
 
@@ -57,8 +68,8 @@ func TestInitDetectsGitHubSpecKit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Specs.Adapter != "github-spec-kit" {
-		t.Fatalf("specs.adapter = %q, want github-spec-kit", cfg.Specs.Adapter)
+	if cfg.Version != currentVersion || cfg.Specs.Adapter != "github-spec-kit" {
+		t.Fatalf("unexpected generated config: %#v", cfg)
 	}
 }
 
@@ -82,8 +93,8 @@ func TestInitDetectsOpenSpecWithoutCreatingTopLevelSpecs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Specs.Adapter != "openspec" || cfg.Specs.Path != "openspec" {
-		t.Fatalf("unexpected OpenSpec config: %#v", cfg.Specs)
+	if cfg.Version != currentVersion || cfg.Specs.Adapter != "openspec" || cfg.Specs.Path != "openspec" {
+		t.Fatalf("unexpected OpenSpec config: %#v", cfg)
 	}
 	if _, err := os.Stat(filepath.Join(root, "specs")); !os.IsNotExist(err) {
 		t.Fatalf("top-level specs directory should not be created, stat err=%v", err)
@@ -107,7 +118,7 @@ func TestInitRejectsAmbiguousFrameworkDetection(t *testing.T) {
 	}
 }
 
-func TestLoadProjectMetadata(t *testing.T) {
+func TestLoadProjectMetadataV1(t *testing.T) {
 	root := t.TempDir()
 	data := "version: 1\nproject:\n  name: \"Observed Project\"\n  root: ./demo\nspecs:\n  adapter: specview\n  path: specs\n  pattern: '*.md'\nserver:\n  host: 127.0.0.1\n  port: 7331\n"
 	if err := os.WriteFile(filepath.Join(root, FileName), []byte(data), 0o644); err != nil {
@@ -117,15 +128,30 @@ func TestLoadProjectMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Project.Name != "Observed Project" || cfg.Project.Root != "./demo" {
+	if cfg.Version != legacyVersion || cfg.Project.Name != "Observed Project" || cfg.Project.Root != "./demo" {
 		t.Fatalf("unexpected project config: %#v", cfg.Project)
 	}
 	if cfg.Specs.Adapter != "specview" {
 		t.Fatalf("unexpected specs adapter %q", cfg.Specs.Adapter)
 	}
+	if cfg.Server.Host != "127.0.0.1" || cfg.Server.Port != 7331 {
+		t.Fatalf("legacy server config not preserved: %#v", cfg.Server)
+	}
 	want := filepath.Join(root, "demo")
 	if got := cfg.ResolveProjectRoot(root); got != want {
 		t.Fatalf("ResolveProjectRoot() = %q, want %q", got, want)
+	}
+}
+
+func TestLoadV2RejectsRepositoryServerSection(t *testing.T) {
+	root := t.TempDir()
+	data := "version: 2\nproject:\n  root: .\nspecs:\n  adapter: specview\n  path: specs\n  pattern: '*.md'\nserver:\n  host: 127.0.0.1\n  port: 7331\n"
+	if err := os.WriteFile(filepath.Join(root, FileName), []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(root)
+	if err == nil || !strings.Contains(err.Error(), "server section is not supported in version 2") {
+		t.Fatalf("Load() error = %v, want v2 server ownership error", err)
 	}
 }
 
@@ -179,7 +205,7 @@ func TestUnknownProjectDemoKeyIsRejected(t *testing.T) {
 	}
 }
 
-func TestInitDoesNotOverwriteConfig(t *testing.T) {
+func TestInitDoesNotOverwriteLegacyV1Config(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, FileName)
 	const custom = "version: 1\nspecs:\n  path: custom\n  pattern: '*.md'\nserver:\n  host: 127.0.0.1\n  port: 8000\n"
@@ -201,6 +227,6 @@ func TestInitDoesNotOverwriteConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(data) != custom {
-		t.Fatal("existing config changed")
+		t.Fatal("existing v1 config changed")
 	}
 }

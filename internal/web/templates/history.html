@@ -28,7 +28,9 @@
     .entry { display:grid; grid-template-columns:minmax(150px,.9fr) minmax(180px,1.1fr) minmax(170px,1fr) 90px 110px; gap:18px; align-items:center; min-height:54px; border-bottom:1px solid var(--line); }
     .repo { min-width:0; overflow:hidden; color:var(--text); font-size:12px; font-weight:540; text-decoration:none; text-overflow:ellipsis; white-space:nowrap; }
     .repo:hover { text-decoration:underline; text-underline-offset:3px; }
-    .agent { color:var(--muted); font-size:11px; }
+    .agent { min-width:0; overflow:hidden; color:var(--muted); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+    a.agent { text-decoration:none; }
+    a.agent:hover { color:var(--text); text-decoration:underline; text-underline-offset:3px; }
     .mono { min-width:0; overflow:hidden; color:var(--quiet); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
     .state { color:var(--muted); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; text-transform:lowercase; }
     .state.active { color:var(--text); }
@@ -49,8 +51,8 @@
       <div class="section-head"><span>Sessions</span><span class="count">{{len .Projection.Entries}}</span></div>
       {{range .Projection.Entries}}
         <div class="entry" data-session-id="{{.SessionID}}" data-session-active="{{.Active}}" data-identity-kind="{{.IdentityKind}}">
-          <a class="repo" href="/project?id={{.RepositoryID}}">{{.RepositoryName}}</a>
-          <div class="agent">{{.Agent}} · {{.Adapter}}</div>
+          <a class="repo" href="/project?id={{urlquery .RepositoryID}}">{{.RepositoryName}}</a>
+          <a class="agent session-detail" href="/history/session?repository={{urlquery .RepositoryID}}&session={{urlquery .SessionID}}">{{.Agent}} · {{.Adapter}}</a>
           <div class="mono">{{if .WorktreeRoot}}{{.WorktreeRoot}}{{else if .CWD}}{{.CWD}}{{else}}{{.RepositoryRoot}}{{end}}</div>
           <div class="state {{if .Active}}active{{end}}">{{if .Active}}active{{else}}ended{{end}}</div>
           <div class="time">{{since .LastSeenAt}}</div>

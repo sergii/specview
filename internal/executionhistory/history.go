@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/sergii/specview/internal/hoststate"
@@ -47,6 +48,29 @@ func (r *Reader) Build(context.Context) (Projection, error) {
 		return Projection{}, errors.New("execution history catalog is required")
 	}
 	return Build(r.catalog.Hostname(), r.catalog.Repositories()), nil
+}
+
+func (r *Reader) Find(ctx context.Context, repositoryID, sessionID string) (Entry, bool, error) {
+	projection, err := r.Build(ctx)
+	if err != nil {
+		return Entry{}, false, err
+	}
+	entry, ok := Find(projection, repositoryID, sessionID)
+	return entry, ok, nil
+}
+
+func Find(projection Projection, repositoryID, sessionID string) (Entry, bool) {
+	repositoryID = strings.TrimSpace(repositoryID)
+	sessionID = strings.TrimSpace(sessionID)
+	if repositoryID == "" || sessionID == "" {
+		return Entry{}, false
+	}
+	for _, entry := range projection.Entries {
+		if entry.RepositoryID == repositoryID && entry.SessionID == sessionID {
+			return entry, true
+		}
+	}
+	return Entry{}, false
 }
 
 func Build(hostname string, repositories []hoststate.Repository) Projection {

@@ -178,7 +178,7 @@ func (s *Server) dispatch(ctx context.Context, req request) (any, *rpcError) {
 	case "ping":
 		return map[string]any{}, nil
 	case "tools/list":
-		return map[string]any{"tools": toolDefinitions()}, nil
+		return map[string]any{"tools": toolDefinitionsForReader(s.reader)}, nil
 	case "tools/call":
 		return s.callTool(ctx, req.Params)
 	default:
@@ -292,6 +292,21 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (any, *rpcEr
 	default:
 		return toolResultFor(nil, fmt.Errorf("unknown Specview tool %q", params.Name)), nil
 	}
+}
+
+func toolDefinitionsForReader(reader Reader) []map[string]any {
+	definitions := toolDefinitions()
+	if _, ok := reader.(HistoryReader); ok {
+		return definitions
+	}
+	filtered := make([]map[string]any, 0, len(definitions)-1)
+	for _, definition := range definitions {
+		if definition["name"] == "get_execution_history" {
+			continue
+		}
+		filtered = append(filtered, definition)
+	}
+	return filtered
 }
 
 func toolDefinitions() []map[string]any {

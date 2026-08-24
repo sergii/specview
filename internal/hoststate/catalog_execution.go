@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sergii/specview/internal/config"
 )
 
 // ObserveExecutions persists normalized logical execution sessions. This is the
@@ -30,7 +32,10 @@ func (c *Catalog) ObserveExecutions(executions []ExecutionSession, now time.Time
 		}
 		seenIDs[execution.ID] = execution.RepositoryRoot
 
-		repo, repoChanged := c.ensureRepositoryLocked(execution.RepositoryRoot, now)
+		repo, repoChanged, err := c.ensureExecutionRepositoryLocked(execution.RepositoryRoot, now)
+		if err != nil {
+			return false, err
+		}
 		if repoChanged {
 			changed = true
 			materialChanged = true
@@ -104,6 +109,49 @@ func (c *Catalog) ObserveExecutions(executions []ExecutionSession, now time.Time
 	}
 
 	return c.finishObservationLocked(changed, materialChanged, heartbeatChanged, now)
+}
+
+// ensureExecutionRepositoryLocked preserves the durable repository record when
+// upgrading a legacy catalog. Historical catalog IDs are not rewritten merely
+// because the current derived root ID differs; the filesystem root is the
+// compatibility bridge. Multiple records for one root fail closed instead of
+// allowing a live logical session to attach nondeterministically.
+func (c *Catalog) ensureExecutionRepositoryLocked(root string, now time.Time) (*Repository, bool, error) {
+	repoID := repositoryID(root)
+	if _, ok := c.repos[repoID]; ok {
+		repo, changed := c.ensureRepositoryLocked(root, now)
+		return repo, changed, nil
+	}
+
+	var matched *Repository
+	for _, candidate := range c.repos {
+		if !sameFilesystemPath(candidate.Root, root) {
+			continue
+		}
+		if matched != nil && matched.ID != candidate.ID {
+			return nil, false, fmt.Errorf("multiple catalog repositories share filesystem root %q: %s and %s", root, matched.ID, candidate.ID)
+		}
+		matched = candidate
+	}
+	if matched == nil {
+		repo, changed := c.ensureRepositoryLocked(root, now)
+		return repo, changed, nil
+	}
+
+	changed := false
+	convention, err := c.detect(root)
+	if err != nil {
+		if matched.DetectionError != err.Error() || matched.Convention != (config.Convention{}) {
+			matched.DetectionError = err.Error()
+			matched.Convention = config.Convention{}
+			changed = true
+		}
+	} else if matched.Convention != convention || matched.DetectionError != "" {
+		matched.Convention = convention
+		matched.DetectionError = ""
+		changed = true
+	}
+	return matched, changed, nil
 }
 
 func normalizeExecutionForCatalog(execution ExecutionSession) (ExecutionSession, error) {

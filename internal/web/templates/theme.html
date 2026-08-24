@@ -30,6 +30,15 @@
   const navLinks = Array.from(document.querySelectorAll('[data-host-nav]'));
   const pathname = window.location.pathname;
   const activeHostPath = pathname === '/history' ? '/history' : (pathname === '/federation' || pathname.startsWith('/federation/')) ? '/federation' : '/';
+  const historyLink = navLinks.find(link => link.dataset.hostNav === '/history');
+  if (historyLink && (pathname === '/project' || pathname === '/project/spec')) {
+    const repositoryID = new URL(window.location.href).searchParams.get('id');
+    if (repositoryID) {
+      const historyURL = new URL('/history', window.location.origin);
+      historyURL.searchParams.set('repository', repositoryID);
+      historyLink.setAttribute('href', historyURL.pathname + historyURL.search);
+    }
+  }
   for (const link of navLinks) {
     if (link.dataset.hostNav === activeHostPath) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
   }

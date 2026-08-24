@@ -18,7 +18,11 @@
     main { width:min(1180px,100%); margin:0 auto; padding:34px var(--gutter) 64px; }
     .eyebrow { margin:0 0 8px; color:var(--quiet); font:10px/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; letter-spacing:.14em; text-transform:uppercase; }
     h1 { margin:0 0 8px; font-size:22px; font-weight:540; letter-spacing:-.025em; }
-    .lede { margin:0 0 34px; max-width:760px; color:var(--muted); font-size:12px; line-height:1.55; }
+    .lede { margin:0 0 20px; max-width:760px; color:var(--muted); font-size:12px; line-height:1.55; }
+    .scope { display:flex; align-items:center; gap:10px; margin:0 0 28px; color:var(--quiet); font:10px/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    .scope a { color:var(--muted); text-decoration:none; }
+    .scope a:hover { color:var(--text); text-decoration:underline; text-underline-offset:3px; }
+    .scope-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .section-head { display:flex; align-items:baseline; justify-content:space-between; min-height:36px; padding:8px 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:10px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; }
     .count { color:var(--quiet); font-weight:400; letter-spacing:.04em; }
     .entry { display:grid; grid-template-columns:minmax(150px,.9fr) minmax(180px,1.1fr) minmax(170px,1fr) 90px 110px; gap:18px; align-items:center; min-height:54px; border-bottom:1px solid var(--line); }
@@ -30,16 +34,17 @@
     .state.active { color:var(--text); }
     .time { color:var(--quiet); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; text-align:right; white-space:nowrap; }
     .empty { padding:24px 0; border-bottom:1px solid var(--line); color:var(--quiet); font-size:11px; }
-    @media(max-width:820px){.topbar{grid-template-columns:auto minmax(0,1fr) auto}.host{font-size:9px}.entry{grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;padding:10px 0}.entry .mono{grid-column:1/-1}.entry .agent{grid-column:1}.entry .state{grid-column:2;grid-row:1}.entry .time{grid-column:2;grid-row:2}.entry .session{display:none}}
+    @media(max-width:820px){.topbar{grid-template-columns:auto minmax(0,1fr) auto}.host{font-size:9px}.scope{flex-wrap:wrap}.entry{grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;padding:10px 0}.entry .mono{grid-column:1/-1}.entry .agent{grid-column:1}.entry .state{grid-column:2;grid-row:1}.entry .time{grid-column:2;grid-row:2}.entry .session{display:none}}
   </style>
 </head>
-<body>
+<body{{if .Repository}} data-history-repository="{{.Repository.ID}}"{{end}}>
 <div class="shell">
-  <header class="topbar"><a class="brand" href="/">← Specview</a><div class="host">HISTORY / {{.Hostname}}</div><div class="top-actions">{{template "theme-switch" .}}</div></header>
+  <header class="topbar"><a class="brand" href="/">← Specview</a><div class="host">HISTORY / {{.Hostname}}{{if .Repository}} / {{.Repository.Name}}{{end}}</div><div class="top-actions">{{template "theme-switch" .}}</div></header>
   <main>
     <div class="eyebrow">Read-only local execution history</div>
-    <h1>Execution history</h1>
+    <h1>{{if .Repository}}Execution history for {{.Repository.Name}}{{else}}Execution history{{end}}</h1>
     <p class="lede">Logical sessions come from the Host catalog. Active sessions remain live observations; ended sessions are local history. Process IDs are diagnostics, not session identity.</p>
+    {{if .Repository}}<div class="scope"><a href="/project?id={{urlquery .Repository.ID}}">← Repository</a><span class="scope-name">{{.Repository.Root}}</span><span>·</span><a href="/history">All history</a></div>{{end}}
     <section>
       <div class="section-head"><span>Sessions</span><span class="count">{{len .Projection.Entries}}</span></div>
       {{range .Projection.Entries}}
@@ -51,7 +56,7 @@
           <div class="time">{{since .LastSeenAt}}</div>
           <div class="mono session">{{.SessionID}} · {{.IdentityKind}} · {{len .ProcessIDs}} process{{if ne (len .ProcessIDs) 1}}es{{end}}</div>
         </div>
-      {{else}}<div class="empty">No execution sessions have been observed yet.</div>{{end}}
+      {{else}}<div class="empty">{{if .Repository}}No execution sessions have been observed for this repository yet.{{else}}No execution sessions have been observed yet.{{end}}</div>{{end}}
     </section>
   </main>
 </div>

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sergii/specview/internal/controlplane"
+	"github.com/sergii/specview/internal/federationruntime"
 )
 
 const ProtocolVersion = "2025-11-25"
@@ -32,13 +33,22 @@ type Reader interface {
 	GetAcceptance(context.Context, string, string) (controlplane.GetAcceptanceResult, error)
 }
 
+type FederationReader interface {
+	Build(context.Context) (federationruntime.Projection, error)
+}
+
 type Server struct {
-	reader  Reader
-	version string
+	reader     Reader
+	federation FederationReader
+	version    string
 }
 
 func New(reader Reader, version string) *Server {
-	return &Server{reader: reader, version: version}
+	return NewWithFederation(reader, nil, version)
+}
+
+func NewWithFederation(reader Reader, federation FederationReader, version string) *Server {
+	return &Server{reader: reader, federation: federation, version: version}
 }
 
 type request struct {
@@ -187,7 +197,7 @@ func (s *Server) initialize(raw json.RawMessage) (any, *rpcError) {
 			"name":    "specview",
 			"version": s.version,
 		},
-		"instructions": "Specview exposes read-only deterministic facts about repositories, work items, evidence, acceptance, worktrees, and active coding-agent sessions on this host.",
+		"instructions": "Specview exposes read-only deterministic facts about repositories, work items, evidence, acceptance, worktrees, active coding-agent sessions, and the current multi-host federation projection.",
 	}, nil
 }
 
@@ -255,6 +265,15 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (any, *rpcEr
 		}
 		value, readErr := s.reader.GetAcceptance(ctx, arguments.RepositoryID, arguments.WorkItemID)
 		return toolResultFor(value, readErr), nil
+	case "get_federation_status":
+		if err := requireEmptyArguments(params.Arguments); err != nil {
+			return nil, invalidParams(params.Name, err)
+		}
+		if s.federation == nil {
+			return toolResultFor(nil, errors.New("federation reader is not configured")), nil
+		}
+		value, err := s.federation.Build(ctx)
+		return toolResultFor(value, err), nil
 	default:
 		return toolResultFor(nil, fmt.Errorf("unknown Specview tool %q", params.Name)), nil
 	}
@@ -343,6 +362,12 @@ func toolDefinitions() []map[string]any {
 			"name":        "get_acceptance",
 			"description": "Evaluate and return deterministic Acceptance for one WorkItem against its exact current revision.",
 			"inputSchema": workItemSchema,
+			"annotations": readOnly,
+		},
+		{
+			"name":        "get_federation_status",
+			"description": "Get the deterministic local plus configured remote Host federation projection, including peer freshness and correlated repository groups.",
+			"inputSchema": emptySchema,
 			"annotations": readOnly,
 		},
 	}

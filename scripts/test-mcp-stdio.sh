@@ -107,6 +107,7 @@ responses=$(
     '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_evidence","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
     '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_acceptance","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
     '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"get_federation_status","arguments":{}}}' \
+    '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"get_execution_history","arguments":{}}}' \
   | XDG_STATE_HOME="$state_home" "$binary" mcp
 )
 
@@ -115,10 +116,10 @@ import json
 import os
 
 lines = [line for line in os.environ["MCP_RESPONSES"].splitlines() if line.strip()]
-if len(lines) != 8:
-    raise SystemExit(f"expected 8 MCP responses, got {len(lines)}: {lines!r}")
+if len(lines) != 9:
+    raise SystemExit(f"expected 9 MCP responses, got {len(lines)}: {lines!r}")
 
-initialize, tools, repositories, work_items, work_item, evidence, acceptance, federation = [json.loads(line) for line in lines]
+initialize, tools, repositories, work_items, work_item, evidence, acceptance, federation, history = [json.loads(line) for line in lines]
 head = os.environ["GIT_HEAD"]
 revision = f"git:{head}"
 
@@ -130,6 +131,7 @@ expected = [
     "list_repositories",
     "get_repository",
     "list_active_sessions",
+    "get_execution_history",
     "list_worktrees",
     "list_work_items",
     "get_work_item",
@@ -176,6 +178,10 @@ if len(hosts) != 1 or hosts[0].get("source") != "local" or hosts[0].get("has_sna
 groups = federation_value.get("federation", {}).get("repositories", [])
 if not any(group.get("name") == "fixture/specview" for group in groups):
     raise SystemExit(f"fixture repository missing from federation projection: {groups!r}")
+
+history_value = structured(history)
+if history_value.get("entries") != []:
+    raise SystemExit(f"unexpected execution history: {history_value!r}")
 PY
 
 host_file="$state_home/specview/host.json"

@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-func TestCatalogV1GoldenFixtureMatchesWriterShape(t *testing.T) {
-	path := catalogContractFixturePath(t)
+func TestCatalogV2GoldenFixtureMatchesWriterShape(t *testing.T) {
+	path := catalogContractFixturePath(t, "v2.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read catalog contract fixture: %v", err)
@@ -29,16 +29,16 @@ func TestCatalogV1GoldenFixtureMatchesWriterShape(t *testing.T) {
 	}
 	encoded = append(encoded, '\n')
 	if string(encoded) != string(data) {
-		t.Fatalf("catalog v1 writer shape changed\n--- fixture ---\n%s\n--- encoded ---\n%s", data, encoded)
+		t.Fatalf("catalog v2 writer shape changed\n--- fixture ---\n%s\n--- encoded ---\n%s", data, encoded)
 	}
 }
 
-func catalogContractFixturePath(t *testing.T) string {
+func catalogContractFixturePath(t *testing.T, name string) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("resolve catalog contract test path")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
-	return filepath.Join(root, "testdata", "contracts", "catalog", "v1.json")
+	return filepath.Join(root, "testdata", "contracts", "catalog", name)
 }

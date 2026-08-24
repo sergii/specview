@@ -18,16 +18,22 @@ func serveMCP() error {
 	if err != nil {
 		return err
 	}
-	if _, err := identity.LoadOrCreateHostForCatalog(statePath); err != nil {
+	hostIdentity, err := identity.LoadOrCreateHostForCatalog(statePath)
+	if err != nil {
 		return err
 	}
 
+	executions := hoststate.DefaultExecutionRegistry()
 	reader := controlplane.NewReader(
 		statePath,
-		hoststate.DefaultExecutionRegistry(),
+		executions,
 		sourcecontrol.DefaultService(),
 	)
-	server := mcpserver.New(reader, version)
+	federationReader, err := newFederationProjectionBuilder(statePath, hostIdentity.ID, executions)
+	if err != nil {
+		return err
+	}
+	server := mcpserver.NewWithFederation(reader, federationReader, version)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

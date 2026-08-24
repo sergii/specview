@@ -1,0 +1,16 @@
+version: 2
+
+project:
+  id: specview:contract/v2
+  name: "Contract V2"
+  root: "."
+
+specs:
+  adapter: specview
+  path: specs
+  pattern: "*.md"
+
+acceptance:
+  required:
+    - unit-tests
+  allow_skipped:

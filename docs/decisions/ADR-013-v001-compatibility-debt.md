@@ -2,15 +2,25 @@
 
 ## Status
 
-Accepted for the v0.0.1 release-stabilization phase.
+Resolved post-v0.0.1. Retained as the historical release-boundary record.
+
+## Resolution
+
+All three migration targets recorded before v0.0.1 were retired through dedicated post-release slices:
+
+1. **Historical execution identity — H26 / ADR-015.** Host catalog v2 and derived SQLite schema v2 persist logical `ExecutionSession` identity with `process_ids` as diagnostics. Catalog v1 remains readable through a deterministic migration path.
+2. **Heartbeat persistence — H25 / ADR-014.** Heartbeat-only catalog persistence is coalesced to a 30-second window while lifecycle/material changes remain immediately durable and graceful shutdown flushes pending state.
+3. **Repository `server` fields — H27 / ADR-016.** Repository config v2 removes Host networking from the canonical writer. Existing valid v1 files remain readable and are not rewritten; v2 rejects a repository `server` section.
+
+The public MCP, federation, Evidence, Acceptance and HostSnapshot authority boundaries remained unchanged across these migrations.
 
 ## Context
 
 H12-H23 expanded Specview from the original single-repository Markdown dashboard into a Host-level, read-only control plane with normalized Execution, Evidence, Acceptance, MCP, Host identity, federation, and a derived federation polling/status runtime.
 
-Several early POC implementation details remain in internal compatibility layers. They should not be allowed to redefine the public product model, but changing them immediately before the first release can create more risk than keeping them explicit and bounded.
+Several early POC implementation details remained in internal compatibility layers. They were not allowed to redefine the public product model, but changing them immediately before the first release would have created more risk than keeping them explicit and bounded.
 
-This ADR records the boundary for three known items.
+This ADR recorded the boundary for three known items before v0.0.1.
 
 ## Decision 1 - Historical catalog sessions are not logical ExecutionSession identity
 
@@ -25,53 +35,43 @@ ExecutionSession
       └── ProcessIDs diagnostics
 ```
 
-The Host catalog currently persists historical session rows shaped around `agent + PID`.
+At the v0.0.1 boundary, the Host catalog persisted historical session rows shaped around `agent + PID`.
 
-That catalog representation is an internal compatibility/history format. It must not become:
+That representation was classified as an internal compatibility/history format. It was never allowed to become:
 
 - MCP logical execution identity;
 - federation logical execution identity;
 - cross-Host correlation identity;
 - a requirement for future execution adapters.
 
-The frozen read-only MCP contract exposes a logical session `id` plus a separate `process_ids` diagnostic array. HostSnapshot v1 consumes the logical session projection and does not export PID as session identity.
+The frozen read-only MCP contract exposed a logical session `id` plus a separate `process_ids` diagnostic array. HostSnapshot v1 consumed the logical session projection and did not export PID as session identity.
 
 ### Migration target
 
-After v0.0.1, a dedicated catalog/index migration may introduce a new historical execution schema based on stable logical execution-session identity and optional diagnostic process membership.
+A dedicated catalog/index migration was required to introduce a historical execution schema based on stable logical execution-session identity and optional diagnostic process membership.
 
-That change must be explicit because the persisted catalog and SQLite index are versioned data structures. It must not be smuggled into an unrelated feature slice.
+**Resolved:** H26 / ADR-015 introduced catalog v2 and SQLite schema v2 with deterministic v1 history migration.
 
-## Decision 2 - Heartbeat persistence is deferred after explicit characterization
+## Decision 2 - Heartbeat persistence was deferred after explicit characterization
 
-The Host observer updates in-memory `LastSeenAt` values during execution polling. The legacy JSON catalog currently persists a heartbeat-only observation as a new atomic catalog snapshot.
+The Host observer updates in-memory `LastSeenAt` values during execution polling. At the v0.0.1 boundary, the legacy JSON catalog persisted a heartbeat-only observation as a new atomic catalog snapshot.
 
-H24 adds `TestCatalogHeartbeatPersistenceBaseline` to make that behavior explicit rather than assumed. With the current two-second Host execution scan interval, a continuously observed active Host can therefore perform up to:
+H24 added `TestCatalogHeartbeatPersistenceBaseline` to make that behavior explicit rather than assumed. With the two-second Host execution scan interval, a continuously observed active Host could therefore perform up to:
 
 ```text
 30 catalog snapshots / minute
 1,800 catalog snapshots / hour
 ```
 
-The write rate is per catalog refresh, not multiplied by every browser client. The catalog is a small local JSON compatibility/history file written through a temporary file plus atomic rename. SQLite, Web material fingerprints, and H23 federation material fingerprints already suppress heartbeat/transport-only changes, so this persistence does not create repeated SQLite rewrites, browser fragment refreshes, or federation status changes.
+The write rate was per catalog refresh, not multiplied by every browser client. SQLite, Web material fingerprints, and federation material fingerprints already suppressed heartbeat/transport-only changes, so this persistence did not create repeated SQLite rewrites, browser fragment refreshes, or federation status changes.
 
 ### v0.0.1 release decision
 
-Defer write coalescing until after v0.0.1.
-
-Reasoning:
-
-- the behavior is covered by an explicit baseline test;
-- it does not change logical Execution semantics;
-- it does not amplify into browser, SQLite, or federation material-update traffic;
-- no correctness, safety, privacy, or release-gate failure is caused by it at current POC scale;
-- changing persistence cadence immediately before the first release would alter crash/restart history semantics without a migration-specific acceptance slice.
-
-The current behavior is not considered desirable long-term. It is accepted as bounded implementation debt for the first POC release.
+Write coalescing was deferred until after v0.0.1 because the behavior was characterized, did not change logical Execution semantics, and was not a correctness or release blocker at POC scale.
 
 ### Migration target
 
-After v0.0.1, add an explicit Host-catalog persistence slice that can coalesce or throttle heartbeat-only snapshots while preserving:
+The post-release migration had to preserve:
 
 - immediate persistence of repository/session lifecycle changes;
 - useful crash/restart history semantics;
@@ -81,11 +81,11 @@ After v0.0.1, add an explicit Host-catalog persistence slice that can coalesce o
 - SQLite authority boundaries;
 - MCP/federation contracts.
 
-The migration should replace the H24 baseline test with tests for the chosen coalescing semantics.
+**Resolved:** H25 / ADR-014 coalesces heartbeat-only persistence to a 30-second window, retries failed material persistence immediately, and flushes pending state on graceful shutdown.
 
-## Decision 3 - Repository `server` fields are legacy v1 compatibility fields
+## Decision 3 - Repository `server` fields were legacy v1 compatibility fields
 
-The v1 `.specview.yaml` parser still accepts:
+The v1 `.specview.yaml` parser accepts:
 
 ```yaml
 server:
@@ -93,9 +93,9 @@ server:
   port: 7331
 ```
 
-The current Host observer binds its local UI independently, and federation Host/peer/runtime state is stored outside repositories. This makes Host networking conceptually Host-scoped rather than repository-scoped.
+The Host observer binds its local UI independently, and federation Host/peer/runtime state is stored outside repositories. This makes Host networking Host-scoped rather than repository-scoped.
 
-For v0.0.1:
+For v0.0.1 the decision was:
 
 - keep the v1 fields for compatibility;
 - do not add new Host settings under the repository `server` section;
@@ -104,31 +104,27 @@ For v0.0.1:
 
 ### Migration target
 
-After v0.0.1, Host-level settings should move to Host-level configuration or explicit CLI/environment configuration.
+Removal from the canonical writer required either a versioned repository configuration contract or a backwards-compatible deprecation reader.
 
-Removal of repository `server` fields requires either:
-
-1. a versioned repository configuration contract, or
-2. a backwards-compatible deprecation reader that can consume v1 while no longer generating the legacy fields.
+**Resolved:** H27 / ADR-016 introduces repository config v2. `specview init` writes v2 without `server`; valid v1 remains readable and unchanged; v2 with `server` fails closed.
 
 ## Consequences
 
 ### Positive
 
-- the domain model stays cleaner than the early POC persistence details;
-- v0.0.1 avoids unnecessary schema churn immediately before release;
-- future migrations have explicit targets;
-- public MCP/federation contracts remain logical-session based;
-- Host-scoped configuration is not accidentally expanded inside repositories;
-- heartbeat persistence debt is quantified and regression-characterized rather than hidden.
+- the domain model remains cleaner than the early POC persistence details;
+- v0.0.1 avoided unnecessary schema churn immediately before release;
+- each debt item received a dedicated migration with explicit acceptance criteria;
+- public MCP/federation contracts remained logical-session based;
+- Host-scoped networking is no longer generated inside repository Intent configuration;
+- heartbeat persistence was quantified before optimization and then reduced without changing discovery cadence.
 
-### Negative
+### Compatibility retained intentionally
 
-- the first release intentionally carries some internal compatibility debt;
-- the JSON catalog remains less elegant than the live Execution model;
-- a continuously active Host may still rewrite the small JSON catalog every two seconds;
-- `.specview.yaml` v1 contains fields that are not the long-term Host configuration design.
+- the catalog v1 reader remains so v0.0.1 history can migrate deterministically;
+- the repository config v1 reader remains so existing repositories do not require forced rewrites;
+- these readers are compatibility surfaces, not the canonical writer formats.
 
-## Release gate
+## Release gate history
 
-These items are not release blockers for v0.0.1 unless later installed-product acceptance exposes a correctness, safety, privacy, portability, or material performance defect caused by one of them.
+None of these items blocked v0.0.1. They were explicitly classified before release and subsequently resolved through H25-H27 rather than being mixed into unrelated feature work.

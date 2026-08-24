@@ -44,9 +44,9 @@ func (s *HostServer) federationPage(reader FederationReader) http.HandlerFunc {
 	}
 }
 
-// ListenAndServeWithFederation exposes the normal Host UI plus the federation
-// read surface. It intentionally shares the Host listener and security headers;
-// H28 does not create another network authority or listener.
+// ListenAndServeWithFederation exposes the normal Host UI plus federation and
+// execution-history read surfaces. Both share the Host listener and security
+// headers and create no additional network authority.
 func (s *HostServer) ListenAndServeWithFederation(ctx context.Context, federation FederationReader) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.index)
@@ -55,6 +55,7 @@ func (s *HostServer) ListenAndServeWithFederation(ctx context.Context, federatio
 	mux.HandleFunc("GET /fragments/project", s.projectFragment)
 	mux.HandleFunc("GET /project/spec", s.projectSpec)
 	mux.HandleFunc("GET /federation", s.federationPage(federation))
+	mux.HandleFunc("GET /history", s.historyPage)
 	mux.HandleFunc("GET /events", s.events)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")

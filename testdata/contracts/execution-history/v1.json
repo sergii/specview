@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "hostname": "laptop.local",
+  "entries": [
+    {
+      "repository_id": "repo-a",
+      "repository_name": "sergii/specview",
+      "repository_root": "/work/sergii/specview",
+      "session_id": "session-live",
+      "identity_kind": "logical",
+      "adapter": "codex",
+      "agent": "Codex",
+      "process_ids": [2, 5],
+      "cwd": "/work/sergii/specview",
+      "worktree_root": "/work/sergii/specview",
+      "started_at": "2026-08-24T08:00:00Z",
+      "last_seen_at": "2026-08-24T08:30:00Z",
+      "active": true
+    },
+    {
+      "repository_id": "repo-b",
+      "repository_name": "teplotec/website",
+      "repository_root": "/work/teplotec/website",
+      "session_id": "session-ended",
+      "identity_kind": "logical",
+      "adapter": "claude-code",
+      "agent": "Claude",
+      "process_ids": [42],
+      "cwd": "/work/teplotec/website",
+      "started_at": "2026-08-24T07:00:00Z",
+      "last_seen_at": "2026-08-24T07:20:00Z",
+      "ended_at": "2026-08-24T07:21:00Z",
+      "active": false
+    },
+    {
+      "repository_id": "repo-b",
+      "repository_name": "teplotec/website",
+      "repository_root": "/work/teplotec/website",
+      "session_id": "legacy-7",
+      "identity_kind": "legacy_pid",
+      "adapter": "codex",
+      "agent": "Codex",
+      "process_ids": [7],
+      "started_at": "2026-08-23T22:00:00Z",
+      "last_seen_at": "2026-08-23T22:05:00Z",
+      "ended_at": "2026-08-23T22:06:00Z",
+      "active": false
+    }
+  ]
+}

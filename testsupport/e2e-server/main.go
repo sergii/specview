@@ -82,11 +82,30 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if _, err := catalog.Observe([]hoststate.Observation{{
-		Agent:          "Codex",
-		PID:            4242,
+	endedAt := time.Date(2026, 8, 23, 11, 50, 0, 0, time.UTC)
+	if _, err := catalog.ObserveExecutions([]hoststate.ExecutionSession{{
+		ID:             "e2e-ended-claude",
+		Adapter:        "claude-code",
+		Agent:          "Claude",
 		RepositoryRoot: root,
-	}}, time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)); err != nil {
+		WorktreeRoot:   root,
+		CWD:            root,
+		ProcessIDs:     []int{4141},
+		StartedAt:      endedAt.Add(-10 * time.Minute),
+	}}, endedAt); err != nil {
+		log.Fatal(err)
+	}
+	liveAt := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	if _, err := catalog.ObserveExecutions([]hoststate.ExecutionSession{{
+		ID:             "e2e-live-codex",
+		Adapter:        "codex",
+		Agent:          "Codex",
+		RepositoryRoot: root,
+		WorktreeRoot:   root,
+		CWD:            root,
+		ProcessIDs:     []int{4242, 4243},
+		StartedAt:      liveAt.Add(-5 * time.Minute),
+	}}, liveAt); err != nil {
 		log.Fatal(err)
 	}
 

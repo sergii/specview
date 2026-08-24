@@ -1,0 +1,86 @@
+{{define "repository_evidence.html"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Specview - {{.Repository.Name}} Evidence</title>
+  {{template "theme-head" .}}
+  <style>
+    :root { font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; --gutter:clamp(16px,2.4vw,32px); }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--page); color:var(--text); -webkit-font-smoothing:antialiased; }
+    .shell { min-height:100vh; border:1px solid var(--line); }
+    .topbar { min-height:54px; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:16px; padding:0 var(--gutter); border-bottom:1px solid var(--line); }
+    .brand { color:var(--text); font-size:15px; font-weight:500; letter-spacing:-.012em; text-decoration:none; }
+    .host { justify-self:center; max-width:48vw; overflow:hidden; color:var(--muted); font:11px/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
+    .top-actions { justify-self:end; display:flex; align-items:center; gap:14px; }
+    main { width:min(1180px,100%); margin:0 auto; padding:34px var(--gutter) 64px; }
+    .eyebrow { margin:0 0 8px; color:var(--quiet); font:10px/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; letter-spacing:.14em; text-transform:uppercase; }
+    h1 { margin:0 0 8px; font-size:22px; font-weight:540; letter-spacing:-.025em; }
+    .lede { margin:0 0 20px; max-width:800px; color:var(--muted); font-size:12px; line-height:1.55; }
+    .scope { display:flex; align-items:center; gap:10px; margin:0 0 28px; color:var(--quiet); font:10px/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    .scope a { color:var(--muted); text-decoration:none; }
+    .scope a:hover { color:var(--text); text-decoration:underline; text-underline-offset:3px; }
+    .notice { padding:16px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:var(--muted); font-size:11px; line-height:1.5; }
+    .summary { display:grid; grid-template-columns:repeat(4,minmax(110px,1fr)); margin:24px 0 28px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+    .metric { min-height:74px; padding:14px 12px 12px 0; }
+    .metric + .metric { padding-left:14px; border-left:1px solid var(--line); }
+    .metric-value { display:block; color:var(--text); font:18px/1.1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    .metric-label { display:block; margin-top:6px; color:var(--quiet); font-size:10px; letter-spacing:.12em; text-transform:uppercase; }
+    .section-head { display:flex; align-items:baseline; justify-content:space-between; min-height:36px; padding:8px 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:10px; font-weight:600; letter-spacing:.18em; text-transform:uppercase; }
+    .count { color:var(--quiet); font-weight:400; letter-spacing:.04em; }
+    .entry { display:grid; grid-template-columns:minmax(170px,.9fr) minmax(150px,.8fr) minmax(150px,.9fr) minmax(130px,.75fr) 92px 158px; gap:16px; align-items:center; min-height:58px; border-bottom:1px solid var(--line); }
+    .work-item { min-width:0; overflow:hidden; color:var(--text); font-size:12px; text-decoration:none; text-overflow:ellipsis; white-space:nowrap; }
+    .work-item:hover { text-decoration:underline; text-underline-offset:3px; }
+    .mono { min-width:0; overflow:hidden; color:var(--quiet); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
+    .provider { color:var(--muted); font-size:11px; }
+    .result { color:var(--muted); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; text-transform:lowercase; }
+    .result.passed { color:var(--done); }
+    .result.failed,.result.error,.result.invalid { color:var(--fail); }
+    .result.running,.result.queued { color:var(--progress); }
+    .invalid-message { grid-column:1/-1; margin-top:-8px; padding-bottom:10px; color:var(--fail); font:10px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    .empty { padding:22px 0; border-bottom:1px solid var(--line); color:var(--quiet); font-size:11px; }
+    @media(max-width:860px){.topbar{grid-template-columns:auto minmax(0,1fr) auto;gap:10px}.host{font-size:9px}.scope{flex-wrap:wrap}.summary{grid-template-columns:repeat(2,1fr)}.metric:nth-child(3){border-left:0;border-top:1px solid var(--line);padding-left:0}.metric:nth-child(4){border-top:1px solid var(--line)}.entry{grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;padding:10px 0}.entry .mono,.entry .provider{grid-column:1}.entry .result{grid-column:2;grid-row:1}.entry .observed{grid-column:2;grid-row:2}.work-item{white-space:normal}.invalid-message{grid-column:1/-1}.entry .revision,.entry .check{display:none}}
+  </style>
+</head>
+<body data-hostname="{{.Hostname}}" data-evidence-repository="{{.Repository.ID}}">
+<div class="shell">
+  <header class="topbar"><a class="brand" href="/project?id={{urlquery .Repository.ID}}">← Specview</a><div class="host">EVIDENCE / {{.Hostname}} / {{.Repository.Name}}</div><div class="top-actions">{{template "theme-switch" .}}</div></header>
+  <main>
+    <div class="eyebrow">Read-only native Evidence overview</div>
+    <h1>Evidence for {{.Repository.Name}}</h1>
+    <p class="lede">Records come directly from the repository native Evidence store. Intent metadata only enriches links and titles; it does not determine whether an Evidence record exists.</p>
+    <div class="scope"><a href="/project?id={{urlquery .Repository.ID}}">← Repository</a><span>{{.Repository.Root}}</span></div>
+
+    {{if .Error}}
+      <div class="notice">Evidence overview unavailable: {{.Error}}</div>
+    {{else}}
+      <section data-specview="evidence-overview" data-evidence-count="{{.Overview.Total}}" data-passed="{{.Overview.Passed}}" data-failed="{{.Overview.Failed}}" data-invalid="{{.Overview.Invalid}}">
+        {{if .Overview.WorkItemError}}<div class="notice">Intent links unavailable: {{.Overview.WorkItemError}}. Evidence records remain visible from their native source.</div>{{end}}
+        <div class="summary">
+          <div class="metric"><span class="metric-value">{{.Overview.Total}}</span><span class="metric-label">Records</span></div>
+          <div class="metric"><span class="metric-value">{{.Overview.Passed}}</span><span class="metric-label">Passed</span></div>
+          <div class="metric"><span class="metric-value">{{.Overview.Failed}}</span><span class="metric-label">Failed / error</span></div>
+          <div class="metric"><span class="metric-value">{{.Overview.Invalid}}</span><span class="metric-label">Invalid</span></div>
+        </div>
+        <div class="section-head"><span>Native records</span><span class="count">{{len .Rows}}</span></div>
+        {{range .Rows}}
+          <div class="entry" data-evidence-id="{{.Record.ID}}" data-evidence-path="{{.Record.Path}}" data-evidence-result="{{if .Record.Error}}invalid{{else}}{{.Record.Result}}{{end}}" data-work-item="{{.Record.WorkItemID}}">
+            {{if .WorkItemPath}}<a class="work-item" href="/project/spec?id={{urlquery $.Repository.ID}}&path={{urlquery .WorkItemPath}}">{{.Record.WorkItemID}}{{if .WorkItemTitle}} · {{.WorkItemTitle}}{{end}}</a>{{else}}<div class="work-item">{{if .Record.WorkItemID}}{{.Record.WorkItemID}}{{else}}{{.Record.Path}}{{end}}</div>{{end}}
+            <div class="mono check">{{if .Record.Check}}{{.Record.Check}}{{else}}unavailable{{end}}</div>
+            <div class="mono revision">{{if .Record.Revision}}{{.Record.Revision}}{{else}}unavailable{{end}}</div>
+            <div class="provider">{{if .Record.Provider}}{{.Record.Provider}}{{else}}unavailable{{end}}{{if .Record.Kind}} · {{.Record.Kind}}{{end}}</div>
+            <div class="result {{if .Record.Error}}invalid{{else}}{{.Record.Result}}{{end}}">{{if .Record.Error}}invalid{{else}}{{.Record.Result}}{{end}}</div>
+            <div class="mono observed">{{.ObservedAt}}</div>
+            {{if .Record.Error}}<div class="invalid-message">{{.Record.Path}} · {{.Record.Error}}</div>{{end}}
+          </div>
+        {{else}}<div class="empty">No native Evidence records have been observed for this repository yet.</div>{{end}}
+      </section>
+    {{end}}
+  </main>
+</div>
+{{template "theme-runtime" .}}
+</body>
+</html>
+{{end}}

@@ -160,7 +160,6 @@ func TestWorkItemDiscoveryDetailEvidenceAndAcceptanceToolsReturnStructuredContra
 			Host:           "devbox",
 			RepositoryID:   "repo-1",
 			RepositoryName: "sergii/specview",
-			WorkItemID:     "H18",
 			WorkItem: controlplane.WorkItemSummary{
 				ID:         "H18",
 				Kind:       "spec",

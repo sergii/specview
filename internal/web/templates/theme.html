@@ -31,7 +31,7 @@
   const pathname = window.location.pathname;
   const activeHostPath = (pathname === '/history' || pathname.startsWith('/history/')) ? '/history' : (pathname === '/federation' || pathname.startsWith('/federation/')) ? '/federation' : '/';
   const params = new URL(window.location.href).searchParams;
-  const projectRepositoryContext = pathname === '/project' || pathname === '/project/spec' || pathname === '/project/acceptance';
+  const projectRepositoryContext = pathname === '/project' || pathname === '/project/spec' || pathname === '/project/evidence' || pathname === '/project/acceptance';
   const historyRepositoryContext = pathname === '/history/session';
   const repositoryID = projectRepositoryContext ? params.get('id') : historyRepositoryContext ? params.get('repository') : '';
   const historyLink = navLinks.find(link => link.dataset.hostNav === '/history');
@@ -44,20 +44,24 @@
     const nav = document.querySelector('.host-nav');
     const federationLink = navLinks.find(link => link.dataset.hostNav === '/federation');
     if (nav && federationLink) {
-      const divider = document.createElement('span');
-      divider.className = 'host-nav-divider';
-      divider.textContent = '/';
-      const acceptanceLink = document.createElement('a');
-      const acceptanceURL = new URL('/project/acceptance', window.location.origin);
-      acceptanceURL.searchParams.set('id', repositoryID);
-      acceptanceLink.href = acceptanceURL.pathname + acceptanceURL.search;
-      acceptanceLink.textContent = 'Acceptance';
-      acceptanceLink.dataset.repositoryNav = 'acceptance';
-      if (pathname === '/project/acceptance') acceptanceLink.setAttribute('aria-current', 'location');
       const federationDivider = federationLink.previousElementSibling;
       const insertionPoint = federationDivider || federationLink;
-      nav.insertBefore(divider, insertionPoint);
-      nav.insertBefore(acceptanceLink, insertionPoint);
+      const insertRepositoryView = (label, path, key) => {
+        const divider = document.createElement('span');
+        divider.className = 'host-nav-divider';
+        divider.textContent = '/';
+        const link = document.createElement('a');
+        const url = new URL(path, window.location.origin);
+        url.searchParams.set('id', repositoryID);
+        link.href = url.pathname + url.search;
+        link.textContent = label;
+        link.dataset.repositoryNav = key;
+        if (pathname === path) link.setAttribute('aria-current', 'location');
+        nav.insertBefore(divider, insertionPoint);
+        nav.insertBefore(link, insertionPoint);
+      };
+      insertRepositoryView('Evidence', '/project/evidence', 'evidence');
+      insertRepositoryView('Acceptance', '/project/acceptance', 'acceptance');
     }
   }
   for (const link of navLinks) {

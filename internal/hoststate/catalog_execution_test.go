@@ -183,7 +183,11 @@ func TestCatalogCollapsesActiveV1FragmentsIntoLogicalSession(t *testing.T) {
 	if _, err := catalog.ObserveExecutions([]ExecutionSession{live}, now); err != nil {
 		t.Fatal(err)
 	}
-	sessions := catalog.Repositories()[0].Sessions
+	repositories := catalog.Repositories()
+	if len(repositories) != 1 {
+		t.Fatalf("logical cutover split one filesystem root into multiple repositories: %#v", repositories)
+	}
+	sessions := repositories[0].Sessions
 	if len(sessions) != 2 {
 		t.Fatalf("sessions = %#v, want logical session plus ended legacy history", sessions)
 	}

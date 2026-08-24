@@ -125,6 +125,7 @@ func TestLegacyStdioInitializeToolsAndRepositoryContract(t *testing.T) {
 		"get_work_item",
 		"get_evidence",
 		"get_acceptance",
+		"get_federation_status",
 	}
 	if !reflect.DeepEqual(names, wantNames) {
 		t.Fatalf("tools = %#v, want %#v", names, wantNames)

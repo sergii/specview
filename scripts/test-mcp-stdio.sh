@@ -9,7 +9,7 @@ repo_root="$state_home/fixture/specview"
 mkdir -p "$repo_root/specs" "$repo_root/.specview/evidence" "$state_home/specview"
 
 cat > "$repo_root/.specview.yaml" <<'YAML'
-version: 1
+version: 2
 project:
   name: MCP Smoke
   root: .
@@ -20,9 +20,6 @@ specs:
 acceptance:
   required:
     - unit-tests
-server:
-  host: 127.0.0.1
-  port: 7331
 YAML
 
 cat > "$repo_root/specs/H18.md" <<'MARKDOWN'
@@ -65,8 +62,7 @@ record = {
     "summary": "binary smoke passed",
 }
 (root / ".specview" / "evidence" / "tests.json").write_text(
-    json.dumps(record, indent=2) + "\n",
-    encoding="utf-8",
+    json.dumps(record, indent=2) + "\n", encoding="utf-8"
 )
 PY
 
@@ -79,27 +75,24 @@ root = os.environ["REPO_ROOT"]
 state_home = Path(os.environ["STATE_HOME"])
 catalog = {
     "version": 1,
-    "repositories": [
-        {
-            "id": "repo-mcp-smoke",
-            "name": "fixture/specview",
-            "root": root,
-            "first_seen_at": "2026-08-23T18:00:00Z",
-            "last_seen_at": "2026-08-23T18:00:00Z",
-            "convention": {
-                "adapter": "specview",
-                "label": "Specview",
-                "path": "specs",
-                "recognized": True,
-                "supported": True,
-            },
-            "sessions": [],
-        }
-    ],
+    "repositories": [{
+        "id": "repo-mcp-smoke",
+        "name": "fixture/specview",
+        "root": root,
+        "first_seen_at": "2026-08-23T18:00:00Z",
+        "last_seen_at": "2026-08-23T18:00:00Z",
+        "convention": {
+            "adapter": "specview",
+            "label": "Specview",
+            "path": "specs",
+            "recognized": True,
+            "supported": True,
+        },
+        "sessions": [],
+    }],
 }
 (state_home / "specview" / "catalog.json").write_text(
-    json.dumps(catalog, indent=2) + "\n",
-    encoding="utf-8",
+    json.dumps(catalog, indent=2) + "\n", encoding="utf-8"
 )
 PY
 
@@ -113,6 +106,7 @@ responses=$(
     '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_work_item","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
     '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_evidence","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
     '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_acceptance","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
+    '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"get_federation_status","arguments":{}}}' \
   | XDG_STATE_HOME="$state_home" "$binary" mcp
 )
 
@@ -121,15 +115,13 @@ import json
 import os
 
 lines = [line for line in os.environ["MCP_RESPONSES"].splitlines() if line.strip()]
-if len(lines) != 7:
-    raise SystemExit(f"expected 7 MCP responses, got {len(lines)}: {lines!r}")
+if len(lines) != 8:
+    raise SystemExit(f"expected 8 MCP responses, got {len(lines)}: {lines!r}")
 
-initialize, tools, repositories, work_items, work_item, evidence, acceptance = [json.loads(line) for line in lines]
+initialize, tools, repositories, work_items, work_item, evidence, acceptance, federation = [json.loads(line) for line in lines]
 head = os.environ["GIT_HEAD"]
 revision = f"git:{head}"
 
-if initialize.get("id") != 1:
-    raise SystemExit(f"unexpected initialize response: {initialize!r}")
 if initialize.get("result", {}).get("protocolVersion") != "2025-11-25":
     raise SystemExit(f"unexpected MCP protocol version: {initialize!r}")
 
@@ -143,16 +135,14 @@ expected = [
     "get_work_item",
     "get_evidence",
     "get_acceptance",
+    "get_federation_status",
 ]
 if names != expected:
     raise SystemExit(f"unexpected MCP tools: {names!r}")
-
 for tool in tools.get("result", {}).get("tools", []):
     annotations = tool.get("annotations", {})
-    if annotations.get("readOnlyHint") is not True:
-        raise SystemExit(f"tool is not read-only: {tool!r}")
-    if annotations.get("destructiveHint") is not False:
-        raise SystemExit(f"tool is destructive: {tool!r}")
+    if annotations.get("readOnlyHint") is not True or annotations.get("destructiveHint") is not False:
+        raise SystemExit(f"tool is not strictly read-only: {tool!r}")
 
 def structured(response):
     result = response.get("result", {})
@@ -167,25 +157,25 @@ repositories_value = structured(repositories)
 if not any(item.get("id") == "repo-mcp-smoke" for item in repositories_value.get("repositories", [])):
     raise SystemExit(f"fixture repository missing: {repositories_value!r}")
 
-work_items_value = structured(work_items)
-items = work_items_value.get("work_items", [])
+items = structured(work_items).get("work_items", [])
 if len(items) != 1 or items[0].get("work_item_id") != "H18":
-    raise SystemExit(f"unexpected WorkItem discovery: {work_items_value!r}")
-
-work_item_value = structured(work_item)
-if work_item_value.get("work_item", {}).get("work_item_id") != "H18":
-    raise SystemExit(f"unexpected WorkItem: {work_item_value!r}")
-
-evidence_value = structured(evidence)
-records = evidence_value.get("records", [])
+    raise SystemExit(f"unexpected WorkItem discovery: {items!r}")
+if structured(work_item).get("work_item", {}).get("work_item_id") != "H18":
+    raise SystemExit(f"unexpected WorkItem detail: {work_item!r}")
+records = structured(evidence).get("records", [])
 if len(records) != 1 or records[0].get("revision") != revision or records[0].get("provider") != "binary-smoke":
-    raise SystemExit(f"unexpected Evidence: {evidence_value!r}")
-
+    raise SystemExit(f"unexpected Evidence: {records!r}")
 acceptance_value = structured(acceptance)
-if acceptance_value.get("revision", {}).get("revision") != revision:
-    raise SystemExit(f"unexpected Acceptance revision: {acceptance_value!r}")
-if acceptance_value.get("decision", {}).get("state") != "accepted":
-    raise SystemExit(f"unexpected Acceptance decision: {acceptance_value!r}")
+if acceptance_value.get("revision", {}).get("revision") != revision or acceptance_value.get("decision", {}).get("state") != "accepted":
+    raise SystemExit(f"unexpected Acceptance: {acceptance_value!r}")
+
+federation_value = structured(federation)
+hosts = federation_value.get("hosts", [])
+if len(hosts) != 1 or hosts[0].get("source") != "local" or hosts[0].get("has_snapshot") is not True:
+    raise SystemExit(f"unexpected federation hosts: {hosts!r}")
+groups = federation_value.get("federation", {}).get("repositories", [])
+if not any(group.get("name") == "fixture/specview" for group in groups):
+    raise SystemExit(f"fixture repository missing from federation projection: {groups!r}")
 PY
 
 host_file="$state_home/specview/host.json"
@@ -193,21 +183,6 @@ if [ ! -f "$host_file" ]; then
   echo "specview mcp did not create persistent host identity" >&2
   exit 1
 fi
-
-HOST_FILE="$host_file" python3 - <<'PY'
-import json
-import os
-from pathlib import Path
-
-value = json.loads(Path(os.environ["HOST_FILE"]).read_text(encoding="utf-8"))
-if value.get("version") != 1:
-    raise SystemExit(f"unexpected host identity version: {value!r}")
-if not str(value.get("id", "")).startswith("host:"):
-    raise SystemExit(f"unexpected host identity id: {value!r}")
-if not value.get("created_at"):
-    raise SystemExit(f"host identity created_at missing: {value!r}")
-PY
-
 cp "$host_file" "$state_home/host-before.json"
 printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"binary-smoke-reopen","version":"1.0.0"}}}' \

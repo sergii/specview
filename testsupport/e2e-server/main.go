@@ -10,6 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sergii/specview/internal/federation"
+	"github.com/sergii/specview/internal/federationpeers"
+	"github.com/sergii/specview/internal/federationruntime"
 	"github.com/sergii/specview/internal/hoststate"
 	"github.com/sergii/specview/internal/sourcecontrol"
 	"github.com/sergii/specview/internal/web"
@@ -30,6 +33,37 @@ func (s fixtureSourceControl) Inspect(context.Context, string) (sourcecontrol.Re
 				Branch:     "feat/acceptance-policy",
 				Head:       fixtureHead,
 				DirtyCount: 0,
+			}},
+		},
+	}, nil
+}
+
+type fixtureFederationReader struct {
+	root string
+}
+
+func (r fixtureFederationReader) Build(context.Context) (federationruntime.Projection, error) {
+	now := time.Date(2026, 8, 24, 1, 0, 0, 0, time.UTC)
+	return federationruntime.Projection{
+		SchemaVersion: federationruntime.ProjectionSchemaVersion,
+		GeneratedAt:   now,
+		Hosts: []federationruntime.HostStatus{
+			{Source: federationruntime.HostSourceLocal, HostID: "host:550e8400-e29b-41d4-a716-446655440000", Hostname: "e2e-laptop", HasSnapshot: true},
+			{Source: federationruntime.HostSourcePeer, Peer: "devbox", HostID: "host:550e8400-e29b-41d4-a716-446655440001", Hostname: "e2e-devbox", Freshness: federationpeers.FreshnessUnreachable, HasSnapshot: true, LastError: "fixture transport unavailable"},
+			{Source: federationruntime.HostSourcePeer, Peer: "newbox", HostID: "host:550e8400-e29b-41d4-a716-446655440002", Freshness: federationpeers.FreshnessNeverRetrieved, HasSnapshot: false},
+		},
+		Federation: federation.Projection{
+			SchemaVersion: federation.ProjectionSchemaVersion,
+			GeneratedAt:   now,
+			Repositories: []federation.RepositoryGroup{{
+				GroupID: "group:e2e-specview",
+				Name:    "sergii/specview",
+				Active:  true,
+				Agents:  []string{"Codex"},
+				Instances: []federation.SourcedInstance{
+					{HostID: "host:550e8400-e29b-41d4-a716-446655440000", Hostname: "e2e-laptop", ObservedAt: now, RepositoryInstance: federation.RepositoryInstance{InstanceID: "instance:e2e-local", SourceRepositoryID: "repo-e2e", Name: "sergii/specview", Root: r.root, Active: true}},
+					{HostID: "host:550e8400-e29b-41d4-a716-446655440001", Hostname: "e2e-devbox", ObservedAt: now.Add(-time.Minute), RepositoryInstance: federation.RepositoryInstance{InstanceID: "instance:e2e-devbox", SourceRepositoryID: "repo-e2e-remote", Name: "sergii/specview", Root: "/srv/repos/sergii/specview", Active: false}},
+				},
 			}},
 		},
 	}, nil
@@ -68,7 +102,7 @@ func main() {
 		fixtureSourceControl{root: root},
 	)
 	log.Printf("Specview e2e fixture server listening on http://127.0.0.1:7332")
-	if err := server.ListenAndServe(ctx); err != nil {
+	if err := server.ListenAndServeWithFederation(ctx, fixtureFederationReader{root: root}); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -81,7 +115,7 @@ func writeFixture(root string) error {
 		return err
 	}
 
-	config := `version: 1
+	config := `version: 2
 project:
   name: "Specview E2E"
   root: "."
@@ -93,9 +127,6 @@ acceptance:
   required:
     - unit-tests
     - lint
-server:
-  host: 127.0.0.1
-  port: 7332
 `
 	if err := os.WriteFile(filepath.Join(root, ".specview.yaml"), []byte(config), 0o644); err != nil {
 		return err

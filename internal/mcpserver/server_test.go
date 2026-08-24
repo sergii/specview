@@ -125,6 +125,7 @@ func TestLegacyStdioInitializeToolsAndRepositoryContract(t *testing.T) {
 		"get_work_item",
 		"get_evidence",
 		"get_acceptance",
+		"get_federation_status",
 	}
 	if !reflect.DeepEqual(names, wantNames) {
 		t.Fatalf("tools = %#v, want %#v", names, wantNames)
@@ -159,6 +160,7 @@ func TestWorkItemDiscoveryDetailEvidenceAndAcceptanceToolsReturnStructuredContra
 			Host:           "devbox",
 			RepositoryID:   "repo-1",
 			RepositoryName: "sergii/specview",
+			WorkItemID:     "H18",
 			WorkItem: controlplane.WorkItemSummary{
 				ID:         "H18",
 				Kind:       "spec",

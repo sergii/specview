@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sergii/specview/internal/controlplane"
+	"github.com/sergii/specview/internal/executionhistory"
 	"github.com/sergii/specview/internal/federationruntime"
 )
 
@@ -31,6 +32,10 @@ type Reader interface {
 	GetWorkItem(context.Context, string, string) (controlplane.GetWorkItemResult, error)
 	GetEvidence(context.Context, string, string) (controlplane.GetEvidenceResult, error)
 	GetAcceptance(context.Context, string, string) (controlplane.GetAcceptanceResult, error)
+}
+
+type HistoryReader interface {
+	GetExecutionHistory(context.Context) (executionhistory.Projection, error)
 }
 
 type FederationReader interface {
@@ -197,7 +202,7 @@ func (s *Server) initialize(raw json.RawMessage) (any, *rpcError) {
 			"name":    "specview",
 			"version": s.version,
 		},
-		"instructions": "Specview exposes read-only deterministic facts about repositories, work items, evidence, acceptance, worktrees, active coding-agent sessions, and the current multi-host federation projection.",
+		"instructions": "Specview exposes read-only deterministic facts about repositories, work items, evidence, acceptance, worktrees, active and historical coding-agent sessions, and the current multi-host federation projection.",
 	}, nil
 }
 
@@ -229,6 +234,16 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (any, *rpcEr
 			return nil, invalidParams(params.Name, err)
 		}
 		value, err := s.reader.ListActiveSessions(ctx)
+		return toolResultFor(value, err), nil
+	case "get_execution_history":
+		if err := requireEmptyArguments(params.Arguments); err != nil {
+			return nil, invalidParams(params.Name, err)
+		}
+		historyReader, ok := s.reader.(HistoryReader)
+		if !ok {
+			return toolResultFor(nil, errors.New("execution history reader is not configured")), nil
+		}
+		value, err := historyReader.GetExecutionHistory(ctx)
 		return toolResultFor(value, err), nil
 	case "list_worktrees":
 		arguments, err := decodeRepositoryID(params.Arguments)
@@ -331,6 +346,12 @@ func toolDefinitions() []map[string]any {
 		{
 			"name":        "list_active_sessions",
 			"description": "List active coding-agent execution sessions observed on this host.",
+			"inputSchema": emptySchema,
+			"annotations": readOnly,
+		},
+		{
+			"name":        "get_execution_history",
+			"description": "Get deterministic local Host execution history, including active and ended logical sessions with repository attribution.",
 			"inputSchema": emptySchema,
 			"annotations": readOnly,
 		},

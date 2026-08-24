@@ -11,11 +11,13 @@
 <style>
 :root { color-scheme:light; --page:#fff; --text:#151515; --muted:#6f6f69; --quiet:#a0a099; --line:#d8d8d2; --line-strong:#c8c8c2; --active:#2f8a57; --hover:#fcfcfb; --control-hover:#f6f6f3; --surface:#fff; --surface-subtle:#f7f7f4; --code:#f4f4f1; --agent-neutral:#151515; --new:#85857e; --progress:#c39423; --done:#2f8a57; --fail:#a54a43; }
 :root[data-theme="dark"] { color-scheme:dark; --page:#11120f; --text:#f1f1ed; --muted:#b6b6ae; --quiet:#7d7d75; --line:#2c2d29; --line-strong:#44453f; --active:#58a878; --hover:#171814; --control-hover:#1d1e1a; --surface:#141511; --surface-subtle:#191a16; --code:#191a17; --agent-neutral:#f1f1ed; --new:#a1a198; --progress:#d1a846; --done:#58a878; --fail:#d97870; }
+.host-nav{display:flex;align-items:center;gap:2px;white-space:nowrap}.host-nav a{border-bottom:1px solid transparent;outline:0;padding:3px 4px;color:var(--quiet);font:10px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;text-decoration:none}.host-nav a:hover{color:var(--muted)}.host-nav a[aria-current="page"]{border-bottom-color:var(--line-strong);color:var(--text)}.host-nav a:focus-visible{outline:1px solid var(--line-strong);outline-offset:2px;border-radius:2px}.host-nav-divider{color:var(--line-strong);font-size:10px}
 .theme-switch{display:flex;align-items:center;gap:2px;white-space:nowrap}.theme-switch button{border:0;border-bottom:1px solid transparent;outline:0;padding:3px 4px;background:transparent;color:var(--quiet);font:10px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;cursor:pointer}.theme-switch button[aria-pressed="true"]{border-bottom-color:var(--line-strong);color:var(--text)}.theme-switch button:hover{color:var(--muted)}.theme-switch button:focus-visible{outline:1px solid var(--line-strong);outline-offset:2px;border-radius:2px}.theme-switch-divider{color:var(--line-strong);font-size:10px}
+@media(max-width:760px){.host-nav{gap:0}.host-nav a{padding:3px;font-size:9px}.host-nav-divider{display:none}}
 </style>
 {{end}}
 
-{{define "theme-switch"}}<div class="theme-switch" aria-label="Theme"><button type="button" data-theme-choice="light" aria-pressed="true">Light</button><span class="theme-switch-divider">/</span><button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button></div>{{end}}
+{{define "theme-switch"}}<nav class="host-nav" aria-label="Host views"><a href="/" data-host-nav="/">Host</a><span class="host-nav-divider">/</span><a href="/history" data-host-nav="/history">History</a><span class="host-nav-divider">/</span><a href="/federation" data-host-nav="/federation">Federation</a></nav><div class="theme-switch" aria-label="Theme"><button type="button" data-theme-choice="light" aria-pressed="true">Light</button><span class="theme-switch-divider">/</span><button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button></div>{{end}}
 
 {{define "theme-runtime"}}
 <script>
@@ -25,6 +27,11 @@
   const sync = () => { const theme = currentTheme(); for (const button of buttons) button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme)); };
   const setTheme = theme => { document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light'; try { localStorage.setItem('specview-theme', document.documentElement.dataset.theme); } catch (_) {} sync(); };
   for (const button of buttons) button.addEventListener('click', () => setTheme(button.dataset.themeChoice));
+  const navLinks = Array.from(document.querySelectorAll('[data-host-nav]'));
+  const activeHostPath = window.location.pathname === '/history' ? '/history' : window.location.pathname === '/federation' ? '/federation' : '/';
+  for (const link of navLinks) {
+    if (link.dataset.hostNav === activeHostPath) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+  }
   const hostname = document.body && document.body.dataset ? document.body.dataset.hostname : '';
   if (hostname) { try { localStorage.setItem('specview-hostname', hostname); } catch (_) {} }
   sync();

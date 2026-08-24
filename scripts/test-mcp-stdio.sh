@@ -106,8 +106,9 @@ responses=$(
     '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_work_item","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
     '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_evidence","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
     '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_acceptance","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
-    '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"get_federation_status","arguments":{}}}' \
-    '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"get_execution_history","arguments":{}}}' \
+    '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"get_repository_control_plane","arguments":{"repository_id":"repo-mcp-smoke"}}}' \
+    '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"get_federation_status","arguments":{}}}' \
+    '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"get_execution_history","arguments":{}}}' \
   | XDG_STATE_HOME="$state_home" "$binary" mcp
 )
 
@@ -116,10 +117,10 @@ import json
 import os
 
 lines = [line for line in os.environ["MCP_RESPONSES"].splitlines() if line.strip()]
-if len(lines) != 9:
-    raise SystemExit(f"expected 9 MCP responses, got {len(lines)}: {lines!r}")
+if len(lines) != 10:
+    raise SystemExit(f"expected 10 MCP responses, got {len(lines)}: {lines!r}")
 
-initialize, tools, repositories, work_items, work_item, evidence, acceptance, federation, history = [json.loads(line) for line in lines]
+initialize, tools, repositories, work_items, work_item, evidence, acceptance, control_plane, federation, history = [json.loads(line) for line in lines]
 head = os.environ["GIT_HEAD"]
 revision = f"git:{head}"
 
@@ -130,6 +131,7 @@ names = [tool.get("name") for tool in tools.get("result", {}).get("tools", [])]
 expected = [
     "list_repositories",
     "get_repository",
+    "get_repository_control_plane",
     "list_active_sessions",
     "get_execution_history",
     "list_worktrees",
@@ -170,6 +172,23 @@ if len(records) != 1 or records[0].get("revision") != revision or records[0].get
 acceptance_value = structured(acceptance)
 if acceptance_value.get("revision", {}).get("revision") != revision or acceptance_value.get("decision", {}).get("state") != "accepted":
     raise SystemExit(f"unexpected Acceptance: {acceptance_value!r}")
+
+control_plane_value = structured(control_plane)
+if control_plane_value.get("repository_id") != "repo-mcp-smoke":
+    raise SystemExit(f"unexpected control-plane repository: {control_plane_value!r}")
+intent = control_plane_value.get("intent", {})
+if intent.get("total") != 1 or intent.get("in_progress") != 1 or intent.get("invalid") != 0:
+    raise SystemExit(f"unexpected control-plane Intent: {intent!r}")
+execution = control_plane_value.get("execution", {})
+if execution.get("active") != 0 or execution.get("latest") is not None:
+    raise SystemExit(f"unexpected control-plane Execution: {execution!r}")
+repo_evidence = control_plane_value.get("evidence", {})
+latest_record = repo_evidence.get("latest", {}).get("record", {})
+if repo_evidence.get("total") != 1 or repo_evidence.get("passed") != 1 or latest_record.get("revision") != revision or latest_record.get("provider") != "binary-smoke":
+    raise SystemExit(f"unexpected control-plane Evidence: {repo_evidence!r}")
+repo_acceptance = control_plane_value.get("acceptance", {})
+if repo_acceptance.get("configured") is not True or repo_acceptance.get("accepted") != 1 or repo_acceptance.get("revision", {}).get("revision") != revision:
+    raise SystemExit(f"unexpected control-plane Acceptance: {repo_acceptance!r}")
 
 federation_value = structured(federation)
 hosts = federation_value.get("hosts", [])

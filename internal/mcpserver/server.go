@@ -38,6 +38,10 @@ type HistoryReader interface {
 	GetExecutionHistory(context.Context) (executionhistory.Projection, error)
 }
 
+type RepositoryControlPlaneReader interface {
+	GetRepositoryControlPlane(context.Context, string) (controlplane.GetRepositoryControlPlaneResult, error)
+}
+
 type FederationReader interface {
 	Build(context.Context) (federationruntime.Projection, error)
 }
@@ -202,7 +206,7 @@ func (s *Server) initialize(raw json.RawMessage) (any, *rpcError) {
 			"name":    "specview",
 			"version": s.version,
 		},
-		"instructions": "Specview exposes read-only deterministic facts about repositories, work items, evidence, acceptance, worktrees, active and historical coding-agent sessions, and the current multi-host federation projection.",
+		"instructions": "Specview exposes read-only deterministic facts about repositories, repository control-plane summaries, work items, evidence, acceptance, worktrees, active and historical coding-agent sessions, and the current multi-host federation projection.",
 	}, nil
 }
 
@@ -228,6 +232,17 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (any, *rpcEr
 			return nil, invalidParams(params.Name, err)
 		}
 		value, readErr := s.reader.GetRepository(ctx, arguments.RepositoryID)
+		return toolResultFor(value, readErr), nil
+	case "get_repository_control_plane":
+		arguments, err := decodeRepositoryID(params.Arguments)
+		if err != nil {
+			return nil, invalidParams(params.Name, err)
+		}
+		controlPlaneReader, ok := s.reader.(RepositoryControlPlaneReader)
+		if !ok {
+			return toolResultFor(nil, errors.New("repository control-plane reader is not configured")), nil
+		}
+		value, readErr := controlPlaneReader.GetRepositoryControlPlane(ctx, arguments.RepositoryID)
 		return toolResultFor(value, readErr), nil
 	case "list_active_sessions":
 		if err := requireEmptyArguments(params.Arguments); err != nil {
@@ -296,12 +311,15 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (any, *rpcEr
 
 func toolDefinitionsForReader(reader Reader) []map[string]any {
 	definitions := toolDefinitions()
-	if _, ok := reader.(HistoryReader); ok {
-		return definitions
-	}
-	filtered := make([]map[string]any, 0, len(definitions)-1)
+	_, hasHistory := reader.(HistoryReader)
+	_, hasControlPlane := reader.(RepositoryControlPlaneReader)
+	filtered := make([]map[string]any, 0, len(definitions))
 	for _, definition := range definitions {
-		if definition["name"] == "get_execution_history" {
+		name, _ := definition["name"].(string)
+		if name == "get_execution_history" && !hasHistory {
+			continue
+		}
+		if name == "get_repository_control_plane" && !hasControlPlane {
 			continue
 		}
 		filtered = append(filtered, definition)
@@ -355,6 +373,12 @@ func toolDefinitions() []map[string]any {
 		{
 			"name":        "get_repository",
 			"description": "Get one repository with live agent state plus degradable Git and forge context.",
+			"inputSchema": repositorySchema,
+			"annotations": readOnly,
+		},
+		{
+			"name":        "get_repository_control_plane",
+			"description": "Get one repository read-only control-plane summary across Intent, logical Execution, native Evidence, and Acceptance without inventing aggregate health.",
 			"inputSchema": repositorySchema,
 			"annotations": readOnly,
 		},

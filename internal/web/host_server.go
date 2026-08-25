@@ -121,15 +121,16 @@ func (s *HostServer) ListenAndServe(ctx context.Context) error {
 }
 
 type hostData struct {
-	Hostname    string
-	Query       string
-	Filtered    bool
-	SearchError string
-	Results     []hoststate.Repository
-	Today       []hoststate.Repository
-	Yesterday   []hoststate.Repository
-	Earlier     []hoststate.Repository
-	Total       int
+	Hostname     string
+	Query        string
+	Filtered     bool
+	SearchError  string
+	ControlPlane hostControlPlaneSummary
+	Results      []hoststate.Repository
+	Today        []hoststate.Repository
+	Yesterday    []hoststate.Repository
+	Earlier      []hoststate.Repository
+	Total        int
 }
 
 func (s *HostServer) index(w http.ResponseWriter, r *http.Request) {
@@ -158,6 +159,7 @@ func (s *HostServer) loadHostData(ctx context.Context, rawQuery string, now time
 	query := strings.TrimSpace(rawQuery)
 	data := hostData{Hostname: s.catalog.Hostname(), Query: query, Filtered: query != ""}
 	repositories := s.catalog.Repositories()
+	data.ControlPlane = s.hostControlPlane(ctx, repositories)
 
 	if query != "" {
 		if s.repositorySearch == nil {

@@ -213,7 +213,7 @@ if host_acceptance.get("configured_repositories") != 1 or host_acceptance.get("a
 if host_control_plane_value.get("attention") != []:
     raise SystemExit(f"unexpected Host control-plane attention: {host_control_plane_value!r}")
 
-federation_value = structured(federation, schema_version=2)
+federation_value = structured(federation, schema_version=3)
 hosts = federation_value.get("hosts", [])
 if len(hosts) != 1 or hosts[0].get("source") != "local" or hosts[0].get("has_snapshot") is not True:
     raise SystemExit(f"unexpected federation hosts: {hosts!r}")
@@ -224,6 +224,9 @@ if not any(group.get("name") == "fixture/specview" for group in groups):
     raise SystemExit(f"fixture repository missing from federation projection: {groups!r}")
 if federation_value.get("federation", {}).get("schema_version") != 1:
     raise SystemExit(f"nested H20 repository projection changed: {federation_value!r}")
+source_instances = [instance for group in groups for instance in group.get("instances", []) if instance.get("source_repository_id") == "repo-mcp-smoke"]
+if len(source_instances) != 1 or source_instances[0].get("control_plane") != control_plane_value:
+    raise SystemExit(f"federation repository control plane diverged from local authority: federation={source_instances!r} local={control_plane_value!r}")
 
 history_value = structured(history)
 if history_value.get("entries") != []:
@@ -295,6 +298,8 @@ if row.get("name") != "fixture/specview" or instance.get("source_repository_id")
     raise SystemExit(f"unexpected selected Host repository attribution: {row!r}")
 if instance.get("host_id") != os.environ["HOST_ID"]:
     raise SystemExit(f"repository instance belongs to another Host: {instance!r}")
+if not instance.get("control_plane"):
+    raise SystemExit(f"selected Host repository lost repository control plane: {instance!r}")
 PY
 
 repository_response=$(
@@ -309,6 +314,7 @@ import os
 
 responses = [json.loads(line) for line in os.environ["MCP_RESPONSES"].splitlines() if line.strip()]
 federation = responses[9]["result"]["structuredContent"]
+local_repository_control_plane = responses[7]["result"]["structuredContent"]
 expected_host = federation["hosts"][0]
 expected_group = None
 expected_instance = None
@@ -349,6 +355,8 @@ if instance.get("source_repository_id") != "repo-mcp-smoke" or instance.get("roo
     raise SystemExit(f"unexpected federation repository attribution: {instance!r}")
 if not instance.get("observed_at"):
     raise SystemExit(f"selected repository instance lost observation time: {instance!r}")
+if instance.get("control_plane") != local_repository_control_plane:
+    raise SystemExit(f"exact federation repository control plane diverged from local authority: selected={instance.get('control_plane')!r} local={local_repository_control_plane!r}")
 actual_stable = copy.deepcopy(instance)
 expected_stable = copy.deepcopy(expected_instance)
 actual_stable.pop("observed_at", None)

@@ -39,6 +39,16 @@ func (s snapshotReaderStub) GetHostControlPlane(context.Context) (controlplane.G
 	}, nil
 }
 
+func (s snapshotReaderStub) GetRepositoryControlPlane(_ context.Context, repositoryID string) (controlplane.GetRepositoryControlPlaneResult, error) {
+	detail := s.details[repositoryID]
+	return controlplane.GetRepositoryControlPlaneResult{
+		SchemaVersion:  controlplane.SchemaVersion,
+		Host:           s.repositories.Host,
+		RepositoryID:   repositoryID,
+		RepositoryName: detail.Repository.Name,
+	}, nil
+}
+
 func TestBuilderProducesSourceAttributedSnapshot(t *testing.T) {
 	root := t.TempDir()
 	configBody := `version: 1
@@ -119,19 +129,22 @@ server:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.SchemaVersion != SnapshotSchemaVersionV2 {
-		t.Fatalf("snapshot schema = %d, want v2", snapshot.SchemaVersion)
+	if snapshot.SchemaVersion != SnapshotSchemaVersionV3 {
+		t.Fatalf("snapshot schema = %d, want v3", snapshot.SchemaVersion)
 	}
 	if snapshot.HostID != "host:11111111-1111-4111-9111-111111111111" || snapshot.Hostname != "laptop" {
 		t.Fatalf("unexpected Host snapshot: %#v", snapshot)
 	}
 	if snapshot.ControlPlane == nil || snapshot.ControlPlane.Host != "laptop" {
-		t.Fatalf("Host control plane missing from v2 snapshot: %#v", snapshot.ControlPlane)
+		t.Fatalf("Host control plane missing from v3 snapshot: %#v", snapshot.ControlPlane)
 	}
 	if len(snapshot.Instances) != 1 {
 		t.Fatalf("instances = %d, want 1", len(snapshot.Instances))
 	}
 	instance := snapshot.Instances[0]
+	if instance.ControlPlane == nil || instance.ControlPlane.RepositoryID != "repo-local" || instance.ControlPlane.RepositoryName != "team/app" {
+		t.Fatalf("repository control plane missing from v3 snapshot: %#v", instance.ControlPlane)
+	}
 	if instance.Fingerprint.ExplicitID != "specview:team/app" {
 		t.Fatalf("explicit project identity missing: %#v", instance.Fingerprint)
 	}
@@ -148,8 +161,19 @@ server:
 		t.Fatalf("unexpected worktrees: %#v", instance.Worktrees)
 	}
 
+	v2 := snapshot.V2()
+	if v2.SchemaVersion != SnapshotSchemaVersionV2 || v2.ControlPlane == nil || v2.Instances[0].ControlPlane != nil {
+		t.Fatalf("v2 projection = %#v", v2)
+	}
+	if snapshot.Instances[0].ControlPlane == nil {
+		t.Fatal("v2 down-projection mutated source v3 snapshot")
+	}
+	if err := v2.Validate(); err != nil {
+		t.Fatalf("v2 down-projection must remain valid: %v", err)
+	}
+
 	legacy := snapshot.V1()
-	if legacy.SchemaVersion != SnapshotSchemaVersion || legacy.ControlPlane != nil {
+	if legacy.SchemaVersion != SnapshotSchemaVersion || legacy.ControlPlane != nil || legacy.Instances[0].ControlPlane != nil {
 		t.Fatalf("legacy projection = %#v", legacy)
 	}
 	if err := legacy.Validate(); err != nil {

@@ -19,10 +19,14 @@ import (
 
 const (
 	SnapshotPath    = "/v1/federation/snapshot"
+	SnapshotPathV1  = SnapshotPath
+	SnapshotPathV2  = "/v2/federation/snapshot"
 	DefaultAddress  = "127.0.0.1:7332"
 	DefaultMaxBytes = int64(16 << 20)
 	DefaultTimeout  = 10 * time.Second
 )
+
+var errSnapshotVersionUnavailable = errors.New("federation snapshot version unavailable")
 
 type SnapshotSource interface {
 	Build(context.Context) (federation.HostSnapshot, error)
@@ -40,7 +44,7 @@ func NewHandler(source SnapshotSource) (*Handler, error) {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != SnapshotPath {
+	if r.URL.Path != SnapshotPathV1 && r.URL.Path != SnapshotPathV2 {
 		http.NotFound(w, r)
 		return
 	}
@@ -54,6 +58,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "federation snapshot unavailable", http.StatusServiceUnavailable)
 		return
+	}
+	if r.URL.Path == SnapshotPathV1 {
+		snapshot = snapshot.V1()
 	}
 	if err := snapshot.Validate(); err != nil {
 		http.Error(w, "federation snapshot invalid", http.StatusInternalServerError)
@@ -121,6 +128,28 @@ func (c *Client) FetchWithHeaders(ctx context.Context, rawURL, expectedHostID st
 		}
 	}
 
+	var lastUnavailable error
+	for _, candidate := range preferredSnapshotURLs(peerURL) {
+		snapshot, fetchErr := c.fetchSnapshot(ctx, candidate, headers)
+		if fetchErr != nil {
+			if errors.Is(fetchErr, errSnapshotVersionUnavailable) {
+				lastUnavailable = fetchErr
+				continue
+			}
+			return federation.HostSnapshot{}, fetchErr
+		}
+		if expectedHostID != "" && snapshot.HostID != expectedHostID {
+			return federation.HostSnapshot{}, fmt.Errorf("federation peer Host ID %q does not match expected %q", snapshot.HostID, expectedHostID)
+		}
+		return snapshot, nil
+	}
+	if lastUnavailable != nil {
+		return federation.HostSnapshot{}, lastUnavailable
+	}
+	return federation.HostSnapshot{}, errors.New("federation snapshot unavailable")
+}
+
+func (c *Client) fetchSnapshot(ctx context.Context, peerURL *url.URL, headers http.Header) (federation.HostSnapshot, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, peerURL.String(), nil)
 	if err != nil {
 		return federation.HostSnapshot{}, err
@@ -137,6 +166,9 @@ func (c *Client) FetchWithHeaders(ctx context.Context, rawURL, expectedHostID st
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode == http.StatusNotFound {
+		return federation.HostSnapshot{}, fmt.Errorf("%w: %s", errSnapshotVersionUnavailable, peerURL.Path)
+	}
 	if response.StatusCode != http.StatusOK {
 		return federation.HostSnapshot{}, fmt.Errorf("fetch federation snapshot: unexpected HTTP status %d", response.StatusCode)
 	}
@@ -152,10 +184,15 @@ func (c *Client) FetchWithHeaders(ctx context.Context, rawURL, expectedHostID st
 	if err != nil {
 		return federation.HostSnapshot{}, err
 	}
-	if expectedHostID != "" && snapshot.HostID != expectedHostID {
-		return federation.HostSnapshot{}, fmt.Errorf("federation peer Host ID %q does not match expected %q", snapshot.HostID, expectedHostID)
-	}
 	return snapshot, nil
+}
+
+func preferredSnapshotURLs(peerURL *url.URL) []*url.URL {
+	v2 := *peerURL
+	v2.Path = SnapshotPathV2
+	v1 := *peerURL
+	v1.Path = SnapshotPathV1
+	return []*url.URL{&v2, &v1}
 }
 
 func ValidatePeerURL(rawURL string) (*url.URL, error) {
@@ -177,10 +214,10 @@ func ValidatePeerURL(rawURL string) (*url.URL, error) {
 		return nil, errors.New("federation peer URL must not contain query or fragment")
 	}
 	if peerURL.Path == "" || peerURL.Path == "/" {
-		peerURL.Path = SnapshotPath
+		peerURL.Path = SnapshotPathV1
 	}
-	if peerURL.Path != SnapshotPath {
-		return nil, fmt.Errorf("federation peer URL path must be %s", SnapshotPath)
+	if peerURL.Path != SnapshotPathV1 && peerURL.Path != SnapshotPathV2 {
+		return nil, fmt.Errorf("federation peer URL path must be %s or %s", SnapshotPathV1, SnapshotPathV2)
 	}
 
 	switch strings.ToLower(peerURL.Scheme) {

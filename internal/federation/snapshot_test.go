@@ -2,6 +2,7 @@ package federation
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +29,14 @@ func (s snapshotReaderStub) GetRepository(_ context.Context, repositoryID string
 
 func (s snapshotReaderStub) ListActiveSessions(context.Context) (controlplane.ListActiveSessionsResult, error) {
 	return s.sessions, s.sessionErr
+}
+
+func (s snapshotReaderStub) GetHostControlPlane(context.Context) (controlplane.GetHostControlPlaneResult, error) {
+	return controlplane.GetHostControlPlaneResult{
+		SchemaVersion: controlplane.SchemaVersion,
+		Host:          s.repositories.Host,
+		Attention:     []controlplane.HostAttentionSummary{},
+	}, nil
 }
 
 func TestBuilderProducesSourceAttributedSnapshot(t *testing.T) {
@@ -110,8 +119,14 @@ server:
 	if err != nil {
 		t.Fatal(err)
 	}
+	if snapshot.SchemaVersion != SnapshotSchemaVersionV2 {
+		t.Fatalf("snapshot schema = %d, want v2", snapshot.SchemaVersion)
+	}
 	if snapshot.HostID != "host:11111111-1111-4111-9111-111111111111" || snapshot.Hostname != "laptop" {
 		t.Fatalf("unexpected Host snapshot: %#v", snapshot)
+	}
+	if snapshot.ControlPlane == nil || snapshot.ControlPlane.Host != "laptop" {
+		t.Fatalf("Host control plane missing from v2 snapshot: %#v", snapshot.ControlPlane)
 	}
 	if len(snapshot.Instances) != 1 {
 		t.Fatalf("instances = %d, want 1", len(snapshot.Instances))
@@ -131,6 +146,60 @@ server:
 	}
 	if len(instance.Worktrees) != 1 || instance.Worktrees[0].DirtyCount != 1 {
 		t.Fatalf("unexpected worktrees: %#v", instance.Worktrees)
+	}
+
+	legacy := snapshot.V1()
+	if legacy.SchemaVersion != SnapshotSchemaVersion || legacy.ControlPlane != nil {
+		t.Fatalf("legacy projection = %#v", legacy)
+	}
+	if err := legacy.Validate(); err != nil {
+		t.Fatalf("v1 down-projection must remain valid: %v", err)
+	}
+}
+
+func TestDecodeSnapshotPreservesFrozenV1Fixture(t *testing.T) {
+	snapshot, err := DecodeSnapshot(readFederationFixture(t, "v1-laptop.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.SchemaVersion != SnapshotSchemaVersion || snapshot.ControlPlane != nil {
+		t.Fatalf("unexpected v1 snapshot: %#v", snapshot)
+	}
+}
+
+func TestDecodeSnapshotAcceptsValidatedV2ControlPlane(t *testing.T) {
+	legacy := loadSnapshotFixture(t, "v1-laptop.json")
+	legacy.SchemaVersion = SnapshotSchemaVersionV2
+	legacy.ControlPlane = &controlplane.GetHostControlPlaneResult{
+		SchemaVersion: controlplane.SchemaVersion,
+		Host:          legacy.Hostname,
+		Attention:     []controlplane.HostAttentionSummary{},
+	}
+	data, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := DecodeSnapshot(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.ControlPlane == nil || snapshot.ControlPlane.Host != legacy.Hostname {
+		t.Fatalf("unexpected v2 control plane: %#v", snapshot.ControlPlane)
+	}
+}
+
+func TestSnapshotV2RejectsMissingOrMismatchedControlPlane(t *testing.T) {
+	snapshot := loadSnapshotFixture(t, "v1-laptop.json")
+	snapshot.SchemaVersion = SnapshotSchemaVersionV2
+	if err := snapshot.Validate(); err == nil {
+		t.Fatal("expected v2 snapshot without control_plane to fail")
+	}
+	snapshot.ControlPlane = &controlplane.GetHostControlPlaneResult{
+		SchemaVersion: controlplane.SchemaVersion,
+		Host:          "other-host",
+	}
+	if err := snapshot.Validate(); err == nil {
+		t.Fatal("expected v2 snapshot with mismatched Host authority to fail")
 	}
 }
 

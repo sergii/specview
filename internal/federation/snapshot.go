@@ -18,21 +18,28 @@ import (
 	"github.com/sergii/specview/internal/identity"
 )
 
-const SnapshotSchemaVersion = 1
+const (
+	// SnapshotSchemaVersion is the frozen H20/H21 wire contract.
+	SnapshotSchemaVersion   = 1
+	SnapshotSchemaVersionV2 = 2
+	CurrentSnapshotVersion  = SnapshotSchemaVersionV2
+)
 
 type LocalReader interface {
 	ListRepositories(context.Context) (controlplane.ListRepositoriesResult, error)
 	GetRepository(context.Context, string) (controlplane.GetRepositoryResult, error)
 	ListActiveSessions(context.Context) (controlplane.ListActiveSessionsResult, error)
+	GetHostControlPlane(context.Context) (controlplane.GetHostControlPlaneResult, error)
 }
 
 type HostSnapshot struct {
-	SchemaVersion int                  `json:"schema_version"`
-	HostID        string               `json:"host_id"`
-	Hostname      string               `json:"hostname"`
-	ObservedAt    time.Time            `json:"observed_at"`
-	Instances     []RepositoryInstance `json:"repository_instances"`
-	Warnings      []string             `json:"warnings,omitempty"`
+	SchemaVersion int                                     `json:"schema_version"`
+	HostID        string                                  `json:"host_id"`
+	Hostname      string                                  `json:"hostname"`
+	ObservedAt    time.Time                               `json:"observed_at"`
+	ControlPlane  *controlplane.GetHostControlPlaneResult `json:"control_plane,omitempty"`
+	Instances     []RepositoryInstance                    `json:"repository_instances"`
+	Warnings      []string                                `json:"warnings,omitempty"`
 }
 
 type RepositoryInstance struct {
@@ -92,12 +99,17 @@ func (b *Builder) Build(ctx context.Context) (HostSnapshot, error) {
 		return HostSnapshot{}, err
 	}
 	sessions, sessionErr := b.reader.ListActiveSessions(ctx)
+	controlPlane, controlPlaneErr := b.reader.GetHostControlPlane(ctx)
+	if controlPlaneErr != nil {
+		return HostSnapshot{}, fmt.Errorf("build Host control plane for federation snapshot: %w", controlPlaneErr)
+	}
 
 	snapshot := HostSnapshot{
-		SchemaVersion: SnapshotSchemaVersion,
+		SchemaVersion: CurrentSnapshotVersion,
 		HostID:        b.hostID,
 		Hostname:      repositories.Host,
 		ObservedAt:    b.now().UTC(),
+		ControlPlane:  &controlPlane,
 		Instances:     make([]RepositoryInstance, 0, len(repositories.Repositories)),
 		Warnings:      append([]string(nil), repositories.Warnings...),
 	}
@@ -131,6 +143,13 @@ func (b *Builder) Build(ctx context.Context) (HostSnapshot, error) {
 	return snapshot, nil
 }
 
+func (s HostSnapshot) V1() HostSnapshot {
+	copySnapshot := s
+	copySnapshot.SchemaVersion = SnapshotSchemaVersion
+	copySnapshot.ControlPlane = nil
+	return copySnapshot
+}
+
 func DecodeSnapshot(data []byte) (HostSnapshot, error) {
 	var snapshot HostSnapshot
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -152,7 +171,22 @@ func DecodeSnapshot(data []byte) (HostSnapshot, error) {
 }
 
 func (s HostSnapshot) Validate() error {
-	if s.SchemaVersion != SnapshotSchemaVersion {
+	switch s.SchemaVersion {
+	case SnapshotSchemaVersion:
+		if s.ControlPlane != nil {
+			return errors.New("federation HostSnapshot v1 must not contain control_plane")
+		}
+	case SnapshotSchemaVersionV2:
+		if s.ControlPlane == nil {
+			return errors.New("federation HostSnapshot v2 requires control_plane")
+		}
+		if s.ControlPlane.SchemaVersion != controlplane.SchemaVersion {
+			return fmt.Errorf("unsupported Host control-plane schema version %d", s.ControlPlane.SchemaVersion)
+		}
+		if strings.TrimSpace(s.ControlPlane.Host) != strings.TrimSpace(s.Hostname) {
+			return fmt.Errorf("federation HostSnapshot control-plane Host %q does not match hostname %q", s.ControlPlane.Host, s.Hostname)
+		}
+	default:
 		return fmt.Errorf("unsupported federation snapshot version %d", s.SchemaVersion)
 	}
 	if err := identity.ValidateHostID(strings.TrimSpace(s.HostID)); err != nil {

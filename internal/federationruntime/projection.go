@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sergii/specview/internal/controlplane"
 	"github.com/sergii/specview/internal/federation"
 	"github.com/sergii/specview/internal/federationpeers"
 )
 
-const ProjectionSchemaVersion = 1
+const ProjectionSchemaVersion = 2
 
 const (
 	HostSourceLocal = "local"
@@ -35,18 +36,19 @@ type Projection struct {
 }
 
 type HostStatus struct {
-	Source           string                    `json:"source"`
-	Peer             string                    `json:"peer,omitempty"`
-	HostID           string                    `json:"host_id"`
-	Hostname         string                    `json:"hostname,omitempty"`
-	Freshness        federationpeers.Freshness `json:"freshness,omitempty"`
-	HasSnapshot      bool                      `json:"has_snapshot"`
-	ObservedAt       *time.Time                `json:"observed_at,omitempty"`
-	RetrievedAt      *time.Time                `json:"retrieved_at,omitempty"`
-	LastAttemptAt    *time.Time                `json:"last_attempt_at,omitempty"`
-	LastSuccessAt    *time.Time                `json:"last_success_at,omitempty"`
-	LastError        string                    `json:"last_error,omitempty"`
-	SourceAgeSeconds *int64                    `json:"source_age_seconds,omitempty"`
+	Source           string                                  `json:"source"`
+	Peer             string                                  `json:"peer,omitempty"`
+	HostID           string                                  `json:"host_id"`
+	Hostname         string                                  `json:"hostname,omitempty"`
+	Freshness        federationpeers.Freshness               `json:"freshness,omitempty"`
+	HasSnapshot      bool                                    `json:"has_snapshot"`
+	ObservedAt       *time.Time                              `json:"observed_at,omitempty"`
+	RetrievedAt      *time.Time                              `json:"retrieved_at,omitempty"`
+	LastAttemptAt    *time.Time                              `json:"last_attempt_at,omitempty"`
+	LastSuccessAt    *time.Time                              `json:"last_success_at,omitempty"`
+	LastError        string                                  `json:"last_error,omitempty"`
+	SourceAgeSeconds *int64                                  `json:"source_age_seconds,omitempty"`
+	ControlPlane     *controlplane.GetHostControlPlaneResult `json:"control_plane,omitempty"`
 }
 
 type ProjectionBuilder struct {
@@ -136,11 +138,12 @@ func (b *ProjectionBuilder) Build(ctx context.Context) (Projection, error) {
 func localHostStatus(snapshot federation.HostSnapshot) HostStatus {
 	observedAt := snapshot.ObservedAt.UTC()
 	return HostStatus{
-		Source:      HostSourceLocal,
-		HostID:      snapshot.HostID,
-		Hostname:    snapshot.Hostname,
-		HasSnapshot: true,
-		ObservedAt:  &observedAt,
+		Source:       HostSourceLocal,
+		HostID:       snapshot.HostID,
+		Hostname:     snapshot.Hostname,
+		HasSnapshot:  true,
+		ObservedAt:   &observedAt,
+		ControlPlane: cloneControlPlane(snapshot.ControlPlane),
 	}
 }
 
@@ -162,8 +165,26 @@ func peerHostStatus(status federationpeers.PeerStatus) HostStatus {
 		host.ObservedAt = &observedAt
 		age := int64(status.SourceAge / time.Second)
 		host.SourceAgeSeconds = &age
+		host.ControlPlane = cloneControlPlane(status.Snapshot.ControlPlane)
 	}
 	return host
+}
+
+func cloneControlPlane(value *controlplane.GetHostControlPlaneResult) *controlplane.GetHostControlPlaneResult {
+	if value == nil {
+		return nil
+	}
+	copyValue := *value
+	if value.Attention != nil {
+		copyValue.Attention = make([]controlplane.HostAttentionSummary, len(value.Attention))
+		copy(copyValue.Attention, value.Attention)
+	}
+	for i := range copyValue.Attention {
+		if value.Attention[i].Signals != nil {
+			copyValue.Attention[i].Signals = append([]string{}, value.Attention[i].Signals...)
+		}
+	}
+	return &copyValue
 }
 
 func cloneTime(value *time.Time) *time.Time {

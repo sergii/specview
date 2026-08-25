@@ -87,12 +87,21 @@ first = json.loads(Path(os.environ["SNAPSHOT_ONE"]).read_text(encoding="utf-8"))
 second = json.loads(Path(os.environ["SNAPSHOT_TWO"]).read_text(encoding="utf-8"))
 root = os.environ["FIXTURE_ROOT"]
 
-if first.get("schema_version") != 1:
+if first.get("schema_version") != 2:
     raise SystemExit(f"unexpected snapshot schema: {first!r}")
 if not first.get("host_id", "").startswith("host:"):
     raise SystemExit(f"missing Host identity: {first!r}")
 if first.get("host_id") != second.get("host_id"):
     raise SystemExit("Host identity changed between snapshot processes")
+control_plane = first.get("control_plane")
+if not control_plane:
+    raise SystemExit(f"missing Host control plane: {first!r}")
+if control_plane.get("schema_version") != 1 or control_plane.get("host") != first.get("hostname"):
+    raise SystemExit(f"invalid Host control-plane authority: {control_plane!r}")
+if control_plane.get("intent", {}).get("managed_repositories") != 1:
+    raise SystemExit(f"unexpected Host Intent summary: {control_plane!r}")
+if control_plane.get("intent", {}).get("in_progress") != 1:
+    raise SystemExit(f"unexpected Host Intent status: {control_plane!r}")
 instances = first.get("repository_instances", [])
 if len(instances) != 1:
     raise SystemExit(f"expected one RepositoryInstance: {instances!r}")

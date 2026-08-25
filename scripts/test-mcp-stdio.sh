@@ -142,6 +142,7 @@ expected = [
     "get_evidence",
     "get_acceptance",
     "get_federation_status",
+    "get_federation_host",
 ]
 if names != expected:
     raise SystemExit(f"unexpected MCP tools: {names!r}")
@@ -226,6 +227,56 @@ if federation_value.get("federation", {}).get("schema_version") != 1:
 history_value = structured(history)
 if history_value.get("entries") != []:
     raise SystemExit(f"unexpected execution history: {history_value!r}")
+PY
+
+host_id=$(MCP_RESPONSES="$responses" python3 - <<'PY'
+import json
+import os
+
+lines = [json.loads(line) for line in os.environ["MCP_RESPONSES"].splitlines() if line.strip()]
+federation = lines[9].get("result", {}).get("structuredContent", {})
+hosts = federation.get("hosts", [])
+if len(hosts) != 1 or not hosts[0].get("host_id"):
+    raise SystemExit(f"cannot discover exact local Host ID: {hosts!r}")
+print(hosts[0]["host_id"])
+PY
+)
+
+host_response=$(
+  printf '{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"get_federation_host","arguments":{"host_id":"%s"}}}\n' "$host_id" \
+  | XDG_STATE_HOME="$state_home" "$binary" mcp
+)
+
+MCP_RESPONSES="$responses" MCP_HOST_RESPONSE="$host_response" REPO_ROOT="$repo_root" HOST_ID="$host_id" python3 - <<'PY'
+import json
+import os
+
+responses = [json.loads(line) for line in os.environ["MCP_RESPONSES"].splitlines() if line.strip()]
+selected_response = json.loads(os.environ["MCP_HOST_RESPONSE"])
+expected_host = responses[9]["result"]["structuredContent"]["hosts"][0]
+result = selected_response.get("result", {})
+if result.get("isError"):
+    raise SystemExit(f"get_federation_host failed: {selected_response!r}")
+selected = result.get("structuredContent", {})
+if selected.get("schema_version") != 1:
+    raise SystemExit(f"unexpected federation Host result schema: {selected!r}")
+host = selected.get("host", {})
+if host.get("host_id") != os.environ["HOST_ID"] or host.get("source") != "local" or host.get("has_snapshot") is not True:
+    raise SystemExit(f"unexpected exact federation Host: {host!r}")
+if not host.get("observed_at"):
+    raise SystemExit(f"selected local Host lost observation time: {host!r}")
+for key in ("source", "host_id", "hostname", "has_snapshot", "control_plane"):
+    if host.get(key) != expected_host.get(key):
+        raise SystemExit(f"get_federation_host diverged on {key}: selected={host!r} expected={expected_host!r}")
+repositories = selected.get("repositories", [])
+if len(repositories) != 1:
+    raise SystemExit(f"unexpected selected Host repositories: {repositories!r}")
+row = repositories[0]
+instance = row.get("instance", {})
+if row.get("name") != "fixture/specview" or instance.get("source_repository_id") != "repo-mcp-smoke" or instance.get("root") != os.environ["REPO_ROOT"]:
+    raise SystemExit(f"unexpected selected Host repository attribution: {row!r}")
+if instance.get("host_id") != os.environ["HOST_ID"]:
+    raise SystemExit(f"repository instance belongs to another Host: {instance!r}")
 PY
 
 host_file="$state_home/specview/host.json"

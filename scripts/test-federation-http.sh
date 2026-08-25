@@ -97,9 +97,10 @@ server_pid=$!
 
 endpoint_v1='http://127.0.0.1:7332/v1/federation/snapshot'
 endpoint_v2='http://127.0.0.1:7332/v2/federation/snapshot'
+endpoint_v3='http://127.0.0.1:7332/v3/federation/snapshot'
 ready=false
 for _ in $(seq 1 50); do
-  if curl --fail --silent --show-error "$endpoint_v2" >/dev/null 2>&1; then
+  if curl --fail --silent --show-error "$endpoint_v3" >/dev/null 2>&1; then
     ready=true
     break
   fi
@@ -118,25 +119,40 @@ fi
 
 served_v1="$state_home/served-v1.json"
 served_v2="$state_home/served-v2.json"
+served_v3="$state_home/served-v3.json"
 curl --fail --silent --show-error "$endpoint_v1" > "$served_v1"
 curl --fail --silent --show-error "$endpoint_v2" > "$served_v2"
+curl --fail --silent --show-error "$endpoint_v3" > "$served_v3"
 
-SERVED_V1="$served_v1" SERVED_V2="$served_v2" HOST_ID="$host_id" python3 - <<'PY'
+SERVED_V1="$served_v1" SERVED_V2="$served_v2" SERVED_V3="$served_v3" HOST_ID="$host_id" python3 - <<'PY'
 import json
 import os
 from pathlib import Path
 
 v1 = json.loads(Path(os.environ["SERVED_V1"]).read_text(encoding="utf-8"))
 v2 = json.loads(Path(os.environ["SERVED_V2"]).read_text(encoding="utf-8"))
+v3 = json.loads(Path(os.environ["SERVED_V3"]).read_text(encoding="utf-8"))
 
 if v1.get("schema_version") != 1 or "control_plane" in v1:
     raise SystemExit(f"frozen v1 endpoint changed: {v1!r}")
+if any("control_plane" in instance for instance in v1.get("repository_instances", [])):
+    raise SystemExit(f"v1 leaked repository control plane: {v1!r}")
 if v2.get("schema_version") != 2 or not v2.get("control_plane"):
     raise SystemExit(f"v2 endpoint missing Host control plane: {v2!r}")
-if v1.get("host_id") != os.environ["HOST_ID"] or v2.get("host_id") != os.environ["HOST_ID"]:
-    raise SystemExit(f"dual-version Host identity mismatch: v1={v1!r} v2={v2!r}")
-if v2["control_plane"].get("host") != v2.get("hostname"):
-    raise SystemExit(f"v2 control-plane Host authority mismatch: {v2!r}")
+if any("control_plane" in instance for instance in v2.get("repository_instances", [])):
+    raise SystemExit(f"v2 leaked repository control plane: {v2!r}")
+if v3.get("schema_version") != 3 or not v3.get("control_plane"):
+    raise SystemExit(f"v3 endpoint missing Host control plane: {v3!r}")
+if v1.get("host_id") != os.environ["HOST_ID"] or v2.get("host_id") != os.environ["HOST_ID"] or v3.get("host_id") != os.environ["HOST_ID"]:
+    raise SystemExit(f"versioned Host identity mismatch: v1={v1!r} v2={v2!r} v3={v3!r}")
+if v2["control_plane"].get("host") != v2.get("hostname") or v3["control_plane"].get("host") != v3.get("hostname"):
+    raise SystemExit(f"control-plane Host authority mismatch: v2={v2!r} v3={v3!r}")
+instances = v3.get("repository_instances", [])
+if len(instances) != 1 or not instances[0].get("control_plane"):
+    raise SystemExit(f"v3 repository control plane missing: {instances!r}")
+repo_cp = instances[0]["control_plane"]
+if repo_cp.get("repository_id") != instances[0].get("source_repository_id") or repo_cp.get("repository_name") != instances[0].get("name") or repo_cp.get("host") != v3.get("hostname"):
+    raise SystemExit(f"v3 repository control-plane authority mismatch: {instances[0]!r}")
 PY
 
 pulled="$state_home/pulled.json"
@@ -148,12 +164,12 @@ import os
 from pathlib import Path
 
 snapshot = json.loads(Path(os.environ["PULLED"]).read_text(encoding="utf-8"))
-if snapshot.get("schema_version") != 2:
-    raise SystemExit(f"new client did not prefer v2: {snapshot!r}")
+if snapshot.get("schema_version") != 3:
+    raise SystemExit(f"new client did not prefer v3: {snapshot!r}")
 if snapshot.get("host_id") != os.environ["HOST_ID"]:
     raise SystemExit(f"unexpected Host ID: {snapshot!r}")
 if not snapshot.get("control_plane"):
-    raise SystemExit(f"preferred v2 snapshot missing control plane: {snapshot!r}")
+    raise SystemExit(f"preferred v3 snapshot missing Host control plane: {snapshot!r}")
 instances = snapshot.get("repository_instances", [])
 if len(instances) != 1:
     raise SystemExit(f"expected one RepositoryInstance: {instances!r}")
@@ -162,6 +178,9 @@ if instance.get("root") != os.environ["FIXTURE_ROOT"]:
     raise SystemExit(f"unexpected root: {instance!r}")
 if instance.get("fingerprint", {}).get("explicit_id") != "specview:sergii/specview":
     raise SystemExit(f"missing explicit identity: {instance!r}")
+repo_cp = instance.get("control_plane")
+if not repo_cp or repo_cp.get("repository_id") != instance.get("source_repository_id"):
+    raise SystemExit(f"preferred v3 repository control plane missing: {instance!r}")
 PY
 
 wrong_host='host:22222222-2222-4222-9222-222222222222'
@@ -191,10 +210,12 @@ from pathlib import Path
 projection = json.loads(Path(os.environ["PROJECTION"]).read_text(encoding="utf-8"))
 repositories = projection.get("repositories", [])
 if len(repositories) != 1:
-    raise SystemExit(f"v2 pulled snapshot did not correlate with v1 DevBox fixture: {repositories!r}")
+    raise SystemExit(f"v3 pulled snapshot did not correlate with v1 DevBox fixture: {repositories!r}")
 instances = repositories[0].get("instances", [])
 if len(instances) != 2:
     raise SystemExit(f"expected two source instances: {instances!r}")
+if sum(1 for instance in instances if instance.get("control_plane")) != 1:
+    raise SystemExit(f"only v3 source instance should carry repository control plane: {instances!r}")
 if projection.get("correlation_issues"):
     raise SystemExit(f"unexpected correlation issues: {projection!r}")
 PY

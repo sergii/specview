@@ -27,12 +27,12 @@ host_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["host_
 "$bin" federation serve > "$root/federation-server.log" 2>&1 &
 server_pid=$!
 for _ in $(seq 1 50); do
-  if curl -fsS http://127.0.0.1:7332/v1/federation/snapshot > /dev/null; then
+  if curl -fsS http://127.0.0.1:7332/v2/federation/snapshot > /dev/null; then
     break
   fi
   sleep 0.1
 done
-curl -fsS http://127.0.0.1:7332/v1/federation/snapshot > /dev/null
+curl -fsS http://127.0.0.1:7332/v2/federation/snapshot > /dev/null
 
 "$bin" federation peer add cached \
   --url http://127.0.0.1:7332 \
@@ -45,16 +45,21 @@ curl -fsS http://127.0.0.1:7332/v1/federation/snapshot > /dev/null
   --host host:33333333-3333-4333-9333-333333333333 \
   --stale-after 5m
 
-# Freeze the successful state before simulating an outage. H23 status must expose
-# a fresh cached peer and a never-retrieved peer without inventing remote facts.
+# Freeze the successful state before simulating an outage. H40 status must expose
+# a fresh cached v2 peer and a never-retrieved peer without inventing remote facts.
 "$bin" federation status > "$root/status-fresh.json"
 python3 - "$root/status-fresh.json" "$host_id" <<'PY'
 import json, sys
 status = json.load(open(sys.argv[1]))
 host_id = sys.argv[2]
 
-assert status["schema_version"] == 1, status
+assert status["schema_version"] == 2, status
+assert status["federation"]["schema_version"] == 1, status
 assert status["federation"]["generated_at"] == status["generated_at"], status
+local = status["hosts"][0]
+assert local["source"] == "local", local
+assert local["control_plane"]["host"] == local["hostname"], local
+
 by_peer = {row.get("peer"): row for row in status["hosts"] if row["source"] == "peer"}
 
 cached = by_peer["cached"]
@@ -63,11 +68,13 @@ assert cached["freshness"] == "fresh", cached
 assert cached["has_snapshot"] is True, cached
 assert cached["observed_at"], cached
 assert cached["retrieved_at"], cached
+assert cached["control_plane"]["host"] == cached["hostname"], cached
 
 never = by_peer["never"]
 assert never["freshness"] == "never_retrieved", never
 assert never["has_snapshot"] is False, never
 assert "observed_at" not in never, never
+assert "control_plane" not in never, never
 PY
 
 kill "$server_pid"
@@ -89,7 +96,7 @@ import json, sys
 status = json.load(open(sys.argv[1]))
 host_id = sys.argv[2]
 
-assert status["schema_version"] == 1, status
+assert status["schema_version"] == 2, status
 assert status["generated_at"], status
 assert status["federation"]["schema_version"] == 1, status
 assert status["federation"]["generated_at"] == status["generated_at"], status
@@ -100,6 +107,7 @@ local = hosts[0]
 assert local["source"] == "local", local
 assert local["host_id"] == host_id, local
 assert local["has_snapshot"] is True, local
+assert local["control_plane"]["host"] == local["hostname"], local
 
 by_peer = {row.get("peer"): row for row in hosts if row["source"] == "peer"}
 cached = by_peer["cached"]
@@ -109,11 +117,13 @@ assert cached["has_snapshot"] is True, cached
 assert cached["observed_at"], cached
 assert cached["retrieved_at"], cached
 assert cached["last_error"], cached
+assert cached["control_plane"]["host"] == cached["hostname"], cached
 
 never = by_peer["never"]
 assert never["freshness"] == "never_retrieved", never
 assert never["has_snapshot"] is False, never
 assert "observed_at" not in never, never
+assert "control_plane" not in never, never
 
 # Local and cached refer to the same Host in this binary fixture. H20 de-duplicates
 # the Host by identity instead of inventing a second source Host.

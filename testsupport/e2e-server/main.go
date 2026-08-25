@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sergii/specview/internal/controlplane"
 	"github.com/sergii/specview/internal/federation"
 	"github.com/sergii/specview/internal/federationpeers"
 	"github.com/sergii/specview/internal/federationruntime"
@@ -48,8 +49,68 @@ func (r fixtureFederationReader) Build(context.Context) (federationruntime.Proje
 		SchemaVersion: federationruntime.ProjectionSchemaVersion,
 		GeneratedAt:   now,
 		Hosts: []federationruntime.HostStatus{
-			{Source: federationruntime.HostSourceLocal, HostID: "host:550e8400-e29b-41d4-a716-446655440000", Hostname: "e2e-laptop", HasSnapshot: true},
-			{Source: federationruntime.HostSourcePeer, Peer: "devbox", HostID: "host:550e8400-e29b-41d4-a716-446655440001", Hostname: "e2e-devbox", Freshness: federationpeers.FreshnessUnreachable, HasSnapshot: true, LastError: "fixture transport unavailable"},
+			{
+				Source:      federationruntime.HostSourceLocal,
+				HostID:      "host:550e8400-e29b-41d4-a716-446655440000",
+				Hostname:    "e2e-laptop",
+				HasSnapshot: true,
+				ControlPlane: &controlplane.GetHostControlPlaneResult{
+					SchemaVersion: controlplane.SchemaVersion,
+					Host:          "e2e-laptop",
+					Intent: controlplane.HostIntentSummary{
+						ManagedRepositories: 1,
+						WorkItems:           1,
+						InProgress:          1,
+					},
+					Execution: controlplane.HostExecutionSummary{
+						ActiveSessions:     1,
+						ActiveRepositories: 1,
+					},
+					Evidence: controlplane.HostEvidenceSummary{
+						Total:  2,
+						Passed: 2,
+					},
+					Acceptance: controlplane.HostAcceptanceSummary{
+						ConfiguredRepositories: 1,
+						Accepted:               2,
+					},
+					Attention: []controlplane.HostAttentionSummary{},
+				},
+			},
+			{
+				Source:      federationruntime.HostSourcePeer,
+				Peer:        "devbox",
+				HostID:      "host:550e8400-e29b-41d4-a716-446655440001",
+				Hostname:    "e2e-devbox",
+				Freshness:   federationpeers.FreshnessUnreachable,
+				HasSnapshot: true,
+				LastError:   "fixture transport unavailable",
+				ControlPlane: &controlplane.GetHostControlPlaneResult{
+					SchemaVersion: controlplane.SchemaVersion,
+					Host:          "e2e-devbox",
+					Execution: controlplane.HostExecutionSummary{
+						ActiveSessions:     2,
+						ActiveRepositories: 1,
+					},
+					Evidence: controlplane.HostEvidenceSummary{
+						Total:                3,
+						Passed:               2,
+						Failed:               1,
+						AffectedRepositories: 1,
+					},
+					Acceptance: controlplane.HostAcceptanceSummary{
+						ConfiguredRepositories: 1,
+						Accepted:               2,
+						Blocked:                1,
+					},
+					Attention: []controlplane.HostAttentionSummary{{
+						RepositoryID:   "repo-e2e-remote",
+						RepositoryName: "sergii/specview",
+						LastSeenAt:     now.Add(-time.Minute),
+						Signals:        []string{"1 failed Evidence record", "1 blocked Acceptance item"},
+					}},
+				},
+			},
 			{Source: federationruntime.HostSourcePeer, Peer: "newbox", HostID: "host:550e8400-e29b-41d4-a716-446655440002", Freshness: federationpeers.FreshnessNeverRetrieved, HasSnapshot: false},
 		},
 		Federation: federation.Projection{

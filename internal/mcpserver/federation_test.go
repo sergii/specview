@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sergii/specview/internal/controlplane"
 	"github.com/sergii/specview/internal/federation"
 	"github.com/sergii/specview/internal/federationpeers"
 	"github.com/sergii/specview/internal/federationruntime"
@@ -30,8 +31,35 @@ func TestFederationStatusToolReturnsSharedProjectionContract(t *testing.T) {
 		SchemaVersion: federationruntime.ProjectionSchemaVersion,
 		GeneratedAt:   now,
 		Hosts: []federationruntime.HostStatus{
-			{Source: federationruntime.HostSourceLocal, HostID: "host:550e8400-e29b-41d4-a716-446655440000", Hostname: "laptop", HasSnapshot: true},
-			{Source: federationruntime.HostSourcePeer, Peer: "devbox", HostID: "host:550e8400-e29b-41d4-a716-446655440001", Hostname: "devbox", Freshness: federationpeers.FreshnessUnreachable, HasSnapshot: true, LastError: "dial failed"},
+			{
+				Source:      federationruntime.HostSourceLocal,
+				HostID:      "host:550e8400-e29b-41d4-a716-446655440000",
+				Hostname:    "laptop",
+				HasSnapshot: true,
+				ControlPlane: &controlplane.GetHostControlPlaneResult{
+					SchemaVersion: controlplane.SchemaVersion,
+					Host:          "laptop",
+					Execution:     controlplane.HostExecutionSummary{ActiveSessions: 1},
+					Attention:     []controlplane.HostAttentionSummary{},
+				},
+			},
+			{
+				Source:      federationruntime.HostSourcePeer,
+				Peer:        "devbox",
+				HostID:      "host:550e8400-e29b-41d4-a716-446655440001",
+				Hostname:    "devbox",
+				Freshness:   federationpeers.FreshnessUnreachable,
+				HasSnapshot: true,
+				LastError:   "dial failed",
+				ControlPlane: &controlplane.GetHostControlPlaneResult{
+					SchemaVersion: controlplane.SchemaVersion,
+					Host:          "devbox",
+					Execution:     controlplane.HostExecutionSummary{ActiveSessions: 2},
+					Evidence:      controlplane.HostEvidenceSummary{Failed: 1},
+					Acceptance:    controlplane.HostAcceptanceSummary{Blocked: 1},
+					Attention:     []controlplane.HostAttentionSummary{},
+				},
+			},
 		},
 		Federation: federation.Projection{
 			SchemaVersion: federation.ProjectionSchemaVersion,
@@ -62,6 +90,9 @@ func TestFederationStatusToolReturnsSharedProjectionContract(t *testing.T) {
 	}
 	assertJSONEquivalent(t, call.Structured, mustJSON(t, projection))
 	assertJSONEquivalent(t, []byte(call.Content[0].Text), mustJSON(t, projection))
+	if !strings.Contains(call.Content[0].Text, `"control_plane"`) {
+		t.Fatalf("federation MCP result lost per-Host control plane: %s", call.Content[0].Text)
+	}
 	if reader.calls != 1 {
 		t.Fatalf("federation Build calls = %d, want 1", reader.calls)
 	}

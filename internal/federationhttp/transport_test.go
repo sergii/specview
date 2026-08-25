@@ -2,6 +2,7 @@ package federationhttp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sergii/specview/internal/controlplane"
 	"github.com/sergii/specview/internal/federation"
 )
 
@@ -24,14 +26,14 @@ func (s *snapshotSourceStub) Build(context.Context) (federation.HostSnapshot, er
 	return s.snapshot, s.err
 }
 
-func TestHandlerReturnsFreshNoStoreSnapshotJSON(t *testing.T) {
+func TestHandlerPreservesFrozenV1SnapshotEndpoint(t *testing.T) {
 	source := &snapshotSourceStub{snapshot: validSnapshot()}
 	handler, err := NewHandler(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	request := httptest.NewRequest(http.MethodGet, SnapshotPath, nil)
+	request := httptest.NewRequest(http.MethodGet, SnapshotPathV1, nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 
@@ -48,8 +50,31 @@ func TestHandlerReturnsFreshNoStoreSnapshotJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if snapshot.SchemaVersion != federation.SnapshotSchemaVersion || snapshot.ControlPlane != nil {
+		t.Fatalf("v1 endpoint changed wire shape: %#v", snapshot)
+	}
 	if snapshot.HostID != source.snapshot.HostID || source.calls != 1 {
 		t.Fatalf("unexpected served snapshot=%#v calls=%d", snapshot, source.calls)
+	}
+}
+
+func TestHandlerServesV2HostControlPlane(t *testing.T) {
+	source := &snapshotSourceStub{snapshot: validSnapshot()}
+	handler, err := NewHandler(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, SnapshotPathV2, nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%q", response.Code, response.Body.String())
+	}
+	snapshot, err := federation.DecodeSnapshot(response.Body.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.SchemaVersion != federation.SnapshotSchemaVersionV2 || snapshot.ControlPlane == nil || snapshot.ControlPlane.Host != "devbox-01" {
+		t.Fatalf("unexpected v2 snapshot: %#v", snapshot)
 	}
 }
 
@@ -60,7 +85,7 @@ func TestHandlerRejectsUnsupportedMethodWithoutBuildingSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, SnapshotPath, nil))
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, SnapshotPathV1, nil))
 	if response.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d", response.Code)
 	}
@@ -79,7 +104,7 @@ func TestHandlerDoesNotReturnPartialSnapshotOnSourceFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, SnapshotPath, nil))
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, SnapshotPathV2, nil))
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d", response.Code)
 	}
@@ -88,7 +113,7 @@ func TestHandlerDoesNotReturnPartialSnapshotOnSourceFailure(t *testing.T) {
 	}
 }
 
-func TestClientFetchesAndPinsLoopbackPeer(t *testing.T) {
+func TestClientPrefersV2AndPinsLoopbackPeer(t *testing.T) {
 	source := &snapshotSourceStub{snapshot: validSnapshot()}
 	handler, err := NewHandler(source)
 	if err != nil {
@@ -101,8 +126,41 @@ func TestClientFetchesAndPinsLoopbackPeer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.HostID != source.snapshot.HostID {
-		t.Fatalf("Host ID = %q", snapshot.HostID)
+	if snapshot.HostID != source.snapshot.HostID || snapshot.SchemaVersion != federation.SnapshotSchemaVersionV2 || snapshot.ControlPlane == nil {
+		t.Fatalf("unexpected preferred v2 snapshot: %#v", snapshot)
+	}
+	if source.calls != 1 {
+		t.Fatalf("v2-capable peer should require one source build, got %d", source.calls)
+	}
+}
+
+func TestClientFallsBackToFrozenV1Peer(t *testing.T) {
+	legacy := validSnapshot().V1()
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if r.URL.Path == SnapshotPathV2 {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Path != SnapshotPathV1 {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(legacy)
+	}))
+	defer server.Close()
+
+	snapshot, err := NewClient().Fetch(context.Background(), server.URL+SnapshotPathV1, legacy.HostID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.SchemaVersion != federation.SnapshotSchemaVersion || snapshot.ControlPlane != nil {
+		t.Fatalf("unexpected v1 fallback snapshot: %#v", snapshot)
+	}
+	if strings.Join(paths, ",") != SnapshotPathV2+","+SnapshotPathV1 {
+		t.Fatalf("request order = %#v, want v2 then v1", paths)
 	}
 }
 
@@ -138,7 +196,7 @@ func TestClientRejectsRemoteCleartextBeforeSendingRequest(t *testing.T) {
 
 func TestClientRejectsRedirects(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, SnapshotPath, http.StatusFound)
+		http.Redirect(w, r, SnapshotPathV1, http.StatusFound)
 	}))
 	defer server.Close()
 
@@ -181,8 +239,10 @@ func TestClientRequiresJSONContentType(t *testing.T) {
 func TestValidatePeerURLAllowsHTTPSAndLoopbackHTTP(t *testing.T) {
 	for _, value := range []string{
 		"https://devbox.example.ts.net/v1/federation/snapshot",
+		"https://devbox.example.ts.net/v2/federation/snapshot",
 		"https://devbox.example.ts.net",
 		"http://localhost:7332/v1/federation/snapshot",
+		"http://localhost:7332/v2/federation/snapshot",
 		"http://127.0.0.1:7332",
 		"http://[::1]:7332",
 	} {
@@ -194,11 +254,16 @@ func TestValidatePeerURLAllowsHTTPSAndLoopbackHTTP(t *testing.T) {
 
 func validSnapshot() federation.HostSnapshot {
 	return federation.HostSnapshot{
-		SchemaVersion: federation.SnapshotSchemaVersion,
+		SchemaVersion: federation.SnapshotSchemaVersionV2,
 		HostID:        "host:11111111-1111-4111-9111-111111111111",
 		Hostname:      "devbox-01",
 		ObservedAt:    time.Date(2026, 8, 23, 20, 0, 0, 0, time.UTC),
-		Instances:     []federation.RepositoryInstance{},
+		ControlPlane: &controlplane.GetHostControlPlaneResult{
+			SchemaVersion: controlplane.SchemaVersion,
+			Host:          "devbox-01",
+			Attention:     []controlplane.HostAttentionSummary{},
+		},
+		Instances: []federation.RepositoryInstance{},
 	}
 }
 

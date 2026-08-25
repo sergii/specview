@@ -150,12 +150,12 @@ for tool in tools.get("result", {}).get("tools", []):
     if annotations.get("readOnlyHint") is not True or annotations.get("destructiveHint") is not False:
         raise SystemExit(f"tool is not strictly read-only: {tool!r}")
 
-def structured(response):
+def structured(response, schema_version=1):
     result = response.get("result", {})
     if result.get("isError"):
         raise SystemExit(f"MCP tool failed: {response!r}")
     value = result.get("structuredContent")
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
+    if not isinstance(value, dict) or value.get("schema_version") != schema_version:
         raise SystemExit(f"unexpected structured content: {response!r}")
     return value
 
@@ -211,13 +211,17 @@ if host_acceptance.get("configured_repositories") != 1 or host_acceptance.get("a
 if host_control_plane_value.get("attention") != []:
     raise SystemExit(f"unexpected Host control-plane attention: {host_control_plane_value!r}")
 
-federation_value = structured(federation)
+federation_value = structured(federation, schema_version=2)
 hosts = federation_value.get("hosts", [])
 if len(hosts) != 1 or hosts[0].get("source") != "local" or hosts[0].get("has_snapshot") is not True:
     raise SystemExit(f"unexpected federation hosts: {hosts!r}")
+if hosts[0].get("control_plane") != host_control_plane_value:
+    raise SystemExit(f"federation local Host control plane diverged from get_host_control_plane: federation={hosts[0]!r} host={host_control_plane_value!r}")
 groups = federation_value.get("federation", {}).get("repositories", [])
 if not any(group.get("name") == "fixture/specview" for group in groups):
     raise SystemExit(f"fixture repository missing from federation projection: {groups!r}")
+if federation_value.get("federation", {}).get("schema_version") != 1:
+    raise SystemExit(f"nested H20 repository projection changed: {federation_value!r}")
 
 history_value = structured(history)
 if history_value.get("entries") != []:

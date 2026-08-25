@@ -22,11 +22,13 @@
     .section { margin-top:36px; }
     .section-head { display:flex; align-items:baseline; justify-content:space-between; min-height:36px; padding:8px 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:10px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; }
     .count { color:var(--quiet); font-weight:400; letter-spacing:.04em; }
-    .host-row { display:grid; grid-template-columns:minmax(150px,1fr) minmax(220px,1.4fr) 120px minmax(160px,1fr); gap:18px; align-items:center; min-height:48px; border-bottom:1px solid var(--line); }
+    .host-row { display:grid; grid-template-columns:minmax(130px,.8fr) minmax(180px,1.1fr) 92px minmax(130px,.8fr) minmax(250px,1.5fr); gap:16px; align-items:center; min-height:52px; border-bottom:1px solid var(--line); }
     .name { min-width:0; overflow:hidden; font-size:12px; font-weight:540; text-overflow:ellipsis; white-space:nowrap; }
     .mono { min-width:0; overflow:hidden; color:var(--quiet); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
     .freshness { color:var(--muted); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
     .freshness.unreachable { color:var(--text); }
+    .host-control-plane { color:var(--muted); }
+    .host-control-plane.unavailable { color:var(--quiet); }
     .repo { border-bottom:1px solid var(--line); padding:12px 0 10px; }
     .repo-head { display:grid; grid-template-columns:minmax(180px,1fr) auto auto; gap:16px; align-items:center; min-height:30px; }
     .state { color:var(--muted); font-size:10px; white-space:nowrap; }
@@ -36,7 +38,8 @@
     .instance:focus-visible { outline:1px solid var(--line-strong); outline-offset:2px; }
     .empty { padding:24px 0; border-bottom:1px solid var(--line); color:var(--quiet); font-size:11px; }
     .issues { color:var(--muted); font-size:10px; }
-    @media(max-width:760px){.topbar{grid-template-columns:auto minmax(0,1fr) auto}.host{font-size:9px}.host-row{grid-template-columns:minmax(0,1fr) auto;gap:7px 14px;padding:9px 0}.host-row .mono{grid-column:1/-1}.repo-head{grid-template-columns:minmax(0,1fr) auto}.repo-head .state:last-child{display:none}.instance{grid-template-columns:minmax(0,1fr) auto}.instance .mono{grid-column:1/-1}}
+    @media(max-width:900px){.host-row{grid-template-columns:minmax(0,1fr) auto;gap:7px 14px;padding:9px 0}.host-row .host-id,.host-row .host-snapshot,.host-row .host-control-plane{grid-column:1/-1}.host-row .host-control-plane{white-space:normal}.repo-head{grid-template-columns:minmax(0,1fr) auto}.repo-head .state:last-child{display:none}.instance{grid-template-columns:minmax(0,1fr) auto}.instance .mono{grid-column:1/-1}}
+    @media(max-width:760px){.topbar{grid-template-columns:auto minmax(0,1fr) auto}.host{font-size:9px}}
   </style>
 </head>
 <body>
@@ -45,16 +48,21 @@
   <main>
     <div class="eyebrow">Read-only multi-host projection</div>
     <h1>Federation</h1>
-    <p class="lede">Local facts are rebuilt now. Remote facts remain attributed to their source Host and keep their freshness state; an unreachable peer does not become an empty or inactive Host.</p>
+    <p class="lede">Local facts are rebuilt now. Remote facts remain attributed to their source Host and keep their freshness state; an unreachable peer does not become an empty or inactive Host. Control-plane facts remain per-Host and are never collapsed into a federation health score.</p>
 
     <section class="section">
       <div class="section-head"><span>Hosts</span><span class="count">{{len .Projection.Hosts}}</span></div>
       {{range .Projection.Hosts}}
-        <div class="host-row" data-host-source="{{.Source}}" data-freshness="{{.Freshness}}">
+        <div class="host-row" data-host-source="{{.Source}}" data-freshness="{{.Freshness}}" data-host-control-plane="{{if .ControlPlane}}available{{else}}unavailable{{end}}">
           <div class="name">{{if .Hostname}}{{.Hostname}}{{else}}{{.Peer}}{{end}}</div>
-          <div class="mono">{{.HostID}}{{if .Peer}} · peer {{.Peer}}{{end}}</div>
+          <div class="mono host-id">{{.HostID}}{{if .Peer}} · peer {{.Peer}}{{end}}</div>
           <div class="freshness {{.Freshness}}">{{if eq .Source "local"}}local{{else}}{{.Freshness}}{{end}}</div>
-          <div class="mono">{{if .HasSnapshot}}snapshot available{{else}}no snapshot yet{{end}}{{if .LastError}} · {{.LastError}}{{end}}</div>
+          <div class="mono host-snapshot">{{if .HasSnapshot}}snapshot available{{else}}no snapshot yet{{end}}{{if .LastError}} · {{.LastError}}{{end}}</div>
+          {{if .ControlPlane}}
+            <div class="mono host-control-plane" data-active-sessions="{{.ControlPlane.Execution.ActiveSessions}}" data-failed-evidence="{{.ControlPlane.Evidence.Failed}}" data-blocked-acceptance="{{.ControlPlane.Acceptance.Blocked}}" data-attention-count="{{len .ControlPlane.Attention}}">{{.ControlPlane.Execution.ActiveSessions}} active · {{.ControlPlane.Evidence.Failed}} failed Evidence · {{.ControlPlane.Acceptance.Blocked}} blocked Acceptance · {{len .ControlPlane.Attention}} attention</div>
+          {{else}}
+            <div class="mono host-control-plane unavailable">control plane unavailable</div>
+          {{end}}
         </div>
       {{else}}<div class="empty">No Hosts are available.</div>{{end}}
     </section>

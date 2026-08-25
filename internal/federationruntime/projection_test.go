@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sergii/specview/internal/controlplane"
 	"github.com/sergii/specview/internal/federation"
 	"github.com/sergii/specview/internal/federationpeers"
 )
@@ -37,7 +38,7 @@ func (a fixedAggregator) Aggregate(snapshots ...federation.HostSnapshot) (federa
 	return projection, nil
 }
 
-func TestProjectionContractFixture(t *testing.T) {
+func TestProjectionV2ContractKeepsV1PeerWithoutInventingControlPlane(t *testing.T) {
 	root := t.TempDir()
 	registryPath := filepath.Join(root, "federation-peers.json")
 	observationDir := filepath.Join(root, "federation", "peers")
@@ -81,11 +82,25 @@ func TestProjectionContractFixture(t *testing.T) {
 	}
 
 	local := federation.HostSnapshot{
-		SchemaVersion: federation.SnapshotSchemaVersion,
+		SchemaVersion: federation.SnapshotSchemaVersionV2,
 		HostID:        "host:11111111-1111-4111-9111-111111111111",
 		Hostname:      "sergii-macbook",
 		ObservedAt:    time.Date(2026, 8, 23, 20, 0, 0, 0, time.UTC),
-		Instances:     []federation.RepositoryInstance{},
+		ControlPlane: &controlplane.GetHostControlPlaneResult{
+			SchemaVersion: controlplane.SchemaVersion,
+			Host:          "sergii-macbook",
+			Intent: controlplane.HostIntentSummary{
+				ManagedRepositories: 1,
+				WorkItems:           2,
+				InProgress:          1,
+			},
+			Execution: controlplane.HostExecutionSummary{
+				ActiveSessions:     1,
+				ActiveRepositories: 1,
+			},
+			Attention: []controlplane.HostAttentionSummary{},
+		},
+		Instances: []federation.RepositoryInstance{},
 	}
 	builder, err := NewProjectionBuilder(snapshotBuilderStub{snapshot: local}, registryPath, store)
 	if err != nil {
@@ -99,9 +114,15 @@ func TestProjectionContractFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if actual.Hosts[0].ControlPlane == nil || actual.Hosts[0].ControlPlane.Execution.ActiveSessions != 1 {
+		t.Fatalf("local v2 control plane missing: %#v", actual.Hosts[0])
+	}
+	if actual.Hosts[1].ControlPlane != nil {
+		t.Fatalf("v1 peer invented control-plane facts: %#v", actual.Hosts[1])
+	}
 
 	var expected Projection
-	if err := json.Unmarshal(readRuntimeFixture(t, "v1-status.json"), &expected); err != nil {
+	if err := json.Unmarshal(readRuntimeFixture(t, "v2-status.json"), &expected); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(actual, expected) {
@@ -111,7 +132,7 @@ func TestProjectionContractFixture(t *testing.T) {
 	}
 }
 
-func TestProjectionKeepsCachedUnreachableRepositoryFacts(t *testing.T) {
+func TestProjectionKeepsCachedUnreachableV2ControlPlaneFacts(t *testing.T) {
 	root := t.TempDir()
 	registryPath := filepath.Join(root, "federation-peers.json")
 	store := federationpeers.NewObservationStore(filepath.Join(root, "federation", "peers"))
@@ -121,10 +142,20 @@ func TestProjectionKeepsCachedUnreachableRepositoryFacts(t *testing.T) {
 	}
 
 	laptop := loadFederationFixture(t, "v1-laptop.json")
+	laptop.SchemaVersion = federation.SnapshotSchemaVersionV2
+	laptop.ControlPlane = fixtureControlPlane(laptop.Hostname, 1, 0, 0)
 	devboxSnapshot := loadFederationFixture(t, "v1-devbox.json")
+	devboxSnapshot.SchemaVersion = federation.SnapshotSchemaVersionV2
+	devboxSnapshot.ControlPlane = fixtureControlPlane(devboxSnapshot.Hostname, 2, 1, 1)
+	devboxSnapshot.ControlPlane.Attention = []controlplane.HostAttentionSummary{{
+		RepositoryID:   devboxSnapshot.Instances[0].SourceRepositoryID,
+		RepositoryName: devboxSnapshot.Instances[0].Name,
+		LastSeenAt:     devboxSnapshot.ObservedAt,
+		Signals:        []string{"1 failed Evidence record", "1 blocked Acceptance item"},
+	}}
 	peer := federationpeers.Peer{
 		Name:              "devbox",
-		URL:               "https://devbox.example.ts.net/v1/federation/snapshot",
+		URL:               "https://devbox.example.ts.net/v2/federation/snapshot",
 		ExpectedHostID:    devboxSnapshot.HostID,
 		StaleAfterSeconds: 300,
 	}
@@ -151,6 +182,13 @@ func TestProjectionKeepsCachedUnreachableRepositoryFacts(t *testing.T) {
 	if len(projection.Hosts) != 2 || projection.Hosts[1].Freshness != federationpeers.FreshnessUnreachable || !projection.Hosts[1].HasSnapshot {
 		t.Fatalf("unexpected remote Host status: %#v", projection.Hosts)
 	}
+	remoteControlPlane := projection.Hosts[1].ControlPlane
+	if remoteControlPlane == nil {
+		t.Fatalf("cached unreachable v2 peer lost control-plane facts: %#v", projection.Hosts[1])
+	}
+	if remoteControlPlane.Execution.ActiveSessions != 2 || remoteControlPlane.Evidence.Failed != 1 || remoteControlPlane.Acceptance.Blocked != 1 || len(remoteControlPlane.Attention) != 1 {
+		t.Fatalf("unexpected cached remote control plane: %#v", remoteControlPlane)
+	}
 	if len(projection.Federation.Repositories) != 1 || len(projection.Federation.Repositories[0].Instances) != 2 {
 		t.Fatalf("cached remote repository facts disappeared: %#v", projection.Federation.Repositories)
 	}
@@ -174,7 +212,7 @@ func TestProjectionShowsNeverRetrievedPeerWithoutInventingFacts(t *testing.T) {
 	}
 	peer := federationpeers.Peer{
 		Name:              "never",
-		URL:               "https://never.example.ts.net/v1/federation/snapshot",
+		URL:               "https://never.example.ts.net/v2/federation/snapshot",
 		ExpectedHostID:    "host:33333333-3333-4333-9333-333333333333",
 		StaleAfterSeconds: 300,
 	}
@@ -182,10 +220,11 @@ func TestProjectionShowsNeverRetrievedPeerWithoutInventingFacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	local := federation.HostSnapshot{
-		SchemaVersion: federation.SnapshotSchemaVersion,
+		SchemaVersion: federation.SnapshotSchemaVersionV2,
 		HostID:        "host:11111111-1111-4111-9111-111111111111",
 		Hostname:      "laptop",
 		ObservedAt:    time.Now().UTC(),
+		ControlPlane:  fixtureControlPlane("laptop", 0, 0, 0),
 		Instances:     []federation.RepositoryInstance{},
 	}
 	builder, err := NewProjectionBuilder(snapshotBuilderStub{snapshot: local}, registryPath, store)
@@ -196,7 +235,7 @@ func TestProjectionShowsNeverRetrievedPeerWithoutInventingFacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(projection.Hosts) != 2 || projection.Hosts[1].Freshness != federationpeers.FreshnessNeverRetrieved || projection.Hosts[1].HasSnapshot {
+	if len(projection.Hosts) != 2 || projection.Hosts[1].Freshness != federationpeers.FreshnessNeverRetrieved || projection.Hosts[1].HasSnapshot || projection.Hosts[1].ControlPlane != nil {
 		t.Fatalf("unexpected never-retrieved status: %#v", projection.Hosts)
 	}
 	if len(projection.Federation.Hosts) != 1 {
@@ -211,6 +250,23 @@ func TestProjectionFailsWhenLocalSnapshotFails(t *testing.T) {
 	}
 	if _, err := builder.Build(context.Background()); err == nil {
 		t.Fatal("expected local snapshot failure")
+	}
+}
+
+func fixtureControlPlane(host string, activeSessions, failedEvidence, blockedAcceptance int) *controlplane.GetHostControlPlaneResult {
+	return &controlplane.GetHostControlPlaneResult{
+		SchemaVersion: controlplane.SchemaVersion,
+		Host:          host,
+		Execution: controlplane.HostExecutionSummary{
+			ActiveSessions: activeSessions,
+		},
+		Evidence: controlplane.HostEvidenceSummary{
+			Failed: failedEvidence,
+		},
+		Acceptance: controlplane.HostAcceptanceSummary{
+			Blocked: blockedAcceptance,
+		},
+		Attention: []controlplane.HostAttentionSummary{},
 	}
 }
 

@@ -1,19 +1,33 @@
 const { test, expect } = require('@playwright/test');
 
-test('federation page preserves peer freshness and source attribution', async ({ page }) => {
+test('federation page preserves peer freshness, source attribution, and per-Host control plane', async ({ page }) => {
   await page.goto('/federation');
 
   await expect(page.getByRole('heading', { name: 'Federation' })).toBeVisible();
-  await expect(page.locator('[data-host-source="local"]')).toContainText('e2e-laptop');
+
+  const local = page.locator('[data-host-source="local"]');
+  await expect(local).toContainText('e2e-laptop');
+  await expect(local).toHaveAttribute('data-host-control-plane', 'available');
+  await expect(local.locator('.host-control-plane')).toHaveAttribute('data-active-sessions', '1');
+  await expect(local.locator('.host-control-plane')).toHaveAttribute('data-failed-evidence', '0');
+  await expect(local.locator('.host-control-plane')).toHaveAttribute('data-blocked-acceptance', '0');
+  await expect(local.locator('.host-control-plane')).toHaveAttribute('data-attention-count', '0');
 
   const unreachable = page.locator('[data-freshness="unreachable"]');
   await expect(unreachable).toContainText('e2e-devbox');
   await expect(unreachable).toContainText('snapshot available');
   await expect(unreachable).toContainText('fixture transport unavailable');
+  await expect(unreachable).toHaveAttribute('data-host-control-plane', 'available');
+  await expect(unreachable.locator('.host-control-plane')).toHaveAttribute('data-active-sessions', '2');
+  await expect(unreachable.locator('.host-control-plane')).toHaveAttribute('data-failed-evidence', '1');
+  await expect(unreachable.locator('.host-control-plane')).toHaveAttribute('data-blocked-acceptance', '1');
+  await expect(unreachable.locator('.host-control-plane')).toHaveAttribute('data-attention-count', '1');
 
   const neverRetrieved = page.locator('[data-freshness="never_retrieved"]');
   await expect(neverRetrieved).toContainText('newbox');
   await expect(neverRetrieved).toContainText('no snapshot yet');
+  await expect(neverRetrieved).toHaveAttribute('data-host-control-plane', 'unavailable');
+  await expect(neverRetrieved).toContainText('control plane unavailable');
 
   const group = page.locator('[data-group-id="group:e2e-specview"]');
   await expect(group).toContainText('sergii/specview');

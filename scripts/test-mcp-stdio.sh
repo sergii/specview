@@ -107,8 +107,9 @@ responses=$(
     '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_evidence","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
     '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_acceptance","arguments":{"repository_id":"repo-mcp-smoke","work_item_id":"H18"}}}' \
     '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"get_repository_control_plane","arguments":{"repository_id":"repo-mcp-smoke"}}}' \
-    '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"get_federation_status","arguments":{}}}' \
-    '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"get_execution_history","arguments":{}}}' \
+    '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"get_host_control_plane","arguments":{}}}' \
+    '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"get_federation_status","arguments":{}}}' \
+    '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"get_execution_history","arguments":{}}}' \
   | XDG_STATE_HOME="$state_home" "$binary" mcp
 )
 
@@ -117,10 +118,10 @@ import json
 import os
 
 lines = [line for line in os.environ["MCP_RESPONSES"].splitlines() if line.strip()]
-if len(lines) != 10:
-    raise SystemExit(f"expected 10 MCP responses, got {len(lines)}: {lines!r}")
+if len(lines) != 11:
+    raise SystemExit(f"expected 11 MCP responses, got {len(lines)}: {lines!r}")
 
-initialize, tools, repositories, work_items, work_item, evidence, acceptance, control_plane, federation, history = [json.loads(line) for line in lines]
+initialize, tools, repositories, work_items, work_item, evidence, acceptance, control_plane, host_control_plane, federation, history = [json.loads(line) for line in lines]
 head = os.environ["GIT_HEAD"]
 revision = f"git:{head}"
 
@@ -131,6 +132,7 @@ names = [tool.get("name") for tool in tools.get("result", {}).get("tools", [])]
 expected = [
     "list_repositories",
     "get_repository",
+    "get_host_control_plane",
     "get_repository_control_plane",
     "list_active_sessions",
     "get_execution_history",
@@ -189,6 +191,25 @@ if repo_evidence.get("total") != 1 or repo_evidence.get("passed") != 1 or latest
 repo_acceptance = control_plane_value.get("acceptance", {})
 if repo_acceptance.get("configured") is not True or repo_acceptance.get("accepted") != 1 or repo_acceptance.get("revision", {}).get("revision") != revision:
     raise SystemExit(f"unexpected control-plane Acceptance: {repo_acceptance!r}")
+
+host_control_plane_value = structured(host_control_plane)
+if host_control_plane_value.get("host") == "":
+    raise SystemExit(f"Host identity missing from Host control plane: {host_control_plane_value!r}")
+host_intent = host_control_plane_value.get("intent", {})
+if host_intent.get("managed_repositories") != 1 or host_intent.get("work_items") != 1 or host_intent.get("in_progress") != 1:
+    raise SystemExit(f"unexpected Host control-plane Intent: {host_intent!r}")
+host_execution = host_control_plane_value.get("execution", {})
+if host_execution.get("active_sessions") != 0 or host_execution.get("active_repositories") != 0 or host_execution.get("has_latest") is not False:
+    raise SystemExit(f"unexpected Host control-plane Execution: {host_execution!r}")
+host_evidence = host_control_plane_value.get("evidence", {})
+host_latest_record = host_evidence.get("latest", {}).get("entry", {}).get("record", {})
+if host_evidence.get("total") != 1 or host_evidence.get("passed") != 1 or host_latest_record.get("revision") != revision:
+    raise SystemExit(f"unexpected Host control-plane Evidence: {host_evidence!r}")
+host_acceptance = host_control_plane_value.get("acceptance", {})
+if host_acceptance.get("configured_repositories") != 1 or host_acceptance.get("accepted") != 1 or host_acceptance.get("blocked") != 0:
+    raise SystemExit(f"unexpected Host control-plane Acceptance: {host_acceptance!r}")
+if host_control_plane_value.get("attention") != []:
+    raise SystemExit(f"unexpected Host control-plane attention: {host_control_plane_value!r}")
 
 federation_value = structured(federation)
 hosts = federation_value.get("hosts", [])

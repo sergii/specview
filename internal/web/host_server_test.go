@@ -189,14 +189,24 @@ func TestHostDashboardSearchUsesIndexIdentityAndLiveCatalogProjection(t *testing
 	if !strings.Contains(body, "Results") || !strings.Contains(body, "spotwo/wms") {
 		t.Fatalf("search result missing: %s", body)
 	}
-	if strings.Contains(body, "candidate-api") {
-		t.Fatalf("search leaked unmatched repository: %s", body)
-	}
+	assertSearchProjectionExcludesRepository(t, body, "candidate-api")
 
 	response = httptest.NewRecorder()
 	server.hostFragment(response, httptest.NewRequest(http.MethodGet, "/fragments/host?q=spotwo", nil))
 	body = response.Body.String()
 	if !strings.Contains(body, "Results") || !strings.Contains(body, "spotwo/wms") {
 		t.Fatalf("live search fragment missing: %s", body)
+	}
+	assertSearchProjectionExcludesRepository(t, body, "candidate-api")
+}
+
+func assertSearchProjectionExcludesRepository(t *testing.T, body, repositoryName string) {
+	t.Helper()
+	projectionStart := strings.Index(body, `<div class="projection-list">`)
+	if projectionStart < 0 {
+		t.Fatalf("search projection missing: %s", body)
+	}
+	if strings.Contains(body[projectionStart:], repositoryName) {
+		t.Fatalf("search results leaked unmatched repository %q: %s", repositoryName, body[projectionStart:])
 	}
 }

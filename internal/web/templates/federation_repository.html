@@ -28,17 +28,24 @@
     .section { margin-top:34px; }
     .section-head { display:flex; align-items:baseline; justify-content:space-between; min-height:36px; padding:8px 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:10px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; }
     .count { color:var(--quiet); font-weight:400; letter-spacing:.04em; }
+    .facets { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid var(--line); }
+    .facet { min-height:116px; padding:14px 16px 16px 0; border-right:1px solid var(--line); }
+    .facet + .facet { padding-left:16px; }
+    .facet:last-child { border-right:0; }
+    .facet-title { margin-bottom:9px; color:var(--quiet); font:10px/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; letter-spacing:.1em; text-transform:uppercase; }
+    .facet-main { margin-bottom:5px; color:var(--text); font-size:14px; font-weight:540; }
+    .facet-detail { color:var(--muted); font:10px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
     .session { display:grid; grid-template-columns:140px minmax(180px,1fr) minmax(220px,1.4fr) 160px; gap:16px; align-items:center; min-height:48px; border-bottom:1px solid var(--line); }
     .worktree { display:grid; grid-template-columns:minmax(140px,.8fr) minmax(240px,1.5fr) 90px 140px; gap:16px; align-items:center; min-height:48px; border-bottom:1px solid var(--line); }
     .name { color:var(--text); font-size:11px; font-weight:540; }
     .mono { min-width:0; overflow:hidden; color:var(--quiet); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
     .state { color:var(--muted); font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
     .empty { padding:20px 0; border-bottom:1px solid var(--line); color:var(--quiet); font-size:11px; }
-    @media(max-width:760px){.topbar{grid-template-columns:auto minmax(0,1fr) auto;gap:8px}.host{font-size:9px}.context{grid-template-columns:1fr;gap:3px}.label{margin-top:7px}.session,.worktree{grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:10px 0}.session .mono,.worktree .mono{grid-column:1/-1}.session .state:last-child,.worktree .state:last-child{grid-column:2;grid-row:1}}
+    @media(max-width:760px){.topbar{grid-template-columns:auto minmax(0,1fr) auto;gap:8px}.host{font-size:9px}.context{grid-template-columns:1fr;gap:3px}.label{margin-top:7px}.facets{grid-template-columns:1fr 1fr}.facet:nth-child(2){border-right:0}.facet:nth-child(n+3){border-top:1px solid var(--line)}.session,.worktree{grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:10px 0}.session .mono,.worktree .mono{grid-column:1/-1}.session .state:last-child,.worktree .state:last-child{grid-column:2;grid-row:1}}
   </style>
 </head>
 <body>
-<div class="shell" data-federation-instance="{{.Instance.InstanceID}}" data-host-source="{{.Host.Source}}" data-host-id="{{.Instance.HostID}}" data-freshness="{{.Host.Freshness}}">
+<div class="shell" data-federation-instance="{{.Instance.InstanceID}}" data-host-source="{{.Host.Source}}" data-host-id="{{.Instance.HostID}}" data-freshness="{{.Host.Freshness}}" data-repository-control-plane="{{if .Instance.ControlPlane}}available{{else}}unavailable{{end}}">
   <header class="topbar"><a class="brand" href="/federation">← Federation</a><div class="host">FEDERATION / {{.Hostname}}</div><div class="top-actions">{{template "theme-switch" .}}</div></header>
   <main>
     <div class="eyebrow">{{if .Local}}Local live repository context{{else}}Remote last-known repository snapshot{{end}}</div>
@@ -60,6 +67,20 @@
       {{if .Instance.Fingerprint.ForgeRepository}}<div class="label">Forge</div><div class="value">{{.Instance.Fingerprint.ForgeProvider}} · {{.Instance.Fingerprint.ForgeRepository}}</div>{{end}}
     </div>
     {{if .Host.LastError}}<div class="notice">Peer status: {{.Host.LastError}}. The last valid snapshot remains visible.</div>{{end}}
+
+    <section class="section" data-federation-repository-control-plane>
+      <div class="section-head"><span>Control plane</span><span class="count">source Host snapshot</span></div>
+      {{with .Instance.ControlPlane}}
+        <div class="facets">
+          <div class="facet" data-plane="intent"><div class="facet-title">Intent</div><div class="facet-main">{{.Intent.Total}} work items</div><div class="facet-detail">new {{.Intent.New}} · active {{.Intent.InProgress}} · done {{.Intent.Done}} · invalid {{.Intent.Invalid}}{{if .Intent.Error}} · unavailable{{end}}</div></div>
+          <div class="facet" data-plane="execution"><div class="facet-title">Execution</div><div class="facet-main">{{.Execution.Active}} active</div><div class="facet-detail">{{if .Execution.Latest}}{{.Execution.Latest.Agent}} · {{if .Execution.Latest.Active}}active{{else}}ended{{end}}{{else}}no logical sessions{{end}}{{if .Execution.Error}} · unavailable{{end}}</div></div>
+          <div class="facet" data-plane="evidence"><div class="facet-title">Evidence</div><div class="facet-main">{{.Evidence.Total}} records</div><div class="facet-detail">passed {{.Evidence.Passed}} · failed {{.Evidence.Failed}} · invalid {{.Evidence.Invalid}}{{if .Evidence.Error}} · unavailable{{end}}</div></div>
+          <div class="facet" data-plane="acceptance"><div class="facet-title">Acceptance</div><div class="facet-main">{{if .Acceptance.Configured}}{{.Acceptance.Accepted}} accepted{{else}}not configured{{end}}</div><div class="facet-detail">waiting {{.Acceptance.Waiting}} · blocked {{.Acceptance.Blocked}} · unconfigured {{.Acceptance.Unconfigured}} · invalid {{.Acceptance.Invalid}}{{if .Acceptance.EvaluationPending}} · evaluation pending{{end}}{{if .Acceptance.Error}} · unavailable{{end}}</div></div>
+        </div>
+      {{else}}
+        <div class="empty">Repository control plane unavailable in this source snapshot. Older v1/v2 peers are not interpreted as zero or healthy.</div>
+      {{end}}
+    </section>
 
     <section class="section">
       <div class="section-head"><span>Sessions</span><span class="count">{{len .Instance.Sessions}}</span></div>

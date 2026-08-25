@@ -143,6 +143,7 @@ expected = [
     "get_acceptance",
     "get_federation_status",
     "get_federation_host",
+    "get_federation_repository",
 ]
 if names != expected:
     raise SystemExit(f"unexpected MCP tools: {names!r}")
@@ -242,6 +243,23 @@ print(hosts[0]["host_id"])
 PY
 )
 
+instance_id=$(MCP_RESPONSES="$responses" HOST_ID="$host_id" python3 - <<'PY'
+import json
+import os
+
+lines = [json.loads(line) for line in os.environ["MCP_RESPONSES"].splitlines() if line.strip()]
+federation = lines[9].get("result", {}).get("structuredContent", {})
+for group in federation.get("federation", {}).get("repositories", []):
+    for instance in group.get("instances", []):
+        if instance.get("host_id") == os.environ["HOST_ID"] and instance.get("source_repository_id") == "repo-mcp-smoke":
+            value = instance.get("instance_id")
+            if value:
+                print(value)
+                raise SystemExit(0)
+raise SystemExit("cannot discover exact local RepositoryInstance ID")
+PY
+)
+
 host_response=$(
   printf '{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"get_federation_host","arguments":{"host_id":"%s"}}}\n' "$host_id" \
   | XDG_STATE_HOME="$state_home" "$binary" mcp
@@ -277,6 +295,68 @@ if row.get("name") != "fixture/specview" or instance.get("source_repository_id")
     raise SystemExit(f"unexpected selected Host repository attribution: {row!r}")
 if instance.get("host_id") != os.environ["HOST_ID"]:
     raise SystemExit(f"repository instance belongs to another Host: {instance!r}")
+PY
+
+repository_response=$(
+  printf '{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"get_federation_repository","arguments":{"host_id":"%s","instance_id":"%s"}}}\n' "$host_id" "$instance_id" \
+  | XDG_STATE_HOME="$state_home" "$binary" mcp
+)
+
+MCP_RESPONSES="$responses" MCP_REPOSITORY_RESPONSE="$repository_response" REPO_ROOT="$repo_root" HOST_ID="$host_id" INSTANCE_ID="$instance_id" python3 - <<'PY'
+import copy
+import json
+import os
+
+responses = [json.loads(line) for line in os.environ["MCP_RESPONSES"].splitlines() if line.strip()]
+federation = responses[9]["result"]["structuredContent"]
+expected_host = federation["hosts"][0]
+expected_group = None
+expected_instance = None
+for group in federation.get("federation", {}).get("repositories", []):
+    for instance in group.get("instances", []):
+        if instance.get("host_id") == os.environ["HOST_ID"] and instance.get("instance_id") == os.environ["INSTANCE_ID"]:
+            expected_group = group
+            expected_instance = instance
+            break
+    if expected_instance is not None:
+        break
+if expected_group is None or expected_instance is None:
+    raise SystemExit("discovered repository instance disappeared from source federation projection")
+
+selected_response = json.loads(os.environ["MCP_REPOSITORY_RESPONSE"])
+result = selected_response.get("result", {})
+if result.get("isError"):
+    raise SystemExit(f"get_federation_repository failed: {selected_response!r}")
+selected = result.get("structuredContent", {})
+if selected.get("schema_version") != 1:
+    raise SystemExit(f"unexpected federation repository result schema: {selected!r}")
+host = selected.get("host", {})
+if not host.get("observed_at"):
+    raise SystemExit(f"selected repository Host lost observation time: {host!r}")
+for key in ("source", "host_id", "hostname", "has_snapshot", "control_plane"):
+    if host.get(key) != expected_host.get(key):
+        raise SystemExit(f"get_federation_repository Host diverged on {key}: selected={host!r} expected={expected_host!r}")
+
+group = selected.get("group", {})
+expected_group_view = {key: expected_group.get(key) for key in ("group_id", "name", "active", "agents") if key in expected_group}
+if group != expected_group_view:
+    raise SystemExit(f"federation repository group diverged: selected={group!r} expected={expected_group_view!r}")
+
+instance = selected.get("instance", {})
+if instance.get("host_id") != os.environ["HOST_ID"] or instance.get("instance_id") != os.environ["INSTANCE_ID"]:
+    raise SystemExit(f"unexpected exact federation repository identity: {instance!r}")
+if instance.get("source_repository_id") != "repo-mcp-smoke" or instance.get("root") != os.environ["REPO_ROOT"]:
+    raise SystemExit(f"unexpected federation repository attribution: {instance!r}")
+if not instance.get("observed_at"):
+    raise SystemExit(f"selected repository instance lost observation time: {instance!r}")
+actual_stable = copy.deepcopy(instance)
+expected_stable = copy.deepcopy(expected_instance)
+actual_stable.pop("observed_at", None)
+expected_stable.pop("observed_at", None)
+if actual_stable != expected_stable:
+    raise SystemExit(f"federation repository instance diverged: selected={actual_stable!r} expected={expected_stable!r}")
+if not isinstance(instance.get("sessions"), list) or not isinstance(instance.get("worktrees"), list):
+    raise SystemExit(f"federation repository lost session/worktree arrays: {instance!r}")
 PY
 
 host_file="$state_home/specview/host.json"

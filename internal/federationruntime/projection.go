@@ -13,7 +13,7 @@ import (
 	"github.com/sergii/specview/internal/federationpeers"
 )
 
-const ProjectionSchemaVersion = 2
+const ProjectionSchemaVersion = 3
 
 const (
 	HostSourceLocal = "local"

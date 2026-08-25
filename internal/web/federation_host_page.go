@@ -47,15 +47,7 @@ func (s *HostServer) federationHostPage(reader FederationReader) http.HandlerFun
 			return
 		}
 
-		var host federationruntime.HostStatus
-		found := false
-		for _, candidate := range projection.Hosts {
-			if candidate.HostID == hostID {
-				host = candidate
-				found = true
-				break
-			}
-		}
+		host, found := federationruntime.SelectHost(projection, hostID)
 		if !found {
 			http.NotFound(w, r)
 			return
@@ -78,18 +70,14 @@ func (s *HostServer) federationHostPage(reader FederationReader) http.HandlerFun
 }
 
 func federationHostRepositories(projection federationruntime.Projection, hostID string) []federationHostRepositoryData {
-	result := make([]federationHostRepositoryData, 0)
-	for _, group := range projection.Federation.Repositories {
-		for _, instance := range group.Instances {
-			if instance.HostID != hostID {
-				continue
-			}
-			result = append(result, federationHostRepositoryData{
-				Group:    group,
-				Instance: instance,
-				Href:     federationRepositoryHref(hostID, instance.InstanceID),
-			})
-		}
+	selections := federationruntime.RepositoriesForHost(projection, hostID)
+	result := make([]federationHostRepositoryData, 0, len(selections))
+	for _, selection := range selections {
+		result = append(result, federationHostRepositoryData{
+			Group:    selection.Group,
+			Instance: selection.Instance,
+			Href:     federationRepositoryHref(hostID, selection.Instance.InstanceID),
+		})
 	}
 	return result
 }

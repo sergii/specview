@@ -26,39 +26,26 @@ type federationHostResult struct {
 }
 
 func projectFederationHost(projection federationruntime.Projection, hostID string) (federationHostResult, error) {
-	var selected federationruntime.HostStatus
-	found := false
-	for _, host := range projection.Hosts {
-		if host.HostID != hostID {
-			continue
-		}
-		selected = host
-		found = true
-		break
-	}
+	selected, found := federationruntime.SelectHost(projection, hostID)
 	if !found {
 		return federationHostResult{}, fmt.Errorf("federation Host %q not found", hostID)
 	}
 
+	selections := federationruntime.RepositoriesForHost(projection, hostID)
 	result := federationHostResult{
 		SchemaVersion: federationHostResultSchemaVersion,
 		GeneratedAt:   projection.GeneratedAt,
 		Host:          selected,
-		Repositories:  make([]federationHostRepositoryResult, 0),
+		Repositories:  make([]federationHostRepositoryResult, 0, len(selections)),
 	}
-	for _, group := range projection.Federation.Repositories {
-		for _, instance := range group.Instances {
-			if instance.HostID != hostID {
-				continue
-			}
-			result.Repositories = append(result.Repositories, federationHostRepositoryResult{
-				GroupID:  group.GroupID,
-				Name:     group.Name,
-				Active:   group.Active,
-				Agents:   append([]string(nil), group.Agents...),
-				Instance: instance,
-			})
-		}
+	for _, selection := range selections {
+		result.Repositories = append(result.Repositories, federationHostRepositoryResult{
+			GroupID:  selection.Group.GroupID,
+			Name:     selection.Group.Name,
+			Active:   selection.Group.Active,
+			Agents:   append([]string(nil), selection.Group.Agents...),
+			Instance: selection.Instance,
+		})
 	}
 	return result, nil
 }

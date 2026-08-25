@@ -36,37 +36,8 @@ func (s *HostServer) federationRepositoryPage(reader FederationReader) http.Hand
 			return
 		}
 
-		var host federationruntime.HostStatus
-		hostFound := false
-		for _, candidate := range projection.Hosts {
-			if candidate.HostID == hostID {
-				host = candidate
-				hostFound = true
-				break
-			}
-		}
-		if !hostFound {
-			http.NotFound(w, r)
-			return
-		}
-
-		var group federation.RepositoryGroup
-		var instance federation.SourcedInstance
-		instanceFound := false
-		for _, candidateGroup := range projection.Federation.Repositories {
-			for _, candidate := range candidateGroup.Instances {
-				if candidate.HostID == hostID && candidate.InstanceID == instanceID {
-					group = candidateGroup
-					instance = candidate
-					instanceFound = true
-					break
-				}
-			}
-			if instanceFound {
-				break
-			}
-		}
-		if !instanceFound {
+		host, selection, found := federationruntime.SelectRepository(projection, hostID, instanceID)
+		if !found {
 			http.NotFound(w, r)
 			return
 		}
@@ -75,8 +46,8 @@ func (s *HostServer) federationRepositoryPage(reader FederationReader) http.Hand
 		w.Header().Set("Cache-Control", "no-store")
 		if err := s.tmpl.ExecuteTemplate(w, "federation_repository.html", federationRepositoryPageData{
 			Hostname: s.catalog.Hostname(),
-			Group:    group,
-			Instance: instance,
+			Group:    selection.Group,
+			Instance: selection.Instance,
 			Host:     host,
 			Local:    host.Source == federationruntime.HostSourceLocal,
 		}); err != nil {

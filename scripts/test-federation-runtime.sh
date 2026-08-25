@@ -27,12 +27,12 @@ host_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["host_
 "$bin" federation serve > "$root/federation-server.log" 2>&1 &
 server_pid=$!
 for _ in $(seq 1 50); do
-  if curl -fsS http://127.0.0.1:7332/v2/federation/snapshot > /dev/null; then
+  if curl -fsS http://127.0.0.1:7332/v3/federation/snapshot > /dev/null; then
     break
   fi
   sleep 0.1
 done
-curl -fsS http://127.0.0.1:7332/v2/federation/snapshot > /dev/null
+curl -fsS http://127.0.0.1:7332/v3/federation/snapshot > /dev/null
 
 "$bin" federation peer add cached \
   --url http://127.0.0.1:7332 \
@@ -45,15 +45,15 @@ curl -fsS http://127.0.0.1:7332/v2/federation/snapshot > /dev/null
   --host host:33333333-3333-4333-9333-333333333333 \
   --stale-after 5m
 
-# Freeze the successful state before simulating an outage. H40 status must expose
-# a fresh cached v2 peer and a never-retrieved peer without inventing remote facts.
+# Freeze the successful state before simulating an outage. H44 status must expose
+# a fresh cached v3 peer and a never-retrieved peer without inventing remote facts.
 "$bin" federation status > "$root/status-fresh.json"
 python3 - "$root/status-fresh.json" "$host_id" <<'PY'
 import json, sys
 status = json.load(open(sys.argv[1]))
 host_id = sys.argv[2]
 
-assert status["schema_version"] == 2, status
+assert status["schema_version"] == 3, status
 assert status["federation"]["schema_version"] == 1, status
 assert status["federation"]["generated_at"] == status["generated_at"], status
 local = status["hosts"][0]
@@ -96,7 +96,7 @@ import json, sys
 status = json.load(open(sys.argv[1]))
 host_id = sys.argv[2]
 
-assert status["schema_version"] == 2, status
+assert status["schema_version"] == 3, status
 assert status["generated_at"], status
 assert status["federation"]["schema_version"] == 1, status
 assert status["federation"]["generated_at"] == status["generated_at"], status

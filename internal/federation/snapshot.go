@@ -22,7 +22,8 @@ const (
 	// SnapshotSchemaVersion is the frozen H20/H21 wire contract.
 	SnapshotSchemaVersion   = 1
 	SnapshotSchemaVersionV2 = 2
-	CurrentSnapshotVersion  = SnapshotSchemaVersionV2
+	SnapshotSchemaVersionV3 = 3
+	CurrentSnapshotVersion  = SnapshotSchemaVersionV3
 )
 
 type LocalReader interface {
@@ -30,6 +31,7 @@ type LocalReader interface {
 	GetRepository(context.Context, string) (controlplane.GetRepositoryResult, error)
 	ListActiveSessions(context.Context) (controlplane.ListActiveSessionsResult, error)
 	GetHostControlPlane(context.Context) (controlplane.GetHostControlPlaneResult, error)
+	GetRepositoryControlPlane(context.Context, string) (controlplane.GetRepositoryControlPlaneResult, error)
 }
 
 type HostSnapshot struct {
@@ -43,16 +45,17 @@ type HostSnapshot struct {
 }
 
 type RepositoryInstance struct {
-	InstanceID         string                         `json:"instance_id"`
-	SourceRepositoryID string                         `json:"source_repository_id"`
-	Name               string                         `json:"name"`
-	Root               string                         `json:"root"`
-	Fingerprint        identity.RepositoryFingerprint `json:"fingerprint"`
-	Active             bool                           `json:"active"`
-	Agents             []string                       `json:"agents,omitempty"`
-	Sessions           []Session                      `json:"sessions"`
-	Worktrees          []Worktree                     `json:"worktrees"`
-	Warnings           []string                       `json:"warnings,omitempty"`
+	InstanceID         string                                        `json:"instance_id"`
+	SourceRepositoryID string                                        `json:"source_repository_id"`
+	Name               string                                        `json:"name"`
+	Root               string                                        `json:"root"`
+	Fingerprint        identity.RepositoryFingerprint                `json:"fingerprint"`
+	Active             bool                                          `json:"active"`
+	Agents             []string                                      `json:"agents,omitempty"`
+	Sessions           []Session                                     `json:"sessions"`
+	Worktrees          []Worktree                                    `json:"worktrees"`
+	ControlPlane       *controlplane.GetRepositoryControlPlaneResult `json:"control_plane,omitempty"`
+	Warnings           []string                                      `json:"warnings,omitempty"`
 }
 
 type Session struct {
@@ -129,10 +132,15 @@ func (b *Builder) Build(ctx context.Context) (HostSnapshot, error) {
 		if detailErr != nil {
 			return HostSnapshot{}, fmt.Errorf("get repository %s for federation snapshot: %w", repository.ID, detailErr)
 		}
+		repositoryControlPlane, repositoryControlPlaneErr := b.reader.GetRepositoryControlPlane(ctx, repository.ID)
+		if repositoryControlPlaneErr != nil {
+			return HostSnapshot{}, fmt.Errorf("build repository %s control plane for federation snapshot: %w", repository.ID, repositoryControlPlaneErr)
+		}
 		instance, instanceErr := buildInstance(b.hostID, detail.Repository, sessionsByRepository[repository.ID], detail.Warnings)
 		if instanceErr != nil {
 			return HostSnapshot{}, instanceErr
 		}
+		instance.ControlPlane = &repositoryControlPlane
 		snapshot.Instances = append(snapshot.Instances, instance)
 	}
 
@@ -143,8 +151,18 @@ func (b *Builder) Build(ctx context.Context) (HostSnapshot, error) {
 	return snapshot, nil
 }
 
-func (s HostSnapshot) V1() HostSnapshot {
+func (s HostSnapshot) V2() HostSnapshot {
 	copySnapshot := s
+	copySnapshot.SchemaVersion = SnapshotSchemaVersionV2
+	copySnapshot.Instances = append([]RepositoryInstance(nil), s.Instances...)
+	for i := range copySnapshot.Instances {
+		copySnapshot.Instances[i].ControlPlane = nil
+	}
+	return copySnapshot
+}
+
+func (s HostSnapshot) V1() HostSnapshot {
+	copySnapshot := s.V2()
 	copySnapshot.SchemaVersion = SnapshotSchemaVersion
 	copySnapshot.ControlPlane = nil
 	return copySnapshot
@@ -176,15 +194,9 @@ func (s HostSnapshot) Validate() error {
 		if s.ControlPlane != nil {
 			return errors.New("federation HostSnapshot v1 must not contain control_plane")
 		}
-	case SnapshotSchemaVersionV2:
-		if s.ControlPlane == nil {
-			return errors.New("federation HostSnapshot v2 requires control_plane")
-		}
-		if s.ControlPlane.SchemaVersion != controlplane.SchemaVersion {
-			return fmt.Errorf("unsupported Host control-plane schema version %d", s.ControlPlane.SchemaVersion)
-		}
-		if strings.TrimSpace(s.ControlPlane.Host) != strings.TrimSpace(s.Hostname) {
-			return fmt.Errorf("federation HostSnapshot control-plane Host %q does not match hostname %q", s.ControlPlane.Host, s.Hostname)
+	case SnapshotSchemaVersionV2, SnapshotSchemaVersionV3:
+		if err := validateHostControlPlane(s); err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("unsupported federation snapshot version %d", s.SchemaVersion)
@@ -217,6 +229,47 @@ func (s HostSnapshot) Validate() error {
 			return fmt.Errorf("duplicate federation RepositoryInstance %q", instance.InstanceID)
 		}
 		seen[instance.InstanceID] = struct{}{}
+		if s.SchemaVersion < SnapshotSchemaVersionV3 {
+			if instance.ControlPlane != nil {
+				return fmt.Errorf("federation HostSnapshot v%d must not contain repository control_plane", s.SchemaVersion)
+			}
+			continue
+		}
+		if err := validateRepositoryControlPlane(s, instance); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateHostControlPlane(snapshot HostSnapshot) error {
+	if snapshot.ControlPlane == nil {
+		return fmt.Errorf("federation HostSnapshot v%d requires control_plane", snapshot.SchemaVersion)
+	}
+	if snapshot.ControlPlane.SchemaVersion != controlplane.SchemaVersion {
+		return fmt.Errorf("unsupported Host control-plane schema version %d", snapshot.ControlPlane.SchemaVersion)
+	}
+	if strings.TrimSpace(snapshot.ControlPlane.Host) != strings.TrimSpace(snapshot.Hostname) {
+		return fmt.Errorf("federation HostSnapshot control-plane Host %q does not match hostname %q", snapshot.ControlPlane.Host, snapshot.Hostname)
+	}
+	return nil
+}
+
+func validateRepositoryControlPlane(snapshot HostSnapshot, instance RepositoryInstance) error {
+	if instance.ControlPlane == nil {
+		return fmt.Errorf("federation HostSnapshot v3 repository %q requires control_plane", instance.InstanceID)
+	}
+	if instance.ControlPlane.SchemaVersion != controlplane.SchemaVersion {
+		return fmt.Errorf("unsupported repository control-plane schema version %d", instance.ControlPlane.SchemaVersion)
+	}
+	if strings.TrimSpace(instance.ControlPlane.Host) != strings.TrimSpace(snapshot.Hostname) {
+		return fmt.Errorf("federation repository control-plane Host %q does not match hostname %q", instance.ControlPlane.Host, snapshot.Hostname)
+	}
+	if instance.ControlPlane.RepositoryID != instance.SourceRepositoryID {
+		return fmt.Errorf("federation repository control-plane repository ID %q does not match source repository ID %q", instance.ControlPlane.RepositoryID, instance.SourceRepositoryID)
+	}
+	if instance.ControlPlane.RepositoryName != instance.Name {
+		return fmt.Errorf("federation repository control-plane repository name %q does not match instance name %q", instance.ControlPlane.RepositoryName, instance.Name)
 	}
 	return nil
 }

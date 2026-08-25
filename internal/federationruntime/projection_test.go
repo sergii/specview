@@ -38,7 +38,7 @@ func (a fixedAggregator) Aggregate(snapshots ...federation.HostSnapshot) (federa
 	return projection, nil
 }
 
-func TestProjectionV2ContractKeepsV1PeerWithoutInventingControlPlane(t *testing.T) {
+func TestProjectionV3ContractKeepsV1PeerWithoutInventingControlPlane(t *testing.T) {
 	root := t.TempDir()
 	registryPath := filepath.Join(root, "federation-peers.json")
 	observationDir := filepath.Join(root, "federation", "peers")
@@ -122,7 +122,7 @@ func TestProjectionV2ContractKeepsV1PeerWithoutInventingControlPlane(t *testing.
 	}
 
 	var expected Projection
-	if err := json.Unmarshal(readRuntimeFixture(t, "v2-status.json"), &expected); err != nil {
+	if err := json.Unmarshal(readRuntimeFixture(t, "v3-status.json"), &expected); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(actual, expected) {

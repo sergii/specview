@@ -87,7 +87,7 @@ first = json.loads(Path(os.environ["SNAPSHOT_ONE"]).read_text(encoding="utf-8"))
 second = json.loads(Path(os.environ["SNAPSHOT_TWO"]).read_text(encoding="utf-8"))
 root = os.environ["FIXTURE_ROOT"]
 
-if first.get("schema_version") != 2:
+if first.get("schema_version") != 3:
     raise SystemExit(f"unexpected snapshot schema: {first!r}")
 if not first.get("host_id", "").startswith("host:"):
     raise SystemExit(f"missing Host identity: {first!r}")
@@ -110,6 +110,15 @@ if instance.get("source_repository_id") != "repo-federation-smoke":
     raise SystemExit(f"unexpected source repository: {instance!r}")
 if instance.get("root") != root:
     raise SystemExit(f"unexpected local root: {instance!r}")
+repository_control_plane = instance.get("control_plane")
+if not repository_control_plane:
+    raise SystemExit(f"missing repository control plane: {instance!r}")
+if repository_control_plane.get("schema_version") != 1 or repository_control_plane.get("host") != first.get("hostname"):
+    raise SystemExit(f"invalid repository control-plane Host authority: {repository_control_plane!r}")
+if repository_control_plane.get("repository_id") != "repo-federation-smoke" or repository_control_plane.get("repository_name") != "fixture/specview":
+    raise SystemExit(f"invalid repository control-plane identity: {repository_control_plane!r}")
+if repository_control_plane.get("intent", {}).get("total") != 1 or repository_control_plane.get("intent", {}).get("in_progress") != 1:
+    raise SystemExit(f"unexpected repository Intent summary: {repository_control_plane!r}")
 fingerprint = instance.get("fingerprint", {})
 if fingerprint.get("explicit_id") != "specview:sergii/specview":
     raise SystemExit(f"missing explicit project identity: {fingerprint!r}")
@@ -148,6 +157,8 @@ expected_roots = {
 }
 if roots != expected_roots:
     raise SystemExit(f"unexpected federated roots: {roots!r}")
+if any(instance.get("control_plane") for instance in instances):
+    raise SystemExit(f"frozen v1 aggregate unexpectedly invented repository control plane: {instances!r}")
 if projection.get("correlation_issues"):
     raise SystemExit(f"canonical matching fixtures must not have correlation issues: {projection!r}")
 PY

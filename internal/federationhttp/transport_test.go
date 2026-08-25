@@ -58,7 +58,7 @@ func TestHandlerPreservesFrozenV1SnapshotEndpoint(t *testing.T) {
 	}
 }
 
-func TestHandlerServesV2HostControlPlane(t *testing.T) {
+func TestHandlerServesV2HostControlPlaneWithoutRepositoryV3Fields(t *testing.T) {
 	source := &snapshotSourceStub{snapshot: validSnapshot()}
 	handler, err := NewHandler(source)
 	if err != nil {
@@ -75,6 +75,26 @@ func TestHandlerServesV2HostControlPlane(t *testing.T) {
 	}
 	if snapshot.SchemaVersion != federation.SnapshotSchemaVersionV2 || snapshot.ControlPlane == nil || snapshot.ControlPlane.Host != "devbox-01" {
 		t.Fatalf("unexpected v2 snapshot: %#v", snapshot)
+	}
+}
+
+func TestHandlerServesCurrentV3Snapshot(t *testing.T) {
+	source := &snapshotSourceStub{snapshot: validSnapshot()}
+	handler, err := NewHandler(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, SnapshotPathV3, nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%q", response.Code, response.Body.String())
+	}
+	snapshot, err := federation.DecodeSnapshot(response.Body.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.SchemaVersion != federation.SnapshotSchemaVersionV3 || snapshot.ControlPlane == nil {
+		t.Fatalf("unexpected v3 snapshot: %#v", snapshot)
 	}
 }
 
@@ -104,7 +124,7 @@ func TestHandlerDoesNotReturnPartialSnapshotOnSourceFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, SnapshotPathV2, nil))
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, SnapshotPathV3, nil))
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d", response.Code)
 	}
@@ -113,7 +133,7 @@ func TestHandlerDoesNotReturnPartialSnapshotOnSourceFailure(t *testing.T) {
 	}
 }
 
-func TestClientPrefersV2AndPinsLoopbackPeer(t *testing.T) {
+func TestClientPrefersV3AndPinsLoopbackPeer(t *testing.T) {
 	source := &snapshotSourceStub{snapshot: validSnapshot()}
 	handler, err := NewHandler(source)
 	if err != nil {
@@ -126,11 +146,41 @@ func TestClientPrefersV2AndPinsLoopbackPeer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.HostID != source.snapshot.HostID || snapshot.SchemaVersion != federation.SnapshotSchemaVersionV2 || snapshot.ControlPlane == nil {
-		t.Fatalf("unexpected preferred v2 snapshot: %#v", snapshot)
+	if snapshot.HostID != source.snapshot.HostID || snapshot.SchemaVersion != federation.SnapshotSchemaVersionV3 || snapshot.ControlPlane == nil {
+		t.Fatalf("unexpected preferred v3 snapshot: %#v", snapshot)
 	}
 	if source.calls != 1 {
-		t.Fatalf("v2-capable peer should require one source build, got %d", source.calls)
+		t.Fatalf("v3-capable peer should require one source build, got %d", source.calls)
+	}
+}
+
+func TestClientFallsBackToV2Peer(t *testing.T) {
+	v2 := validSnapshot().V2()
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if r.URL.Path == SnapshotPathV3 {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Path != SnapshotPathV2 {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(v2)
+	}))
+	defer server.Close()
+
+	snapshot, err := NewClient().Fetch(context.Background(), server.URL+SnapshotPathV2, v2.HostID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.SchemaVersion != federation.SnapshotSchemaVersionV2 || snapshot.ControlPlane == nil {
+		t.Fatalf("unexpected v2 fallback snapshot: %#v", snapshot)
+	}
+	if strings.Join(paths, ",") != SnapshotPathV3+","+SnapshotPathV2 {
+		t.Fatalf("request order = %#v, want v3 then v2", paths)
 	}
 }
 
@@ -139,7 +189,7 @@ func TestClientFallsBackToFrozenV1Peer(t *testing.T) {
 	var paths []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.URL.Path)
-		if r.URL.Path == SnapshotPathV2 {
+		if r.URL.Path == SnapshotPathV3 || r.URL.Path == SnapshotPathV2 {
 			http.NotFound(w, r)
 			return
 		}
@@ -159,8 +209,8 @@ func TestClientFallsBackToFrozenV1Peer(t *testing.T) {
 	if snapshot.SchemaVersion != federation.SnapshotSchemaVersion || snapshot.ControlPlane != nil {
 		t.Fatalf("unexpected v1 fallback snapshot: %#v", snapshot)
 	}
-	if strings.Join(paths, ",") != SnapshotPathV2+","+SnapshotPathV1 {
-		t.Fatalf("request order = %#v, want v2 then v1", paths)
+	if strings.Join(paths, ",") != SnapshotPathV3+","+SnapshotPathV2+","+SnapshotPathV1 {
+		t.Fatalf("request order = %#v, want v3 then v2 then v1", paths)
 	}
 }
 
@@ -240,9 +290,11 @@ func TestValidatePeerURLAllowsHTTPSAndLoopbackHTTP(t *testing.T) {
 	for _, value := range []string{
 		"https://devbox.example.ts.net/v1/federation/snapshot",
 		"https://devbox.example.ts.net/v2/federation/snapshot",
+		"https://devbox.example.ts.net/v3/federation/snapshot",
 		"https://devbox.example.ts.net",
 		"http://localhost:7332/v1/federation/snapshot",
 		"http://localhost:7332/v2/federation/snapshot",
+		"http://localhost:7332/v3/federation/snapshot",
 		"http://127.0.0.1:7332",
 		"http://[::1]:7332",
 	} {
@@ -254,7 +306,7 @@ func TestValidatePeerURLAllowsHTTPSAndLoopbackHTTP(t *testing.T) {
 
 func validSnapshot() federation.HostSnapshot {
 	return federation.HostSnapshot{
-		SchemaVersion: federation.SnapshotSchemaVersionV2,
+		SchemaVersion: federation.SnapshotSchemaVersionV3,
 		HostID:        "host:11111111-1111-4111-9111-111111111111",
 		Hostname:      "devbox-01",
 		ObservedAt:    time.Date(2026, 8, 23, 20, 0, 0, 0, time.UTC),

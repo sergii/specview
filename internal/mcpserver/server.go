@@ -101,6 +101,10 @@ type repositoryIDArgs struct {
 	RepositoryID string `json:"repository_id"`
 }
 
+type hostIDArgs struct {
+	HostID string `json:"host_id"`
+}
+
 type workItemArgs struct {
 	RepositoryID string `json:"repository_id"`
 	WorkItemID   string `json:"work_item_id"`
@@ -186,7 +190,7 @@ func (s *Server) dispatch(ctx context.Context, req request) (any, *rpcError) {
 	case "ping":
 		return map[string]any{}, nil
 	case "tools/list":
-		return map[string]any{"tools": toolDefinitionsForReader(s.reader)}, nil
+		return map[string]any{"tools": toolDefinitionsForServer(s.reader, s.federation != nil)}, nil
 	case "tools/call":
 		return s.callTool(ctx, req.Params)
 	default:
@@ -318,12 +322,26 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) (any, *rpcEr
 		}
 		value, err := s.federation.Build(ctx)
 		return toolResultFor(value, err), nil
+	case "get_federation_host":
+		arguments, err := decodeHostID(params.Arguments)
+		if err != nil {
+			return nil, invalidParams(params.Name, err)
+		}
+		if s.federation == nil {
+			return toolResultFor(nil, errors.New("federation reader is not configured")), nil
+		}
+		projection, readErr := s.federation.Build(ctx)
+		if readErr != nil {
+			return toolResultFor(nil, readErr), nil
+		}
+		value, projectErr := projectFederationHost(projection, arguments.HostID)
+		return toolResultFor(value, projectErr), nil
 	default:
 		return toolResultFor(nil, fmt.Errorf("unknown Specview tool %q", params.Name)), nil
 	}
 }
 
-func toolDefinitionsForReader(reader Reader) []map[string]any {
+func toolDefinitionsForServer(reader Reader, hasFederation bool) []map[string]any {
 	definitions := toolDefinitions()
 	_, hasHistory := reader.(HistoryReader)
 	_, hasHostControlPlane := reader.(HostControlPlaneReader)
@@ -338,6 +356,9 @@ func toolDefinitionsForReader(reader Reader) []map[string]any {
 			continue
 		}
 		if name == "get_repository_control_plane" && !hasRepositoryControlPlane {
+			continue
+		}
+		if name == "get_federation_host" && !hasFederation {
 			continue
 		}
 		filtered = append(filtered, definition)
@@ -367,6 +388,17 @@ func toolDefinitions() []map[string]any {
 			"repository_id": repositoryProperty,
 		},
 		"required":             []string{"repository_id"},
+		"additionalProperties": false,
+	}
+	hostSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"host_id": map[string]any{
+				"type":        "string",
+				"description": "Exact Host ID returned by get_federation_status.",
+			},
+		},
+		"required":             []string{"host_id"},
 		"additionalProperties": false,
 	}
 	workItemSchema := map[string]any{
@@ -454,6 +486,12 @@ func toolDefinitions() []map[string]any {
 			"inputSchema": emptySchema,
 			"annotations": readOnly,
 		},
+		{
+			"name":        "get_federation_host",
+			"description": "Get one exact Host from the current federation projection with source/freshness, Host control-plane facts, and only that Host's correlated repository instances.",
+			"inputSchema": hostSchema,
+			"annotations": readOnly,
+		},
 	}
 }
 
@@ -468,6 +506,21 @@ func decodeRepositoryID(raw json.RawMessage) (repositoryIDArgs, error) {
 	arguments.RepositoryID = strings.TrimSpace(arguments.RepositoryID)
 	if arguments.RepositoryID == "" {
 		return arguments, errors.New("arguments.repository_id is required")
+	}
+	return arguments, nil
+}
+
+func decodeHostID(raw json.RawMessage) (hostIDArgs, error) {
+	var arguments hostIDArgs
+	if len(raw) == 0 || string(raw) == "null" {
+		return arguments, errors.New("arguments.host_id is required")
+	}
+	if err := decodeStrict(raw, &arguments); err != nil {
+		return arguments, err
+	}
+	arguments.HostID = strings.TrimSpace(arguments.HostID)
+	if arguments.HostID == "" {
+		return arguments, errors.New("arguments.host_id is required")
 	}
 	return arguments, nil
 }

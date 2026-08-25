@@ -21,6 +21,7 @@ const (
 	SnapshotPath    = "/v1/federation/snapshot"
 	SnapshotPathV1  = SnapshotPath
 	SnapshotPathV2  = "/v2/federation/snapshot"
+	SnapshotPathV3  = "/v3/federation/snapshot"
 	DefaultAddress  = "127.0.0.1:7332"
 	DefaultMaxBytes = int64(16 << 20)
 	DefaultTimeout  = 10 * time.Second
@@ -44,7 +45,7 @@ func NewHandler(source SnapshotSource) (*Handler, error) {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != SnapshotPathV1 && r.URL.Path != SnapshotPathV2 {
+	if r.URL.Path != SnapshotPathV1 && r.URL.Path != SnapshotPathV2 && r.URL.Path != SnapshotPathV3 {
 		http.NotFound(w, r)
 		return
 	}
@@ -59,8 +60,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "federation snapshot unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	if r.URL.Path == SnapshotPathV1 {
+	switch r.URL.Path {
+	case SnapshotPathV1:
 		snapshot = snapshot.V1()
+	case SnapshotPathV2:
+		snapshot = snapshot.V2()
 	}
 	if err := snapshot.Validate(); err != nil {
 		http.Error(w, "federation snapshot invalid", http.StatusInternalServerError)
@@ -188,11 +192,13 @@ func (c *Client) fetchSnapshot(ctx context.Context, peerURL *url.URL, headers ht
 }
 
 func preferredSnapshotURLs(peerURL *url.URL) []*url.URL {
+	v3 := *peerURL
+	v3.Path = SnapshotPathV3
 	v2 := *peerURL
 	v2.Path = SnapshotPathV2
 	v1 := *peerURL
 	v1.Path = SnapshotPathV1
-	return []*url.URL{&v2, &v1}
+	return []*url.URL{&v3, &v2, &v1}
 }
 
 func ValidatePeerURL(rawURL string) (*url.URL, error) {
@@ -216,8 +222,8 @@ func ValidatePeerURL(rawURL string) (*url.URL, error) {
 	if peerURL.Path == "" || peerURL.Path == "/" {
 		peerURL.Path = SnapshotPathV1
 	}
-	if peerURL.Path != SnapshotPathV1 && peerURL.Path != SnapshotPathV2 {
-		return nil, fmt.Errorf("federation peer URL path must be %s or %s", SnapshotPathV1, SnapshotPathV2)
+	if peerURL.Path != SnapshotPathV1 && peerURL.Path != SnapshotPathV2 && peerURL.Path != SnapshotPathV3 {
+		return nil, fmt.Errorf("federation peer URL path must be %s, %s, or %s", SnapshotPathV1, SnapshotPathV2, SnapshotPathV3)
 	}
 
 	switch strings.ToLower(peerURL.Scheme) {

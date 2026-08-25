@@ -1,0 +1,67 @@
+{
+  "schema_version": 3,
+  "generated_at": "2026-08-23T20:00:30Z",
+  "hosts": [
+    {
+      "source": "local",
+      "host_id": "host:11111111-1111-4111-9111-111111111111",
+      "hostname": "sergii-macbook",
+      "has_snapshot": true,
+      "observed_at": "2026-08-23T20:00:00Z",
+      "control_plane": {
+        "schema_version": 1,
+        "host": "sergii-macbook",
+        "intent": {
+          "managed_repositories": 1,
+          "work_items": 2,
+          "in_progress": 1
+        },
+        "execution": {
+          "active_sessions": 1,
+          "active_repositories": 1
+        },
+        "evidence": {},
+        "acceptance": {},
+        "attention": []
+      }
+    },
+    {
+      "source": "peer",
+      "peer": "devbox",
+      "host_id": "host:22222222-2222-4222-9222-222222222222",
+      "hostname": "devbox-01",
+      "freshness": "unreachable",
+      "has_snapshot": true,
+      "observed_at": "2026-08-23T20:00:05Z",
+      "retrieved_at": "2026-08-23T20:00:10Z",
+      "last_attempt_at": "2026-08-23T20:00:20Z",
+      "last_success_at": "2026-08-23T20:00:10Z",
+      "last_error": "offline",
+      "source_age_seconds": 25
+    },
+    {
+      "source": "peer",
+      "peer": "never",
+      "host_id": "host:33333333-3333-4333-9333-333333333333",
+      "freshness": "never_retrieved",
+      "has_snapshot": false
+    }
+  ],
+  "federation": {
+    "schema_version": 1,
+    "generated_at": "2026-08-23T20:00:30Z",
+    "hosts": [
+      {
+        "host_id": "host:11111111-1111-4111-9111-111111111111",
+        "hostname": "sergii-macbook",
+        "observed_at": "2026-08-23T20:00:00Z"
+      },
+      {
+        "host_id": "host:22222222-2222-4222-9222-222222222222",
+        "hostname": "devbox-01",
+        "observed_at": "2026-08-23T20:00:05Z"
+      }
+    ],
+    "repositories": []
+  }
+}
